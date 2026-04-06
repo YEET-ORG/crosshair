@@ -351,7 +351,7 @@ String OS_MacOS::get_version_alias() const {
 	} else {
 		macos_string += "Unknown";
 	}
-	// macOS versions older than 10.13 cannot run Godot.
+	// macOS versions older than 10.13 cannot run Crosshair.
 	return vformat("%s (%s)", macos_string, get_version());
 }
 

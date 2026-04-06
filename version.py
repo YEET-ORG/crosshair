@@ -1,9 +1,9 @@
-short_name = "godot"
-name = "Godot Engine"
+short_name = "crosshair"
+name = "Crosshair"
 major = 4
 minor = 7
 patch = 0
 status = "dev"
 module_config = ""
-website = "https://godotengine.org"
+website = "https://docs.godotengine.org/en/latest/"
 docs = "latest"

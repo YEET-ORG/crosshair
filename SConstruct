@@ -258,7 +258,7 @@ opts.Add(BoolVariable("werror", "Treat compiler warnings as errors", False))
 opts.Add("extra_suffix", "Custom extra suffix added to the base filename of all generated binary files", "")
 opts.Add("object_prefix", "Custom prefix added to the base filename of all generated object files", "")
 opts.Add(BoolVariable("vsproj", "Generate a Visual Studio solution", False))
-opts.Add("vsproj_name", "Name of the Visual Studio solution", "godot")
+opts.Add("vsproj_name", "Name of the Visual Studio solution", "crosshair")
 opts.Add("import_env_vars", "A comma-separated list of environment variables to copy from the outer environment.", "")
 opts.Add(BoolVariable("disable_exceptions", "Force disabling exception handling code", True))
 opts.Add(BoolVariable("disable_3d", "Disable 3D nodes for a smaller executable", False))
@@ -1143,6 +1143,10 @@ if env.editor_build:
 env["PROGSUFFIX_WRAP"] = suffix + env.module_version_string + ".console" + env["PROGSUFFIX"]
 env["PROGSUFFIX"] = suffix + env.module_version_string + env["PROGSUFFIX"]
 env["OBJSUFFIX"] = suffix + env["OBJSUFFIX"]
+
+_engine_version = sys.modules["version"]
+env["engine_bin"] = _engine_version.short_name
+env["progname"] = _engine_version.short_name
 # (SH)LIBSUFFIX will be used for our own built libraries
 # LIBSUFFIXES contains LIBSUFFIX and SHLIBSUFFIX by default,
 # so we need to append the default suffixes to keep the ability

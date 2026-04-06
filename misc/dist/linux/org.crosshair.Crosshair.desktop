@@ -1,5 +1,5 @@
 [Desktop Entry]
-Name=Godot Engine
+Name=Crosshair Engine
 GenericName=Libre game engine
 GenericName[el]=Ελεύθερη μηχανή παιχνιδιού
 GenericName[fr]=Moteur de jeu libre
@@ -20,9 +20,9 @@ Comment[uk]=Багатофункціональний кросплатформн�
 Comment[zh_CN]=多平台 2D 和 3D 游戏引擎，带有功能丰富的编辑器
 Keywords=game development;development;IDE;game engine;
 Exec=godot %f
-Icon=godot
+Icon=crosshair
 Terminal=false
 Type=Application
 MimeType=application/x-godot-project;
 Categories=Development;IDE;
-StartupWMClass=Godot
+StartupWMClass=Crosshair

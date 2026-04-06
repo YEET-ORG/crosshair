@@ -651,7 +651,7 @@ String OS_Windows::get_version_alias() const {
 			} else {
 				windows_string += "Unknown";
 			}
-			// Windows versions older than 10 cannot run Godot.
+			// Windows versions older than 10 cannot run Crosshair.
 
 			return vformat("%s (build %d)", windows_string, (int64_t)fow.dwBuildNumber);
 		}

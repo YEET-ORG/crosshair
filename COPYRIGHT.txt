@@ -1,11 +1,11 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Comment:
- Exhaustive licensing information for files in the Godot Engine repository
+ Exhaustive licensing information for files in the Crosshair Engine repository
  =========================================================================
  .
  This file aims at documenting the copyright and license for every source
- file in the Godot Engine repository, and especially outline the files
- whose license differs from the MIT/Expat license used by Godot Engine.
+ file in the Crosshair Engine repository, and especially outline the files
+ whose license differs from the MIT/Expat license used by Crosshair Engine.
  .
  It is written as a machine-readable format following the debian/copyright
  specification. Globbing patterns (e.g. "Files: *") mean that they affect
@@ -33,14 +33,14 @@ Comment:
  the library is considered as a whole under the Zlib license.
  .
  Note: When linking dynamically against thirdparty libraries instead of
- building them into the Godot binary, you may remove the corresponding
+ building them into the Crosshair binary, you may remove the corresponding
  license details from this file.
-Upstream-Name: Godot Engine
+Upstream-Name: Crosshair Engine
 Upstream-Contact: Rémi Verschelde <contact@godotengine.org>
 Source: https://github.com/godotengine/godot
 
 Files: *
-Comment: Godot Engine
+Comment: Crosshair Engine
 Copyright: 2014-present, Godot Engine contributors
  2007-2014, Juan Linietsky, Ariel Manzur
 License: Expat
@@ -49,7 +49,7 @@ Files: icon.png
  icon.svg
  logo.png
  logo.svg
-Comment: Godot Engine logo
+Comment: Crosshair Engine logo
 Copyright: 2017, Andrea Calabró
 License: CC-BY-4.0
 
@@ -61,7 +61,7 @@ Copyright: 2011, Ole Kniemeyer, MAXON, www.maxon.net
  2007-2014, Juan Linietsky, Ariel Manzur
 License: Expat and Zlib
 
-Files: misc/dist/linux/org.godotengine.Godot.appdata.xml
+Files: misc/dist/linux/org.crosshair.Crosshair.appdata.xml
 Comment: Linux AppStream Metadata File
 Copyright: 2017-2022, Rémi Verschelde
 License: CC0-1.0

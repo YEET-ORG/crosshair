@@ -1805,7 +1805,7 @@ ProjectExportDialog::ProjectExportDialog() {
 	patch_vb->add_margin_child(TTR("Base Packs:"), patches, true);
 
 	patch_dialog = memnew(EditorFileDialog);
-	patch_dialog->add_filter("*.pck", TTR("Godot Project Pack"));
+	patch_dialog->add_filter("*.pck", TTR("Crosshair Project Pack"));
 	patch_dialog->add_filter("*.aab", TTR("Android App Bundle"));
 	patch_dialog->add_filter("*.apk", TTR("Android Package"));
 	patch_dialog->set_access(EditorFileDialog::ACCESS_FILESYSTEM);
@@ -1979,7 +1979,7 @@ ProjectExportDialog::ProjectExportDialog() {
 
 	export_pck_zip = memnew(EditorFileDialog);
 	export_pck_zip->add_filter("*.zip", TTR("ZIP File"));
-	export_pck_zip->add_filter("*.pck", TTR("Godot Project Pack"));
+	export_pck_zip->add_filter("*.pck", TTR("Crosshair Project Pack"));
 	export_pck_zip->set_access(EditorFileDialog::ACCESS_FILESYSTEM);
 	export_pck_zip->set_file_mode(EditorFileDialog::FILE_MODE_SAVE_FILE);
 	add_child(export_pck_zip);

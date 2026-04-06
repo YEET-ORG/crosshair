@@ -4913,7 +4913,7 @@ void WaylandThread::set_default_icon(const Ref<Image> &p_icon) {
 		// Setting a name allows the godot icon to be overridden by a system theme.
 		// We only want the project manager and editor to get themed,
 		// Games will get icons with the protocol and themed icons with .desktop entries.
-		// NOTE: should be synced with the icon name in misc/dist/linuxbsd/Godot.desktop
+		// NOTE: should be synced with the icon name in misc/dist/linux/org.crosshair.Crosshair.desktop
 		xdg_toplevel_icon_v1_set_name(xdg_icon, "godot");
 	}
 

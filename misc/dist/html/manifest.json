@@ -1,9 +1,9 @@
 {
-  "name": "Godot Engine Web Editor",
-  "short_name": "Godot",
+  "name": "___WEB_MANIFEST_LONG_NAME___",
+  "short_name": "___WEB_MANIFEST_SHORT_NAME___",
   "description": "Multi-platform 2D and 3D game engine with a feature-rich editor (Web edition)",
   "lang": "en",
-  "start_url": "./godot.editor.html",
+  "start_url": "___WEB_MANIFEST_START_URL___",
   "display": "standalone",
   "theme_color": "#202531",
   "icons": [

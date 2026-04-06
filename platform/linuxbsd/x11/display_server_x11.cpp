@@ -35,6 +35,7 @@
 #include "x11/key_mapping_x11.h"
 
 #include "core/config/project_settings.h"
+#include "core/version.h"
 #include "core/input/input.h"
 #include "core/io/file_access.h"
 #include "core/math/math_funcs.h"
@@ -5771,16 +5772,17 @@ void DisplayServerX11::_update_context(WindowData &wd) {
 	XClassHint *classHint = XAllocClassHint();
 
 	if (classHint) {
+		const String wm_prefix = String(GODOT_VERSION_SHORT_NAME).capitalize();
 		CharString name_str;
 		switch (context) {
 			case DisplayServerEnums::CONTEXT_EDITOR:
-				name_str = "Godot_Editor";
+				name_str = (wm_prefix + "_Editor").utf8();
 				break;
 			case DisplayServerEnums::CONTEXT_PROJECTMAN:
-				name_str = "Godot_ProjectList";
+				name_str = (wm_prefix + "_ProjectList").utf8();
 				break;
 			case DisplayServerEnums::CONTEXT_ENGINE:
-				name_str = "Godot_Engine";
+				name_str = (wm_prefix + "_Engine").utf8();
 				break;
 		}
 
@@ -5788,12 +5790,12 @@ void DisplayServerX11::_update_context(WindowData &wd) {
 		if (context == DisplayServerEnums::CONTEXT_ENGINE) {
 			String config_name = GLOBAL_GET("application/config/name");
 			if (config_name.length() == 0) {
-				class_str = "Godot_Engine";
+				class_str = (wm_prefix + "_Engine").utf8();
 			} else {
 				class_str = config_name.utf8();
 			}
 		} else {
-			class_str = "Godot";
+			class_str = wm_prefix.utf8();
 		}
 
 		classHint->res_class = class_str.ptrw();
@@ -6589,7 +6591,8 @@ DisplayServerEnums::WindowID DisplayServerX11::_create_window(DisplayServerEnums
 		}
 
 		/* set the titlebar name */
-		XStoreName(x11_display, wd.x11_window, "Godot");
+		CharString x11_wm_title = String(GODOT_VERSION_SHORT_NAME).capitalize().utf8();
+		XStoreName(x11_display, wd.x11_window, x11_wm_title.get_data());
 		XSetWMProtocols(x11_display, wd.x11_window, &wm_delete, 1);
 		if (xdnd_aware != None) {
 			XChangeProperty(x11_display, wd.x11_window, xdnd_aware, XA_ATOM, 32, PropModeReplace, (unsigned char *)&xdnd_version, 1);
@@ -7152,7 +7155,7 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, DisplayServ
 
 			if (use_prime) {
 				print_line("Found discrete GPU, setting DRI_PRIME=1 to use it.");
-				print_line("Note: Set DRI_PRIME=0 in the environment to disable Godot from using the discrete GPU.");
+				print_line("Note: Set DRI_PRIME=0 in the environment to disable Crosshair from using the discrete GPU.");
 				setenv("DRI_PRIME", "1", 1);
 			}
 		}

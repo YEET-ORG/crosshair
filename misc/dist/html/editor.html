@@ -3,20 +3,20 @@
 	<head>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
-		<meta name="author" content="Godot Engine">
-		<meta name="description" content="Use the Godot Engine editor directly in your web browser, without having to install anything.">
+		<meta name="author" content="Crosshair">
+		<meta name="description" content="Use the Crosshair editor directly in your web browser, without having to install anything.">
 		<meta name="mobile-web-app-capable" content="yes">
 		<meta name="apple-mobile-web-app-capable" content="yes">
-		<meta name="application-name" content="Godot">
-		<meta name="apple-mobile-web-app-title" content="Godot">
+		<meta name="application-name" content="Crosshair">
+		<meta name="apple-mobile-web-app-title" content="Crosshair">
 		<meta name="theme-color" content="#202531">
 		<meta name="msapplication-navbutton-color" content="#202531">
 		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 		<meta name="msapplication-starturl" content="/latest">
-		<meta property="og:site_name" content="Godot Engine Web Editor">
+		<meta property="og:site_name" content="Crosshair Web Editor">
 		<meta property="og:url" name="twitter:url" content="https://editor.godotengine.org/releases/stable/">
 		<meta property="og:title" name="twitter:title" content="Free and open source 2D and 3D game engine">
-		<meta property="og:description" name="twitter:description" content="Use the Godot Engine editor directly in your web browser, without having to install anything.">
+		<meta property="og:description" name="twitter:description" content="Use the Crosshair editor directly in your web browser, without having to install anything.">
 		<meta property="og:image" name="twitter:image" content="https://godotengine.org/assets/share-image.webp">
 		<meta property="og:type" content="website">
 		<meta name="twitter:card" content="summary">
@@ -25,7 +25,7 @@
 		<link rel="manifest" href="manifest.json">
 		<link rel="preload" href="inter-regular.woff2" as="font" crossorigin="anonymous">
 		<link rel="preload" href="inter-bold.woff2" as="font" crossorigin="anonymous">
-		<title>Godot Engine Web Editor (___GODOT_VERSION___)</title>
+		<title>Crosshair Web Editor (___GODOT_VERSION___)</title>
 		<style>
 /* Use Inter in the same configuration as used in the editor (e.g. alternate lowercase `l`). */
 @font-face {
@@ -148,7 +148,7 @@ a:active {
 	outline: none;
 }
 
-.godot {
+.crosshair-status {
 	color: #d0d0d0;
 	background-color: #1b1b1b;
 	background-image: linear-gradient(to bottom, #403e48, #35333c);
@@ -303,7 +303,7 @@ a:active {
 				<h2 id="welcome-modal-title" class="welcome-modal-title">Important - Please read before continuing</h2>
 				<div id="welcome-modal-description">
 					<p>
-						The Godot Web Editor has some limitations compared to the native version.<br>
+						The Crosshair Web Editor has some limitations compared to the native version.<br>
 						Its main focus is education and experimentation;
 						<strong>it is not recommended for production</strong>.
 					</p>
@@ -312,7 +312,7 @@ a:active {
 							href="https://godotengine.org/download/"
 							target="_blank"
 							rel="noopener"
-						>download</a> the native Godot Editor.
+						>download</a> the native Crosshair Editor.
 					</p>
 					<p>
 						Refer to the
@@ -325,7 +325,7 @@ a:active {
 				</div>
 				<div id="welcome-modal-missing-description" style="display: none">
 					<p>
-						<strong>The following features required by the Godot Web Editor are missing:</strong>
+						<strong>The following features required by the Crosshair Web Editor are missing:</strong>
 					</p>
 					<ul id="welcome-modal-missing-list">
 					</ul>
@@ -358,7 +358,7 @@ a:active {
 			<div id="tab-loader">
 				<div style="color: #e0e0e0;" id="persistence">
 					<br >
-					<img src="logo.svg" alt="Godot Engine logo" width="1024" height="414" style="width: auto; height: auto; max-width: min(85%, 50vh); max-height: 200px">
+					<img src="logo.svg" alt="Crosshair logo" width="1024" height="414" style="width: auto; height: auto; max-width: min(85%, 50vh); max-height: 200px">
 					<br >
 					___GODOT_VERSION___ - <a href="/releases/">Change version</a>
 					<br >
@@ -368,7 +368,7 @@ a:active {
 					<br>
 					<a href="demo.zip" id="zip-demo">(Try this for example)</a>
 					<br >
-					<button id="startButton" class="btn" style="margin-top: 2rem; margin-bottom: 3rem; font-weight: 700">Start Godot Editor</button>
+					<button id="startButton" class="btn" style="margin-top: 2rem; margin-bottom: 3rem; font-weight: 700">Start Crosshair Editor</button>
 					<br >
 					<button class="btn" onclick="clearPersistence()" style="margin-bottom: 1.5rem">Clear Persistent Data</button>
 					<br >
@@ -401,7 +401,7 @@ a:active {
 					<div></div>
 					<div></div>
 				</div>
-				<div id="status-notice" class="godot" style="display: none;"></div>
+				<div id="status-notice" class="crosshair-status" style="display: none;"></div>
 			</div>
 		</div>
 		<script>
@@ -473,7 +473,7 @@ function closeWelcomeModal(dontShowAgain) { // eslint-disable-line no-unused-var
 	}
 }
 		</script>
-		<script src="godot.editor.js"></script>
+		<script src="___GODOT_WEB_EDITOR_JS___"></script>
 		<script>
 let editor = null;
 let game = null;
@@ -773,7 +773,7 @@ function startEditor(zip) {
 		displayFailureNotice('WebGL not available');
 	} else {
 		setStatusMode('indeterminate');
-		editor.init('godot.editor').then(function () {
+		editor.init('___GODOT_WEB_EDITOR_BASE___').then(function () {
 			if (zip) {
 				editor.copyToFS('/tmp/preload.zip', zip);
 			}

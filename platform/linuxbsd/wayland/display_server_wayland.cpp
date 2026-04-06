@@ -40,6 +40,7 @@
 #endif
 
 #include "core/config/project_settings.h"
+#include "core/version.h"
 #include "core/input/input.h"
 #include "core/input/input_event.h"
 #include "core/os/main_loop.h"
@@ -91,11 +92,11 @@ String DisplayServerWayland::_get_app_id_from_context(DisplayServerEnums::Contex
 
 	switch (p_context) {
 		case DisplayServerEnums::CONTEXT_EDITOR: {
-			app_id = "org.godotengine.Editor";
+			app_id = "org.crosshair.Editor";
 		} break;
 
 		case DisplayServerEnums::CONTEXT_PROJECTMAN: {
-			app_id = "org.godotengine.ProjectManager";
+			app_id = "org.crosshair.ProjectManager";
 		} break;
 
 		case DisplayServerEnums::CONTEXT_ENGINE:
@@ -104,7 +105,7 @@ String DisplayServerWayland::_get_app_id_from_context(DisplayServerEnums::Contex
 			if (config_name.length() != 0) {
 				app_id = config_name;
 			} else {
-				app_id = "org.godotengine.Godot";
+				app_id = "org.crosshair.Crosshair";
 			}
 		}
 	}
@@ -811,7 +812,7 @@ DisplayServerEnums::WindowID DisplayServerWayland::create_sub_window(DisplayServ
 	// can only know once we show it.
 	wd.rect = p_rect;
 
-	wd.title = "Godot";
+	wd.title = String(GODOT_VERSION_SHORT_NAME).capitalize();
 	wd.parent_id = p_transient_parent;
 	return id;
 }
@@ -2424,7 +2425,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Dis
 	wd.flags = p_flags;
 	wd.vsync_mode = p_vsync_mode;
 	wd.rect.size = p_resolution;
-	wd.title = "Godot";
+	wd.title = String(GODOT_VERSION_SHORT_NAME).capitalize();
 
 	if (!AccessibilityServer::get_singleton()->window_create(wd.id, nullptr)) {
 		if (OS::get_singleton()->is_stdout_verbose()) {
