@@ -8,8 +8,11 @@
 #include "yeet_ai_dock.h"
 
 #include "core/config/project_settings.h"
+#include "core/core_bind.h"
 #include "core/input/input_map.h"
+#include "core/io/image.h"
 #include "core/templates/hash_set.h"
+#include "core/templates/list.h"
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
 #include "core/io/json.h"
@@ -18,27 +21,44 @@
 #include "core/object/callable_mp.h"
 #include "core/object/class_db.h"
 #include "core/object/property_info.h"
+#include "core/string/string_name.h"
+#include "core/object/script_language.h"
+#include "core/os/os.h"
 #include "core/os/keyboard.h"
 #include "core/string/translation.h"
+#include "main/main.h"
+#include "servers/display/display_server.h"
+#include "editor/debugger/editor_debugger_node.h"
+#include "editor/debugger/script_editor_debugger.h"
 #include "editor/editor_data.h"
 #include "editor/editor_interface.h"
+#include "editor/editor_log.h"
 #include "editor/editor_node.h"
 #include "editor/editor_string_names.h"
 #include "editor/file_system/editor_file_system.h"
+#include "editor/run/editor_run.h"
+#include "editor/editor_undo_redo_manager.h"
 #include "editor/settings/editor_settings.h"
 #include "editor/themes/editor_scale.h"
-#include "scene/gui/button.h"
 #include "scene/gui/box_container.h"
+#include "scene/gui/button.h"
 #include "scene/gui/label.h"
 #include "scene/gui/margin_container.h"
 #include "scene/gui/panel_container.h"
 #include "scene/gui/rich_text_label.h"
 #include "scene/gui/scroll_container.h"
 #include "scene/gui/text_edit.h"
+#include "scene/2d/navigation/navigation_region_2d.h"
+#include "scene/2d/physics/collision_object_2d.h"
+#include "scene/2d/tile_map.h"
+#include "scene/3d/navigation/navigation_region_3d.h"
+#include "scene/3d/physics/collision_object_3d.h"
 #include "scene/3d/physics/collision_shape_3d.h"
 #include "scene/3d/mesh_instance_3d.h"
 #include "scene/main/node.h"
 #include "scene/main/http_request.h"
+#include "scene/main/viewport.h"
+#include "scene/animation/animation_player.h"
 #include "scene/resources/3d/box_shape_3d.h"
 #include "scene/resources/3d/capsule_shape_3d.h"
 #include "scene/resources/3d/cylinder_shape_3d.h"
@@ -52,6 +72,7 @@
 namespace {
 constexpr int MAX_PROJECT_TREE_ENTRIES = 200;
 constexpr int MAX_FILE_READ_BYTES = 24 * 1024;
+constexpr int MAX_FILE_WRITE_BYTES = 512 * 1024;
 constexpr int MAX_SCENE_TREE_NODES = 300;
 constexpr int MAX_PROPERTY_COLLECTION_DEPTH = 4;
 
@@ -195,6 +216,77 @@ bool contains_string(const Vector<String> &p_values, const String &p_value) {
 		}
 	}
 	return false;
+}
+
+// Some models emit two JSON objects: {"arguments":{...}}, {"tool":"x","type":"tool_call"} — invalid as one value but recoverable.
+static String _json_frag_effective_tool_name(const Dictionary &d) {
+	String t = String(d.get("tool", "")).strip_edges();
+	if (!t.is_empty()) {
+		return t;
+	}
+	return String(d.get("name", "")).strip_edges();
+}
+
+static bool _json_frag_type_is_allowed_on_args_fragment(const String &p_typ) {
+	const String t = p_typ.strip_edges();
+	if (t.is_empty()) {
+		return true;
+	}
+	return t.to_lower() == "tool_call";
+}
+
+// First fragment: arguments dict present; tool name not yet in this object (may have type:"tool_call" split across two objects).
+static bool _json_frag_is_arguments_only(const Dictionary &d) {
+	if (!d.has("arguments") || d["arguments"].get_type() != Variant::DICTIONARY) {
+		return false;
+	}
+	if (!_json_frag_effective_tool_name(d).is_empty()) {
+		return false;
+	}
+	const String typ = String(d.get("type", "")).strip_edges();
+	return _json_frag_type_is_allowed_on_args_fragment(typ);
+}
+
+static bool _json_frag_is_tool_header(const Dictionary &d) {
+	const String tool = _json_frag_effective_tool_name(d);
+	if (tool.is_empty()) {
+		return false;
+	}
+	const String typ = String(d.get("type", "")).strip_edges();
+	if (typ.to_lower() == "final") {
+		return false;
+	}
+	if (!typ.is_empty() && typ.to_lower() != "tool_call") {
+		return false;
+	}
+	return true;
+}
+
+static bool _merge_tool_call_json_pair(const Dictionary &a, const Dictionary &b, Dictionary &r_out) {
+	if (_json_frag_is_arguments_only(a) && _json_frag_is_tool_header(b)) {
+		r_out.clear();
+		r_out["type"] = "tool_call";
+		r_out["tool"] = _json_frag_effective_tool_name(b);
+		r_out["arguments"] = a["arguments"];
+		return true;
+	}
+	if (_json_frag_is_tool_header(a) && _json_frag_is_arguments_only(b)) {
+		r_out.clear();
+		r_out["type"] = "tool_call";
+		r_out["tool"] = _json_frag_effective_tool_name(a);
+		r_out["arguments"] = b["arguments"];
+		return true;
+	}
+	return false;
+}
+
+static bool _envelope_normalized_is_dispatchable(const Dictionary &p_norm) {
+	const String t = String(p_norm.get("type", "")).strip_edges();
+	return t == "tool_call" || t == "final";
+}
+
+static bool _is_json_ws(char32_t c) {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r';
 }
 
 bool is_valid_input_action_name(const String &p_name) {
@@ -481,6 +573,14 @@ void YeetAIDock::_notification(int p_what) {
 	}
 }
 
+void YeetAIDock::_on_game_screenshot_cb(int64_t p_w, int64_t p_h, const String &p_path, Rect2i p_rect) {
+	(void)p_rect;
+	game_screenshot_w = p_w;
+	game_screenshot_h = p_h;
+	game_screenshot_path = p_path;
+	game_screenshot_done = true;
+}
+
 void YeetAIDock::_send_prompt() {
 	if (waiting_for_response) {
 		return;
@@ -495,7 +595,7 @@ void YeetAIDock::_send_prompt() {
 	conversation_messages.append(make_message("user", prompt));
 	_append_message("user", prompt);
 	tool_round_trips = 0;
-	turn_context_prompt = _build_runtime_context_prompt();
+	turn_context_prompt = _build_runtime_context_prompt() + _build_task_hints_for_user_prompt(prompt);
 	_request_model_response();
 }
 
@@ -664,7 +764,8 @@ String YeetAIDock::_humanize_tool_name(const String &p_tool) const {
 
 Vector<String> YeetAIDock::_collect_relevant_paths(const Dictionary &p_args, const Dictionary &p_payload) const {
 	static const char *keys[] = {
-		"path", "scene_path", "script_path", "packed_scene_path", "resource_path", "owner_scene_path", "material_path", "main_scene"
+		"path", "scene_path", "script_path", "packed_scene_path", "resource_path", "owner_scene_path", "material_path", "main_scene",
+		"from_path", "to_path"
 	};
 	Vector<String> out;
 	auto add_from = [&](const Dictionary &d) {
@@ -705,19 +806,66 @@ void YeetAIDock::_set_waiting(bool p_waiting, const String &p_status) {
 }
 
 void YeetAIDock::_request_model_response() {
-	const String endpoint = _get_editor_setting_string("yeet_ai/chat/completions_url", "https://llm.adityaberry.me/v1/chat/completions");
-	const String model = _get_editor_setting_string("yeet_ai/chat/model", "berrymodel");
-	const String api_key = _get_editor_setting_string("yeet_ai/chat/api_key", "");
-	const int max_tokens = _get_editor_setting_int("yeet_ai/chat/max_tokens", 16384);
+	// 0 = Berry (OpenAI-compatible), 1 = Gemini, 2 = OpenRouter, 3 = Yeet Models (in-house Ollama-compatible).
+	const int provider = _get_editor_setting_int("yeet_ai/chat/provider", 0);
+	static const char *k_gemini_openai_url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+	static const char *k_openrouter_url = "https://openrouter.ai/api/v1/chat/completions";
+	static const char *k_yeet_chat_default = "https://gpt.yeetlabs.fun/v1/chat/completions";
 
-	if (endpoint.is_empty()) {
-		_append_message("assistant", TTR("The LLM endpoint is empty. Set `yeet_ai/chat/completions_url` or use the default endpoint."));
+	String endpoint;
+	String api_key;
+	if (provider == 1) {
+		endpoint = String::utf8(k_gemini_openai_url);
+		api_key = _get_editor_setting_string("yeet_ai/chat/gemini_api_key", "");
+	} else if (provider == 2) {
+		endpoint = String::utf8(k_openrouter_url);
+		api_key = _get_editor_setting_string("yeet_ai/chat/openrouter_api_key", "");
+	} else if (provider == 3) {
+		endpoint = _get_editor_setting_string("yeet_ai/chat/yeet_chat_url", k_yeet_chat_default);
+		if (endpoint.strip_edges().is_empty()) {
+			endpoint = String::utf8(k_yeet_chat_default);
+		}
+		api_key = _get_editor_setting_string("yeet_ai/chat/yeet_api_key", "");
+	} else {
+		endpoint = _get_editor_setting_string("yeet_ai/chat/completions_url", "https://llm.adityaberry.me/v1/chat/completions");
+		api_key = _get_editor_setting_string("yeet_ai/chat/api_key", "");
+	}
+
+	String model = _get_editor_setting_string("yeet_ai/chat/model", "berrymodel");
+	// Berry (provider 0) is fixed to the server’s model id (Ollama-style tags list: `berrymodel`).
+	if (provider == 0) {
+		model = "berrymodel";
+	} else if (provider == 1 && model.strip_edges().is_empty()) {
+		model = "gemini-2.0-flash";
+	} else if (provider == 2 && model.strip_edges().is_empty()) {
+		model = "qwen/qwen3.6-plus:free";
+	} else if (provider == 3 && model.strip_edges().is_empty()) {
+		model = "qwen3-coder:latest";
+	}
+
+	if (provider == 0 && endpoint.strip_edges().is_empty()) {
+		_append_message("assistant", TTR("The LLM endpoint is empty. Set `yeet_ai/chat/completions_url` in Editor Settings → Crosshair, or pick a provider."));
 		return;
 	}
+	if (provider == 1 && api_key.strip_edges().is_empty()) {
+		_append_message("assistant", TTR("Google Gemini is selected but `yeet_ai/chat/gemini_api_key` is empty. Add your API key in Editor Settings → Crosshair."));
+		return;
+	}
+	if (provider == 2 && api_key.strip_edges().is_empty()) {
+		_append_message("assistant", TTR("OpenRouter is selected but `yeet_ai/chat/openrouter_api_key` is empty. Add your API key in Editor Settings → Crosshair."));
+		return;
+	}
+
+	const int max_tokens = _get_editor_setting_int("yeet_ai/chat/max_tokens", 32768);
+	const float temperature = _get_editor_setting_float("yeet_ai/chat/temperature", 0.25f);
 
 	Dictionary payload;
 	payload["model"] = model;
 	payload["max_tokens"] = max_tokens;
+	// temperature < 0 omits the field (use server default). Otherwise prefer ~0.2–0.35 for structured JSON (Qwen, etc.).
+	if (temperature >= 0.0f) {
+		payload["temperature"] = temperature;
+	}
 
 	Array messages;
 	messages.append(make_message("system", _build_system_prompt()));
@@ -733,6 +881,10 @@ void YeetAIDock::_request_model_response() {
 	headers.push_back("Content-Type: application/json");
 	if (!api_key.is_empty()) {
 		headers.push_back("Authorization: Bearer " + api_key);
+	}
+	if (provider == 2) {
+		// OpenRouter optional attribution (see https://openrouter.ai/docs).
+		headers.push_back("X-Title: Crosshair");
 	}
 
 	const Error err = request->request(endpoint, headers, HTTPClient::METHOD_POST, JSON::stringify(payload));
@@ -768,6 +920,18 @@ void YeetAIDock::_on_request_completed(int p_result, int p_response_code, const 
 		_append_message("assistant", TTR("The LLM response was not valid JSON."));
 		return;
 	}
+
+	String finish_reason;
+	const Array choices = response_json.get("choices", Array());
+	if (!choices.is_empty() && choices[0].get_type() == Variant::DICTIONARY) {
+		const Dictionary choice0 = choices[0];
+		finish_reason = String(choice0.get("finish_reason", "")).strip_edges();
+	}
+	if (finish_reason == "length") {
+		_append_message("assistant",
+				TTR("The API stopped at the output token limit (finish_reason=length). Raise Editor Setting `yeet_ai/chat/max_tokens` and increase your inference server’s max output / max_new_tokens (defaults are often far below 32k). Do not put GDScript and editor tools in the same `batch_tool_calls`; use a scene-only batch first, then a GDScript-only batch."));
+	}
+
 	const String content = _extract_message_content(response_json);
 	if (content.is_empty()) {
 		_set_waiting(false, TTR("Ready"));
@@ -803,7 +967,7 @@ void YeetAIDock::_handle_model_response(const String &p_content) {
 
 		Dictionary tool_payload = result.payload;
 		tool_payload["ok"] = result.ok && !result.payload.has("error");
-		conversation_messages.append(make_message("user", vformat("Tool `%s` finished with the following JSON result:\n%s\n\nIf you need more context, return another tool_call JSON object. Otherwise return a final JSON object.", tool_name, JSON::stringify(tool_payload, "\t", false, true))));
+		conversation_messages.append(_make_user_message_with_optional_vision(tool_name, tool_payload));
 
 		tool_round_trips++;
 		_request_model_response();
@@ -874,6 +1038,44 @@ String YeetAIDock::_build_runtime_context_prompt() const {
 			"Use this context before deciding whether more inspection tools are needed.\n"
 			"Prefer reusing current scenes, scripts, inputs, and nodes when they already exist.\n"
 			+ JSON::stringify(context, "\t", false, true);
+}
+
+String YeetAIDock::_build_task_hints_for_user_prompt(const String &p_user_prompt) const {
+	const String s = p_user_prompt.to_lower();
+	if (s.is_empty()) {
+		return String();
+	}
+
+	const bool wants_move =
+			s.contains("wasd") || s.contains("move") || s.contains("control") || s.contains("controller") ||
+			s.contains("character") || s.contains("player") || s.contains("walk") || s.contains("arrow") ||
+			s.contains("keyboard");
+	const bool wants_jump = s.contains("jump") || s.contains("space");
+	const bool wants_color =
+			s.contains("color") || s.contains("colour") || s.contains("material") || s.contains("tint") ||
+			s.contains("blue") || s.contains("red") || s.contains("green") || s.contains("yellow");
+
+	if (!wants_move && !wants_jump && !wants_color) {
+		return String();
+	}
+
+	String out = String("\n\n") +
+			"--- Task hints (auto-generated from the user message) ---\n";
+
+	if (wants_move || wants_jump) {
+		out += "Controls / movement: Do NOT respond with only `add_primitive_mesh` or mesh + collision alone. "
+			   "A playable character needs input actions, a physics body (e.g. CharacterBody3D), collision, and a GDScript that reads Input actions in `_physics_process` or `_input`. "
+			   "**Required split:** one `batch_tool_calls` with only editor/scene tools (`create_input_action`, nodes, mesh, material, `attach_script`, etc.) — **never** `create_gdscript_file` or `update_gdscript_file` there. "
+			   "A **separate** tool_call round with a batch containing **only** `create_gdscript_file` and/or `update_gdscript_file` for the script body (mixing is rejected by the editor). "
+			   "If the user asked for jump, bind Space (and/or an action name) explicitly.\n";
+	}
+
+	if (wants_color) {
+		out += "Color / material: `add_primitive_mesh` does not set color by itself. Use `create_standard_material` (albedo color) and `assign_resource_to_property` or assign `material_override` on the MeshInstance3D.\n";
+	}
+
+	out += "Completeness: If the user asked for several things (e.g. controls + color + capsule), address every part across `batch_tool_calls` and follow-up tool_call rounds if needed—do not omit scripts, input, collision, or materials. Prefer multiple smaller rounds over one truncated JSON.\n";
+	return out;
 }
 
 YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_name, const Dictionary &p_args) const {
@@ -1103,6 +1305,209 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 		return result;
 	}
 
+	if (p_tool_name == "write_project_file") {
+		result.ok = true;
+		result.payload = _tool_write_project_file(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "save_all_scenes") {
+		result.ok = true;
+		result.payload = _tool_save_all_scenes();
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "reload_scene") {
+		result.ok = true;
+		result.payload = _tool_reload_scene(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "set_editor_main_screen") {
+		result.ok = true;
+		result.payload = _tool_set_editor_main_screen(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "select_file") {
+		result.ok = true;
+		result.payload = _tool_select_file(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "get_unsaved_scenes") {
+		result.ok = true;
+		result.payload = _tool_get_unsaved_scenes();
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "reparent_node") {
+		result.ok = true;
+		result.payload = _tool_reparent_node(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "rename_node") {
+		result.ok = true;
+		result.payload = _tool_rename_node(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "file_exists") {
+		result.ok = true;
+		result.payload = _tool_file_exists(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "list_directory") {
+		result.ok = true;
+		result.payload = _tool_list_directory(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "duplicate_node") {
+		result.ok = true;
+		result.payload = _tool_duplicate_node(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "edit_script") {
+		result.ok = true;
+		result.payload = _tool_edit_script(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "move_child") {
+		result.ok = true;
+		result.payload = _tool_move_child(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "create_project_folder") {
+		result.ok = true;
+		result.payload = _tool_create_project_folder(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "delete_project_file") {
+		result.ok = true;
+		result.payload = _tool_delete_project_file(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "get_editor_log") {
+		result.ok = true;
+		result.payload = _tool_get_editor_log(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "capture_editor_viewport") {
+		result.ok = true;
+		result.payload = _tool_capture_editor_viewport(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "get_debug_snapshot") {
+		result.ok = true;
+		result.payload = _tool_get_debug_snapshot(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "grep_project_files") {
+		result.ok = true;
+		result.payload = _tool_grep_project_files(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "get_autoloads") {
+		result.ok = true;
+		result.payload = _tool_get_autoloads();
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "get_node_groups") {
+		result.ok = true;
+		result.payload = _tool_get_node_groups(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "get_node_collision_layers") {
+		result.ok = true;
+		result.payload = _tool_get_node_collision_layers(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "move_project_file") {
+		result.ok = true;
+		result.payload = _tool_move_project_file(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "get_animation_player_state") {
+		result.ok = true;
+		result.payload = _tool_get_animation_player_state(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "get_tilemap_info") {
+		result.ok = true;
+		result.payload = _tool_get_tilemap_info(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "get_navigation_region_info") {
+		result.ok = true;
+		result.payload = _tool_get_navigation_region_info(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "capture_game_viewport") {
+		result.ok = true;
+		result.payload = _tool_capture_game_viewport(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "get_runtime_debugger_state") {
+		result.ok = true;
+		result.payload = _tool_get_runtime_debugger_state();
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
+	if (p_tool_name == "editor_undo") {
+		result.ok = true;
+		result.payload = _tool_editor_undo(p_args);
+		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+		return result;
+	}
+
 	result.payload["error"] = "Unknown tool";
 	result.display_text = vformat("Unknown tool: %s", p_tool_name);
 	return result;
@@ -1113,7 +1518,14 @@ String YeetAIDock::_get_editor_setting_string(const String &p_setting, const Str
 	if (settings == nullptr || !settings->has_setting(p_setting)) {
 		return p_default;
 	}
-	return settings->get_setting(p_setting);
+	// Use Object::get(), not get_setting(): get_setting() applies per-project editor overrides from
+	// ProjectSettings, which would mask globally saved API keys when switching projects.
+	bool valid = false;
+	const Variant v = settings->get(StringName(p_setting), &valid);
+	if (!valid) {
+		return p_default;
+	}
+	return String(v);
 }
 
 int YeetAIDock::_get_editor_setting_int(const String &p_setting, int p_default) const {
@@ -1121,7 +1533,85 @@ int YeetAIDock::_get_editor_setting_int(const String &p_setting, int p_default) 
 	if (settings == nullptr || !settings->has_setting(p_setting)) {
 		return p_default;
 	}
-	return int(settings->get_setting(p_setting));
+	bool valid = false;
+	const Variant v = settings->get(StringName(p_setting), &valid);
+	if (!valid) {
+		return p_default;
+	}
+	return int(v);
+}
+
+float YeetAIDock::_get_editor_setting_float(const String &p_setting, float p_default) const {
+	EditorSettings *settings = EditorSettings::get_singleton();
+	if (settings == nullptr || !settings->has_setting(p_setting)) {
+		return p_default;
+	}
+	bool valid = false;
+	const Variant v = settings->get(StringName(p_setting), &valid);
+	if (!valid) {
+		return p_default;
+	}
+	return float(v);
+}
+
+bool YeetAIDock::_get_editor_setting_bool(const String &p_setting, bool p_default) const {
+	EditorSettings *settings = EditorSettings::get_singleton();
+	if (settings == nullptr || !settings->has_setting(p_setting)) {
+		return p_default;
+	}
+	bool valid = false;
+	const Variant v = settings->get(StringName(p_setting), &valid);
+	if (!valid) {
+		return p_default;
+	}
+	return bool(v);
+}
+
+Dictionary YeetAIDock::_make_user_message_with_optional_vision(const String &p_tool_name, const Dictionary &p_tool_payload) const {
+	const bool vision = _get_editor_setting_bool("yeet_ai/chat/vision_enabled", false);
+	const int max_b64 = _get_editor_setting_int("yeet_ai/chat/max_base64_chars", 2000000);
+
+	Dictionary payload_for_text = p_tool_payload.duplicate();
+	if (payload_for_text.has("png_base64")) {
+		const String b64 = String(payload_for_text["png_base64"]);
+		payload_for_text["png_base64"] = vformat("<png base64 omitted in text; %d chars>", b64.length());
+	}
+
+	const String text_body = vformat(
+			"Tool `%s` finished with the following JSON result:\n%s\n\nIf you need more context, return another tool_call JSON object. Otherwise return a final JSON object.",
+			p_tool_name,
+			JSON::stringify(payload_for_text, "\t", false, true));
+
+	if (!vision || !p_tool_payload.has("png_base64")) {
+		return make_message("user", text_body);
+	}
+
+	const String b64 = String(p_tool_payload["png_base64"]);
+	if (b64.length() > max_b64) {
+		const String note = vformat(
+				"\n\n[vision] Image base64 is too large (%d chars; max %d). Enable smaller captures or raise `yeet_ai/chat/max_base64_chars`. Text-only context follows.",
+				b64.length(),
+				max_b64);
+		return make_message("user", text_body + note);
+	}
+
+	Array content;
+	Dictionary text_part;
+	text_part["type"] = "text";
+	text_part["text"] = text_body;
+	content.push_back(text_part);
+
+	Dictionary img_part;
+	img_part["type"] = "image_url";
+	Dictionary img_url;
+	img_url["url"] = "data:image/png;base64," + b64;
+	img_part["image_url"] = img_url;
+	content.push_back(img_part);
+
+	Dictionary msg;
+	msg["role"] = "user";
+	msg["content"] = content;
+	return msg;
 }
 
 Node *YeetAIDock::_resolve_scene_root(const String &p_scene_path, String &r_error) const {
@@ -1574,6 +2064,71 @@ Dictionary YeetAIDock::_tool_get_node_api(const Dictionary &p_args) const {
 	return result;
 }
 
+Dictionary YeetAIDock::_parse_one_batch_call(const Variant &p_call_var, int p_index, const Dictionary &p_shared_arguments) const {
+	Dictionary out;
+	Dictionary call;
+	if (p_call_var.get_type() == Variant::DICTIONARY) {
+		call = p_call_var;
+	} else if (p_call_var.get_type() == Variant::STRING) {
+		if (!_parse_json_dictionary_quiet(String(p_call_var).strip_edges(), call)) {
+			out["error"] = "Each batch call must be a JSON object (or a JSON object encoded as a string).";
+			out["failed_index"] = p_index;
+			return out;
+		}
+	} else {
+		out["error"] = "Each batch call must be a dictionary.";
+		out["failed_index"] = p_index;
+		return out;
+	}
+
+	String tool_name = String(call.get("tool", "")).strip_edges();
+	if (tool_name.is_empty()) {
+		tool_name = String(call.get("name", "")).strip_edges();
+	}
+	if (tool_name.is_empty()) {
+		const Dictionary fn = call.get("function", Dictionary());
+		tool_name = String(fn.get("name", "")).strip_edges();
+	}
+	if (tool_name.is_empty()) {
+		out["error"] = "Each batch call needs a tool name (`tool`, `name`, or `function.name`).";
+		out["failed_index"] = p_index;
+		return out;
+	}
+	if (tool_name == "batch_tool_calls") {
+		out["error"] = "batch_tool_calls cannot invoke itself recursively.";
+		out["failed_index"] = p_index;
+		return out;
+	}
+
+	Dictionary call_args;
+	if (call.has("arguments")) {
+		const Variant av = call["arguments"];
+		if (av.get_type() == Variant::STRING) {
+			Dictionary parsed;
+			if (_parse_json_dictionary_quiet(String(av).strip_edges(), parsed)) {
+				call_args = parsed;
+			}
+		} else if (av.get_type() == Variant::DICTIONARY) {
+			call_args = av;
+		}
+	} else if (call.has("parameters") && call["parameters"].get_type() == Variant::DICTIONARY) {
+		call_args = call["parameters"];
+	}
+
+	const Array shared_keys = p_shared_arguments.keys();
+	for (int key_index = 0; key_index < shared_keys.size(); key_index++) {
+		const Variant shared_key_variant = shared_keys[key_index];
+		const String shared_key = String(shared_key_variant);
+		if (!call_args.has(shared_key)) {
+			call_args[shared_key] = p_shared_arguments[shared_key_variant];
+		}
+	}
+
+	out["tool"] = tool_name;
+	out["arguments"] = call_args;
+	return out;
+}
+
 Dictionary YeetAIDock::_tool_batch_tool_calls(const Dictionary &p_args) const {
 	Dictionary result;
 	Array calls;
@@ -1590,8 +2145,57 @@ Dictionary YeetAIDock::_tool_batch_tool_calls(const Dictionary &p_args) const {
 	// abort subsequent write steps in the same batch.  Pass stop_on_error:true
 	// explicitly when each call depends strictly on the previous one succeeding.
 	const bool stop_on_error = bool(p_args.get("stop_on_error", false));
+	const bool dry_run = bool(p_args.get("dry_run", false));
 	if (calls.is_empty()) {
 		result["error"] = "calls is required and must contain at least one tool call.";
+		return result;
+	}
+
+	// GDScript file tools blow up JSON size; never mix them with scene/editor tools in one batch.
+	{
+		bool any_gdscript_tool = false;
+		bool any_non_gdscript_tool = false;
+		for (int i = 0; i < calls.size(); i++) {
+			const Dictionary parsed = _parse_one_batch_call(calls[i], i, shared_arguments);
+			if (parsed.has("error")) {
+				result["error"] = parsed["error"];
+				result["failed_index"] = parsed["failed_index"];
+				return result;
+			}
+			const String tn = String(parsed["tool"]).strip_edges();
+			const bool is_gd = (tn == "create_gdscript_file" || tn == "update_gdscript_file");
+			if (is_gd) {
+				any_gdscript_tool = true;
+			} else {
+				any_non_gdscript_tool = true;
+			}
+		}
+		if (any_gdscript_tool && any_non_gdscript_tool) {
+			result["error"] =
+					"batch_tool_calls cannot mix `create_gdscript_file` or `update_gdscript_file` with any other tool in one batch. "
+					"Use one tool_call round with only scene/editor tools (inputs, nodes, meshes, attach_script, etc.), then a separate tool_call round whose batch contains only `create_gdscript_file` and/or `update_gdscript_file` calls.";
+			return result;
+		}
+	}
+
+	if (dry_run) {
+		Array planned;
+		for (int i = 0; i < calls.size(); i++) {
+			const Dictionary parsed = _parse_one_batch_call(calls[i], i, shared_arguments);
+			if (parsed.has("error")) {
+				result["error"] = parsed["error"];
+				result["failed_index"] = parsed["failed_index"];
+				return result;
+			}
+			Dictionary entry;
+			entry["tool"] = parsed["tool"];
+			entry["arguments"] = parsed["arguments"];
+			planned.push_back(entry);
+		}
+		result["dry_run"] = true;
+		result["planned_calls"] = planned;
+		result["planned_count"] = planned.size();
+		result["ok"] = true;
 		return result;
 	}
 
@@ -1599,62 +2203,14 @@ Dictionary YeetAIDock::_tool_batch_tool_calls(const Dictionary &p_args) const {
 	int executed_count = 0;
 	bool had_failure = false;
 	for (int i = 0; i < calls.size(); i++) {
-		const Variant call_var = calls[i];
-		Dictionary call;
-		if (call_var.get_type() == Variant::DICTIONARY) {
-			call = call_var;
-		} else if (call_var.get_type() == Variant::STRING) {
-			if (!_parse_json_dictionary_quiet(String(call_var).strip_edges(), call)) {
-				result["error"] = "Each batch call must be a JSON object (or a JSON object encoded as a string).";
-				result["failed_index"] = i;
-				return result;
-			}
-		} else {
-			result["error"] = "Each batch call must be a dictionary.";
-			result["failed_index"] = i;
+		const Dictionary parsed = _parse_one_batch_call(calls[i], i, shared_arguments);
+		if (parsed.has("error")) {
+			result["error"] = parsed["error"];
+			result["failed_index"] = parsed["failed_index"];
 			return result;
 		}
-		String tool_name = String(call.get("tool", "")).strip_edges();
-		if (tool_name.is_empty()) {
-			tool_name = String(call.get("name", "")).strip_edges();
-		}
-		if (tool_name.is_empty()) {
-			const Dictionary fn = call.get("function", Dictionary());
-			tool_name = String(fn.get("name", "")).strip_edges();
-		}
-		if (tool_name.is_empty()) {
-			result["error"] = "Each batch call needs a tool name (`tool`, `name`, or `function.name`).";
-			result["failed_index"] = i;
-			return result;
-		}
-		if (tool_name == "batch_tool_calls") {
-			result["error"] = "batch_tool_calls cannot invoke itself recursively.";
-			result["failed_index"] = i;
-			return result;
-		}
-
-		Dictionary call_args;
-		if (call.has("arguments")) {
-			const Variant av = call["arguments"];
-			if (av.get_type() == Variant::STRING) {
-				Dictionary parsed;
-				if (_parse_json_dictionary_quiet(String(av).strip_edges(), parsed)) {
-					call_args = parsed;
-				}
-			} else if (av.get_type() == Variant::DICTIONARY) {
-				call_args = av;
-			}
-		} else if (call.has("parameters") && call["parameters"].get_type() == Variant::DICTIONARY) {
-			call_args = call["parameters"];
-		}
-		Array shared_keys = shared_arguments.keys();
-		for (int key_index = 0; key_index < shared_keys.size(); key_index++) {
-			const Variant shared_key_variant = shared_keys[key_index];
-			const String shared_key = String(shared_key_variant);
-			if (!call_args.has(shared_key)) {
-				call_args[shared_key] = shared_arguments[shared_key_variant];
-			}
-		}
+		const String tool_name = String(parsed["tool"]);
+		const Dictionary call_args = parsed["arguments"];
 
 		ToolExecutionResult call_result = _execute_tool(tool_name, call_args);
 		Dictionary call_entry;
@@ -1687,7 +2243,8 @@ Dictionary YeetAIDock::_tool_batch_tool_calls(const Dictionary &p_args) const {
 		"add_primitive_mesh", "add_collision_shape",
 		"instantiate_scene", "connect_signal",
 		"create_standard_material", "assign_resource_to_property",
-		"attach_script", nullptr
+		"attach_script", "reparent_node", "rename_node",
+		"duplicate_node", "move_child", nullptr
 	};
 
 	HashSet<String> scenes_to_save;
@@ -2702,6 +3259,1124 @@ Dictionary YeetAIDock::_tool_set_node_property(const Dictionary &p_args) const {
 	return result;
 }
 
+Dictionary YeetAIDock::_tool_write_project_file(const Dictionary &p_args) const {
+	Dictionary result;
+	const String path = p_args.get("path", "");
+	if (!path.begins_with("res://")) {
+		result["error"] = "Path must start with res://";
+		return result;
+	}
+	if (!_is_allowed_text_file(path)) {
+		result["error"] = "Only safe text project extensions are allowed (same allowlist as read_project_file).";
+		return result;
+	}
+	if (!p_args.has("contents")) {
+		result["error"] = "contents is required.";
+		return result;
+	}
+	const String contents = String(p_args["contents"]);
+	if (contents.length() > MAX_FILE_WRITE_BYTES) {
+		result["error"] = vformat("contents exceeds max length (%d bytes).", MAX_FILE_WRITE_BYTES);
+		return result;
+	}
+	if (FileAccess::exists(path) && !bool(p_args.get("overwrite", false))) {
+		result["error"] = "File exists. Pass overwrite=true to replace it.";
+		return result;
+	}
+
+	const Error dir_error = DirAccess::make_dir_recursive_absolute(ProjectSettings::get_singleton()->globalize_path(path.get_base_dir()));
+	if (dir_error != OK) {
+		result["error"] = vformat("Failed to create parent directory: %d", dir_error);
+		return result;
+	}
+
+	Ref<FileAccess> file = FileAccess::open(path, FileAccess::WRITE);
+	if (file.is_null()) {
+		result["error"] = "Failed to open file for writing.";
+		return result;
+	}
+	file->store_string(contents);
+	file->flush();
+
+	EditorInterface *editor = EditorInterface::get_singleton();
+	if (editor != nullptr && editor->get_resource_filesystem() != nullptr) {
+		editor->get_resource_filesystem()->update_file(path);
+	}
+
+	result["path"] = path;
+	result["bytes_written"] = contents.length();
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_save_all_scenes() const {
+	Dictionary result;
+	EditorInterface *editor = EditorInterface::get_singleton();
+	if (editor == nullptr) {
+		result["error"] = "EditorInterface is unavailable.";
+		return result;
+	}
+	editor->save_all_scenes();
+	result["ok"] = true;
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_reload_scene(const Dictionary &p_args) const {
+	Dictionary result;
+	const String scene_path = p_args.get("scene_path", "");
+	if (!scene_path.begins_with("res://")) {
+		result["error"] = "scene_path must start with res://";
+		return result;
+	}
+	EditorInterface *editor = EditorInterface::get_singleton();
+	if (editor == nullptr) {
+		result["error"] = "EditorInterface is unavailable.";
+		return result;
+	}
+	editor->reload_scene_from_path(scene_path);
+	result["scene_path"] = scene_path;
+	result["reloaded"] = true;
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_set_editor_main_screen(const Dictionary &p_args) const {
+	Dictionary result;
+	const String screen = String(p_args.get("screen", "")).strip_edges();
+	if (screen.is_empty()) {
+		result["error"] = "screen is required (e.g. 2D, 3D, Script, Game, AssetLib).";
+		return result;
+	}
+	EditorInterface *editor = EditorInterface::get_singleton();
+	if (editor == nullptr) {
+		result["error"] = "EditorInterface is unavailable.";
+		return result;
+	}
+	editor->set_main_screen_editor(screen);
+	result["screen"] = screen;
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_select_file(const Dictionary &p_args) const {
+	Dictionary result;
+	const String path = p_args.get("path", "");
+	if (!path.begins_with("res://")) {
+		result["error"] = "path must start with res://";
+		return result;
+	}
+	EditorInterface *editor = EditorInterface::get_singleton();
+	if (editor == nullptr) {
+		result["error"] = "EditorInterface is unavailable.";
+		return result;
+	}
+	editor->select_file(path);
+	result["path"] = path;
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_get_unsaved_scenes() const {
+	Dictionary result;
+	EditorInterface *editor = EditorInterface::get_singleton();
+	if (editor == nullptr) {
+		result["error"] = "EditorInterface is unavailable.";
+		return result;
+	}
+	result["unsaved_scenes"] = editor->get_unsaved_scenes();
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_reparent_node(const Dictionary &p_args) const {
+	Dictionary result;
+	const String node_path = p_args.get("node_path", "");
+	const String new_parent_path = p_args.get("new_parent_path", "");
+	if (node_path.is_empty() || new_parent_path.is_empty()) {
+		result["error"] = "node_path and new_parent_path are required (paths relative to scene root).";
+		return result;
+	}
+
+	String error;
+	Node *scene_root = _resolve_scene_root(p_args.get("scene_path", ""), error);
+	if (scene_root == nullptr) {
+		result["error"] = error;
+		return result;
+	}
+
+	Node *target = _resolve_node_target(scene_root, node_path, error);
+	if (target == nullptr) {
+		result["error"] = error;
+		return result;
+	}
+	if (target == scene_root) {
+		result["error"] = "Cannot reparent the scene root.";
+		return result;
+	}
+
+	Node *new_parent = _resolve_node_target(scene_root, new_parent_path, error);
+	if (new_parent == nullptr) {
+		result["error"] = error;
+		return result;
+	}
+	if (new_parent == target) {
+		result["error"] = "Invalid reparent: new_parent cannot be the node itself.";
+		return result;
+	}
+	if (target->is_ancestor_of(new_parent)) {
+		result["error"] = "Invalid reparent: cannot move a node under one of its descendants.";
+		return result;
+	}
+
+	const bool keep_global = bool(p_args.get("keep_global_transform", true));
+	target->reparent(new_parent, keep_global);
+	EditorInterface::get_singleton()->mark_scene_as_unsaved();
+
+	result["scene_path"] = scene_root->get_scene_file_path();
+	result["node_path"] = String(target->get_path());
+	result["new_parent_path"] = String(new_parent->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_rename_node(const Dictionary &p_args) const {
+	Dictionary result;
+	const String node_path = p_args.get("node_path", "");
+	const String new_name = String(p_args.get("new_name", "")).strip_edges();
+	if (node_path.is_empty() || new_name.is_empty()) {
+		result["error"] = "node_path and new_name are required.";
+		return result;
+	}
+	if (new_name.contains("/") || new_name.contains("\\")) {
+		result["error"] = "new_name must be a single segment (no path separators).";
+		return result;
+	}
+
+	String error;
+	Node *scene_root = _resolve_scene_root(p_args.get("scene_path", ""), error);
+	if (scene_root == nullptr) {
+		result["error"] = error;
+		return result;
+	}
+
+	Node *target = _resolve_node_target(scene_root, node_path, error);
+	if (target == nullptr) {
+		result["error"] = error;
+		return result;
+	}
+	if (target == scene_root) {
+		result["error"] = "Cannot rename the scene root via this tool (use save_scene_file or edit scene).";
+		return result;
+	}
+
+	Node *parent = target->get_parent();
+	if (parent == nullptr) {
+		result["error"] = "Node has no parent.";
+		return result;
+	}
+
+	const String validated = parent->prevalidate_child_name(target, StringName(new_name));
+	target->set_name(validated);
+	EditorInterface::get_singleton()->mark_scene_as_unsaved();
+
+	result["scene_path"] = scene_root->get_scene_file_path();
+	result["node_path"] = String(target->get_path());
+	result["new_name"] = target->get_name();
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_file_exists(const Dictionary &p_args) const {
+	Dictionary result;
+	const String path = p_args.get("path", "");
+	if (!path.begins_with("res://")) {
+		result["error"] = "path must start with res://";
+		return result;
+	}
+	const bool is_file = FileAccess::exists(path);
+	const bool is_dir = DirAccess::exists(path);
+	result["path"] = path;
+	result["exists_as_file"] = is_file;
+	result["exists_as_directory"] = is_dir;
+	result["exists"] = is_file || is_dir;
+	if (is_file) {
+		result["resource_type"] = ResourceLoader::get_resource_type(path);
+		Ref<FileAccess> f = FileAccess::open(path, FileAccess::READ);
+		if (f.is_valid()) {
+			result["size_bytes"] = f->get_length();
+		}
+	}
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_list_directory(const Dictionary &p_args) const {
+	Dictionary result;
+	String dir_path = p_args.get("path", "res://");
+	if (!dir_path.begins_with("res://")) {
+		dir_path = "res://";
+	}
+	if (!dir_path.ends_with("/")) {
+		dir_path += "/";
+	}
+	const int max_entries = CLAMP(int(p_args.get("max_entries", 200)), 1, 2000);
+	const Array ext_filter = p_args.get("include_extensions", Array());
+
+	Error open_error = OK;
+	Ref<DirAccess> dir = DirAccess::open(dir_path, &open_error);
+	if (dir.is_null() || open_error != OK) {
+		result["error"] = vformat("Cannot open directory: %d", open_error);
+		return result;
+	}
+
+	dir->set_include_hidden(false);
+	dir->set_include_navigational(false);
+	if (dir->list_dir_begin() != OK) {
+		result["error"] = "list_dir_begin failed.";
+		return result;
+	}
+
+	Array entries;
+	int count = 0;
+	while (count < max_entries) {
+		const String name = dir->get_next();
+		if (name.is_empty()) {
+			break;
+		}
+		const String full_path = dir_path.path_join(name);
+		if (!ext_filter.is_empty() && !dir->current_is_dir()) {
+			const String ext = "." + full_path.get_extension().to_lower();
+			if (!contains_string(_variant_array_to_string_vector(ext_filter), ext)) {
+				continue;
+			}
+		}
+		Dictionary entry;
+		entry["name"] = name;
+		entry["path"] = full_path;
+		entry["kind"] = dir->current_is_dir() ? "dir" : "file";
+		if (!dir->current_is_dir()) {
+			entry["resource_type"] = ResourceLoader::get_resource_type(full_path);
+		}
+		entries.push_back(entry);
+		count++;
+	}
+	dir->list_dir_end();
+
+	result["path"] = dir_path;
+	result["entries"] = entries;
+	result["count"] = entries.size();
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_duplicate_node(const Dictionary &p_args) const {
+	Dictionary result;
+	const String node_path = p_args.get("node_path", "");
+	if (node_path.is_empty()) {
+		result["error"] = "node_path is required.";
+		return result;
+	}
+
+	String error;
+	Node *scene_root = _resolve_scene_root(p_args.get("scene_path", ""), error);
+	if (scene_root == nullptr) {
+		result["error"] = error;
+		return result;
+	}
+
+	Node *target = _resolve_node_target(scene_root, node_path, error);
+	if (target == nullptr) {
+		result["error"] = error;
+		return result;
+	}
+	if (target == scene_root) {
+		result["error"] = "Cannot duplicate the scene root.";
+		return result;
+	}
+
+	Node *dup_parent = target->get_parent();
+	const String parent_path_arg = String(p_args.get("parent_path", "")).strip_edges();
+	if (!parent_path_arg.is_empty()) {
+		dup_parent = _resolve_node_target(scene_root, parent_path_arg, error);
+		if (dup_parent == nullptr) {
+			result["error"] = error;
+			return result;
+		}
+	}
+	if (dup_parent == nullptr) {
+		result["error"] = "Could not resolve parent for duplicate.";
+		return result;
+	}
+	if (target->is_ancestor_of(dup_parent)) {
+		result["error"] = "Invalid parent_path: cannot parent duplicate under a descendant of the source.";
+		return result;
+	}
+
+	Node *dup = target->duplicate(Node::DUPLICATE_SIGNALS | Node::DUPLICATE_GROUPS | Node::DUPLICATE_SCRIPTS);
+	dup_parent->add_child(dup, true);
+	const String base_name = String(p_args.get("new_name", String(target->get_name()) + "Copy")).strip_edges();
+	dup->set_name(dup_parent->prevalidate_child_name(dup, StringName(base_name)));
+	_set_owner_recursive(dup, scene_root);
+	EditorInterface::get_singleton()->mark_scene_as_unsaved();
+
+	result["scene_path"] = scene_root->get_scene_file_path();
+	result["node_path"] = String(dup->get_path());
+	result["duplicated_from"] = node_path;
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_edit_script(const Dictionary &p_args) const {
+	Dictionary result;
+	const String script_path = p_args.get("script_path", "");
+	if (!script_path.begins_with("res://") || !script_path.ends_with(".gd")) {
+		result["error"] = "script_path must be a res:// path to a .gd file.";
+		return result;
+	}
+	EditorInterface *editor = EditorInterface::get_singleton();
+	if (editor == nullptr) {
+		result["error"] = "EditorInterface is unavailable.";
+		return result;
+	}
+
+	const Ref<Script> scr = ResourceLoader::load(script_path);
+	if (scr.is_null()) {
+		result["error"] = "Failed to load script (not found or not a Script resource).";
+		return result;
+	}
+
+	const int line = int(p_args.get("line", -1));
+	const int col = int(p_args.get("column", 0));
+	const bool grab_focus = bool(p_args.get("grab_focus", true));
+	editor->edit_script(scr, line, col, grab_focus);
+	result["script_path"] = script_path;
+	result["line"] = line;
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_move_child(const Dictionary &p_args) const {
+	Dictionary result;
+	const String node_path = p_args.get("node_path", "");
+	if (node_path.is_empty() || !p_args.has("new_index")) {
+		result["error"] = "node_path and new_index are required.";
+		return result;
+	}
+
+	String error;
+	Node *scene_root = _resolve_scene_root(p_args.get("scene_path", ""), error);
+	if (scene_root == nullptr) {
+		result["error"] = error;
+		return result;
+	}
+
+	Node *target = _resolve_node_target(scene_root, node_path, error);
+	if (target == nullptr) {
+		result["error"] = error;
+		return result;
+	}
+	Node *parent = target->get_parent();
+	if (parent == nullptr) {
+		result["error"] = "Node has no parent.";
+		return result;
+	}
+
+	int new_index = int(p_args["new_index"]);
+	new_index = CLAMP(new_index, 0, parent->get_child_count() - 1);
+	parent->move_child(target, new_index);
+	EditorInterface::get_singleton()->mark_scene_as_unsaved();
+
+	result["scene_path"] = scene_root->get_scene_file_path();
+	result["node_path"] = String(target->get_path());
+	result["new_index"] = new_index;
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_project_folder(const Dictionary &p_args) const {
+	Dictionary result;
+	const String folder_path = p_args.get("path", "");
+	if (!folder_path.begins_with("res://")) {
+		result["error"] = "path must start with res://";
+		return result;
+	}
+	const Error err = DirAccess::make_dir_recursive_absolute(ProjectSettings::get_singleton()->globalize_path(folder_path));
+	if (err != OK) {
+		result["error"] = vformat("make_dir_recursive failed: %d", err);
+		return result;
+	}
+	EditorInterface *editor = EditorInterface::get_singleton();
+	if (editor != nullptr && editor->get_resource_filesystem() != nullptr) {
+		editor->get_resource_filesystem()->scan();
+	}
+	result["path"] = folder_path;
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_delete_project_file(const Dictionary &p_args) const {
+	Dictionary result;
+	if (!bool(p_args.get("confirm", false))) {
+		result["error"] = "Refusing to delete without confirm:true.";
+		return result;
+	}
+	const String path = p_args.get("path", "");
+	if (!path.begins_with("res://")) {
+		result["error"] = "path must start with res://";
+		return result;
+	}
+	if (!_is_allowed_text_file(path)) {
+		result["error"] = "Only the same safe extensions as write_project_file are allowed.";
+		return result;
+	}
+	if (!FileAccess::exists(path)) {
+		result["error"] = "File does not exist.";
+		return result;
+	}
+
+	Ref<DirAccess> da = DirAccess::open(path.get_base_dir());
+	if (da.is_null()) {
+		result["error"] = "Cannot open parent directory.";
+		return result;
+	}
+	const Error err = da->remove(path.get_file());
+	if (err != OK) {
+		result["error"] = vformat("remove failed: %d", err);
+		return result;
+	}
+
+	EditorInterface *editor = EditorInterface::get_singleton();
+	if (editor != nullptr && editor->get_resource_filesystem() != nullptr) {
+		editor->get_resource_filesystem()->update_file(path);
+	}
+
+	result["path"] = path;
+	result["deleted"] = true;
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_get_editor_log(const Dictionary &p_args) const {
+	Dictionary result;
+	EditorLog *log = EditorNode::get_log();
+	if (log == nullptr) {
+		result["error"] = "Editor log is unavailable.";
+		return result;
+	}
+	const int max_lines = CLAMP(int(p_args.get("max_lines", 200)), 1, 2000);
+	const Array messages = log->get_recent_messages(max_lines);
+	result["messages"] = messages;
+	result["count"] = messages.size();
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_capture_editor_viewport(const Dictionary &p_args) const {
+	Dictionary result;
+	EditorInterface *editor = EditorInterface::get_singleton();
+	if (editor == nullptr) {
+		result["error"] = "EditorInterface is unavailable.";
+		return result;
+	}
+
+	const String target = String(p_args.get("target", "editor_3d")).to_lower();
+	SubViewport *vp = nullptr;
+	if (target == "editor_2d" || target == "2d") {
+		vp = editor->get_editor_viewport_2d();
+	} else {
+		const int idx = CLAMP(int(p_args.get("viewport_sub_index", 0)), 0, 7);
+		vp = editor->get_editor_viewport_3d(idx);
+	}
+
+	if (vp == nullptr) {
+		result["error"] = "Editor viewport is not available (wrong target or index).";
+		return result;
+	}
+
+	const Ref<ViewportTexture> tex = vp->get_texture();
+	if (tex.is_null()) {
+		result["error"] = "Viewport has no texture.";
+		return result;
+	}
+
+	Ref<Image> img = tex->get_image();
+	if (img.is_null() || img->is_empty()) {
+		result["error"] = "Viewport image is empty; try switching to the 2D/3D editor tab and retry.";
+		return result;
+	}
+
+	const int max_w = CLAMP(int(p_args.get("max_width", 640)), 64, 4096);
+	if (img->get_width() > max_w) {
+		const int nh = MAX(1, int(img->get_height() * (float(max_w) / float(img->get_width()))));
+		img->resize(max_w, nh, Image::INTERPOLATE_BILINEAR);
+	}
+
+	CoreBind::Marshalls *marshalls = CoreBind::Marshalls::get_singleton();
+	if (marshalls == nullptr) {
+		result["error"] = "Marshalls singleton is unavailable.";
+		return result;
+	}
+
+	const Vector<uint8_t> png = img->save_png_to_buffer();
+	String b64 = marshalls->raw_to_base64(png);
+	const int max_b64 = _get_editor_setting_int("yeet_ai/chat/max_base64_chars", 2000000);
+	if (b64.length() > max_b64) {
+		result["warning"] = vformat("png_base64 was truncated from %d to %d characters (yeet_ai/chat/max_base64_chars).", b64.length(), max_b64);
+		b64 = b64.substr(0, max_b64);
+	}
+	result["width"] = img->get_width();
+	result["height"] = img->get_height();
+	result["format"] = "png";
+	result["png_base64"] = b64;
+	result["target"] = target;
+	result["source"] = "editor_viewport";
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_capture_game_viewport(const Dictionary &p_args) const {
+	Dictionary result;
+	EditorInterface *ei = EditorInterface::get_singleton();
+	if (ei == nullptr || !ei->is_playing_scene()) {
+		result["error"] = "No game is running (start play mode with embedded game first).";
+		return result;
+	}
+
+	YeetAIDock *dock = const_cast<YeetAIDock *>(this);
+	dock->game_screenshot_done = false;
+	dock->game_screenshot_path = String();
+	if (!EditorRun::request_screenshot(callable_mp(dock, &YeetAIDock::_on_game_screenshot_cb))) {
+		result["error"] = "Could not request a game screenshot (embedded game view may be unavailable).";
+		return result;
+	}
+
+	const int timeout_ms = CLAMP(_get_editor_setting_int("yeet_ai/chat/game_screenshot_timeout_ms", 8000), 500, 60000);
+	const uint64_t deadline = OS::get_singleton()->get_ticks_msec() + uint64_t(timeout_ms);
+	while (!dock->game_screenshot_done && OS::get_singleton()->get_ticks_msec() < deadline) {
+		DisplayServer::get_singleton()->process_events();
+		Main::iteration();
+	}
+
+	if (!dock->game_screenshot_done) {
+		result["error"] = "Timed out waiting for game screenshot.";
+		return result;
+	}
+
+	Ref<Image> img = Image::load_from_file(dock->game_screenshot_path);
+	if (img.is_null() || img->is_empty()) {
+		result["error"] = "Failed to load screenshot image from temporary path.";
+		return result;
+	}
+
+	const int max_w = CLAMP(int(p_args.get("max_width", 640)), 64, 4096);
+	if (img->get_width() > max_w) {
+		const int nh = MAX(1, int(img->get_height() * (float(max_w) / float(img->get_width()))));
+		img->resize(max_w, nh, Image::INTERPOLATE_BILINEAR);
+	}
+
+	CoreBind::Marshalls *marshalls = CoreBind::Marshalls::get_singleton();
+	if (marshalls == nullptr) {
+		result["error"] = "Marshalls singleton is unavailable.";
+		return result;
+	}
+
+	const Vector<uint8_t> png = img->save_png_to_buffer();
+	String b64 = marshalls->raw_to_base64(png);
+	const int max_b64 = _get_editor_setting_int("yeet_ai/chat/max_base64_chars", 2000000);
+	if (b64.length() > max_b64) {
+		result["warning"] = vformat("png_base64 was truncated from %d to %d characters (yeet_ai/chat/max_base64_chars).", b64.length(), max_b64);
+		b64 = b64.substr(0, max_b64);
+	}
+
+	result["width"] = img->get_width();
+	result["height"] = img->get_height();
+	result["format"] = "png";
+	result["png_base64"] = b64;
+	result["source"] = "embedded_game";
+	result["raw_width"] = int(dock->game_screenshot_w);
+	result["raw_height"] = int(dock->game_screenshot_h);
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_get_runtime_debugger_state() const {
+	Dictionary result;
+	EditorDebuggerNode *edn = EditorDebuggerNode::get_singleton();
+	if (edn == nullptr) {
+		result["error"] = "EditorDebuggerNode is unavailable.";
+		return result;
+	}
+
+	ScriptEditorDebugger *dbg = edn->get_default_debugger();
+	if (dbg == nullptr) {
+		result["error"] = "No script debugger instance (start a debug session by running the project).";
+		return result;
+	}
+
+	result["session_active"] = dbg->is_session_active();
+	result["error_count"] = dbg->get_error_count();
+	result["warning_count"] = dbg->get_warning_count();
+	result["is_breaked"] = dbg->is_breaked();
+	result["stack_script_file"] = dbg->get_stack_script_file();
+	result["stack_script_line"] = dbg->get_stack_script_line();
+	result["stack_script_frame"] = dbg->get_stack_script_frame();
+	result["remote_pid"] = dbg->get_remote_pid();
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_editor_undo(const Dictionary &p_args) const {
+	Dictionary result;
+	EditorInterface *ei = EditorInterface::get_singleton();
+	if (ei == nullptr) {
+		result["error"] = "EditorInterface is unavailable.";
+		return result;
+	}
+
+	EditorUndoRedoManager *urm = ei->get_editor_undo_redo();
+	if (urm == nullptr) {
+		result["error"] = "EditorUndoRedoManager is unavailable.";
+		return result;
+	}
+
+	const int steps = CLAMP(int(p_args.get("steps", 1)), 1, 50);
+	int undone = 0;
+	for (int i = 0; i < steps; i++) {
+		if (!urm->undo()) {
+			break;
+		}
+		undone++;
+	}
+
+	result["undone_steps"] = undone;
+	result["requested_steps"] = steps;
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_get_debug_snapshot(const Dictionary &p_args) const {
+	Dictionary result;
+	const int max_log = CLAMP(int(p_args.get("max_log_lines", 80)), 1, 500);
+	Dictionary log_args;
+	log_args["max_lines"] = max_log;
+	result["editor_log"] = _tool_get_editor_log(log_args);
+	result["current_scene"] = _tool_get_current_scene();
+	result["selected_nodes"] = _tool_get_selected_nodes();
+	result["unsaved_scenes"] = _tool_get_unsaved_scenes();
+	result["open_scenes"] = _tool_get_open_scenes();
+	EditorInterface *ei = EditorInterface::get_singleton();
+	if (ei != nullptr) {
+		result["is_playing"] = ei->is_playing_scene();
+		result["playing_scene"] = ei->get_playing_scene();
+	}
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_grep_project_files(const Dictionary &p_args) const {
+	Dictionary result;
+	const String query = String(p_args.get("query", "")).strip_edges();
+	if (query.is_empty()) {
+		result["error"] = "query is required.";
+		return result;
+	}
+
+	String root = String(p_args.get("path", "res://"));
+	if (!root.begins_with("res://")) {
+		root = "res://";
+	}
+	if (!root.ends_with("/")) {
+		root += "/";
+	}
+
+	const int max_matches = CLAMP(int(p_args.get("max_results", 40)), 1, 200);
+	const int max_bytes = CLAMP(int(p_args.get("max_file_bytes", 256 * 1024)), 1024, 2 * 1024 * 1024);
+	const bool case_sensitive = bool(p_args.get("case_sensitive", false));
+
+	Vector<String> exts = _variant_array_to_string_vector(p_args.get("include_extensions", Array()));
+	if (exts.is_empty()) {
+		static const char *defaults[] = {
+			".gd", ".tscn", ".godot", ".tres", ".cfg", ".gdshader", ".shader", ".md", ".txt", ".json", nullptr
+		};
+		for (int i = 0; defaults[i] != nullptr; i++) {
+			exts.push_back(String(defaults[i]));
+		}
+	}
+
+	Array matches;
+	int match_count = 0;
+	_grep_project_files_recursive(root, query, case_sensitive, exts, max_bytes, max_matches, match_count, matches);
+
+	result["matches"] = matches;
+	result["match_count"] = matches.size();
+	result["root"] = root;
+	return result;
+}
+
+void YeetAIDock::_grep_project_files_recursive(const String &p_dir, const String &p_query, bool p_case_sensitive, const Vector<String> &p_extensions, int p_max_bytes, int p_max_matches, int &r_match_count, Array &r_matches) const {
+	if (r_match_count >= p_max_matches) {
+		return;
+	}
+
+	Error open_error = OK;
+	Ref<DirAccess> dir = DirAccess::open(p_dir, &open_error);
+	if (dir.is_null() || open_error != OK) {
+		return;
+	}
+
+	dir->set_include_hidden(false);
+	dir->set_include_navigational(false);
+	if (dir->list_dir_begin() != OK) {
+		return;
+	}
+
+	while (r_match_count < p_max_matches) {
+		const String name = dir->get_next();
+		if (name.is_empty()) {
+			break;
+		}
+
+		const String full_path = p_dir.path_join(name);
+		if (dir->current_is_dir()) {
+			if (name == ".godot" || name == ".git") {
+				continue;
+			}
+			_grep_project_files_recursive(full_path, p_query, p_case_sensitive, p_extensions, p_max_bytes, p_max_matches, r_match_count, r_matches);
+			continue;
+		}
+
+		if (!p_extensions.is_empty()) {
+			const String ext = "." + full_path.get_extension().to_lower();
+			if (!contains_string(p_extensions, ext)) {
+				continue;
+			}
+		}
+
+		Error ferr = OK;
+		const String content = FileAccess::get_file_as_string(full_path, &ferr);
+		if (ferr != OK) {
+			continue;
+		}
+
+		String scan = content;
+		if (scan.length() > p_max_bytes) {
+			scan = scan.substr(0, p_max_bytes);
+		}
+
+		const String hay = p_case_sensitive ? scan : scan.to_lower();
+		const String needle = p_case_sensitive ? p_query : p_query.to_lower();
+		if (!hay.contains(needle)) {
+			continue;
+		}
+
+		int first_line = 1;
+		const PackedStringArray lines = scan.split("\n");
+		for (int i = 0; i < lines.size(); i++) {
+			const String line_text = p_case_sensitive ? lines[i] : lines[i].to_lower();
+			if (line_text.contains(needle)) {
+				first_line = i + 1;
+				break;
+			}
+		}
+
+		Dictionary hit;
+		hit["path"] = full_path;
+		hit["first_line"] = first_line;
+		r_matches.push_back(hit);
+		r_match_count++;
+	}
+
+	dir->list_dir_end();
+}
+
+Dictionary YeetAIDock::_tool_get_autoloads() const {
+	Dictionary result;
+	ProjectSettings *ps = ProjectSettings::get_singleton();
+	if (ps == nullptr) {
+		result["error"] = "ProjectSettings is unavailable.";
+		return result;
+	}
+
+	Array autoloads;
+	const HashMap<StringName, ProjectSettings::AutoloadInfo> &map = ps->get_autoload_list();
+	for (const KeyValue<StringName, ProjectSettings::AutoloadInfo> &E : map) {
+		Dictionary entry;
+		entry["name"] = String(E.key);
+		entry["path"] = E.value.path;
+		entry["singleton"] = E.value.is_singleton;
+		autoloads.push_back(entry);
+	}
+
+	result["autoloads"] = autoloads;
+	result["count"] = autoloads.size();
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_get_node_groups(const Dictionary &p_args) const {
+	Dictionary result;
+	const String node_path = p_args.get("node_path", "");
+	if (node_path.is_empty()) {
+		result["error"] = "node_path is required.";
+		return result;
+	}
+
+	String error;
+	Node *scene_root = _resolve_scene_root(p_args.get("scene_path", ""), error);
+	if (scene_root == nullptr) {
+		result["error"] = error;
+		return result;
+	}
+
+	Node *node = _resolve_node_target(scene_root, node_path, error);
+	if (node == nullptr) {
+		result["error"] = error;
+		return result;
+	}
+
+	List<Node::GroupInfo> groups;
+	node->get_groups(&groups);
+	Array group_names;
+	for (const Node::GroupInfo &gi : groups) {
+		group_names.push_back(String(gi.name));
+	}
+
+	result["scene_path"] = scene_root->get_scene_file_path();
+	result["node_path"] = String(node->get_path());
+	result["groups"] = group_names;
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_get_node_collision_layers(const Dictionary &p_args) const {
+	Dictionary result;
+	const String node_path = p_args.get("node_path", "");
+	if (node_path.is_empty()) {
+		result["error"] = "node_path is required.";
+		return result;
+	}
+
+	String error;
+	Node *scene_root = _resolve_scene_root(p_args.get("scene_path", ""), error);
+	if (scene_root == nullptr) {
+		result["error"] = error;
+		return result;
+	}
+
+	Node *node = _resolve_node_target(scene_root, node_path, error);
+	if (node == nullptr) {
+		result["error"] = error;
+		return result;
+	}
+
+	result["scene_path"] = scene_root->get_scene_file_path();
+	result["node_path"] = String(node->get_path());
+
+	if (CollisionObject3D *co3 = Object::cast_to<CollisionObject3D>(node)) {
+		result["dimension"] = "3d";
+		result["collision_layer"] = co3->get_collision_layer();
+		result["collision_mask"] = co3->get_collision_mask();
+		return result;
+	}
+	if (CollisionObject2D *co2 = Object::cast_to<CollisionObject2D>(node)) {
+		result["dimension"] = "2d";
+		result["collision_layer"] = co2->get_collision_layer();
+		result["collision_mask"] = co2->get_collision_mask();
+		return result;
+	}
+
+	result["error"] = "Node is not a CollisionObject2D or CollisionObject3D.";
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_move_project_file(const Dictionary &p_args) const {
+	Dictionary result;
+	const String from_path = p_args.get("from_path", "");
+	const String to_path = p_args.get("to_path", "");
+	if (!from_path.begins_with("res://") || !to_path.begins_with("res://")) {
+		result["error"] = "from_path and to_path must start with res://";
+		return result;
+	}
+	if (from_path == to_path) {
+		result["error"] = "from_path and to_path must differ.";
+		return result;
+	}
+	if (!_is_allowed_text_file(from_path) || !_is_allowed_text_file(to_path)) {
+		result["error"] = "Only safe text/resource extensions are allowed (same allowlist as write_project_file).";
+		return result;
+	}
+	if (!FileAccess::exists(from_path)) {
+		result["error"] = "Source file does not exist.";
+		return result;
+	}
+	if (FileAccess::exists(to_path) || DirAccess::exists(to_path)) {
+		result["error"] = "Target path already exists.";
+		return result;
+	}
+
+	const Error mkdir_err = DirAccess::make_dir_recursive_absolute(ProjectSettings::get_singleton()->globalize_path(to_path.get_base_dir()));
+	if (mkdir_err != OK) {
+		result["error"] = vformat("Failed to create target directory: %d", mkdir_err);
+		return result;
+	}
+
+	const String from_abs = ProjectSettings::get_singleton()->globalize_path(from_path);
+	const String to_abs = ProjectSettings::get_singleton()->globalize_path(to_path);
+	const Error err = DirAccess::rename_absolute(from_abs, to_abs);
+	if (err != OK) {
+		result["error"] = vformat("rename_absolute failed: %d", err);
+		return result;
+	}
+
+	EditorInterface *editor = EditorInterface::get_singleton();
+	if (editor != nullptr && editor->get_resource_filesystem() != nullptr) {
+		editor->get_resource_filesystem()->scan();
+	}
+
+	result["from_path"] = from_path;
+	result["to_path"] = to_path;
+	result["moved"] = true;
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_get_animation_player_state(const Dictionary &p_args) const {
+	Dictionary result;
+	const String node_path = p_args.get("node_path", "");
+	if (node_path.is_empty()) {
+		result["error"] = "node_path is required.";
+		return result;
+	}
+
+	String error;
+	Node *scene_root = _resolve_scene_root(p_args.get("scene_path", ""), error);
+	if (scene_root == nullptr) {
+		result["error"] = error;
+		return result;
+	}
+
+	Node *node = _resolve_node_target(scene_root, node_path, error);
+	if (node == nullptr) {
+		result["error"] = error;
+		return result;
+	}
+
+	AnimationPlayer *ap = Object::cast_to<AnimationPlayer>(node);
+	if (ap == nullptr) {
+		result["error"] = "Node is not an AnimationPlayer.";
+		return result;
+	}
+
+	const LocalVector<StringName> sorted = ap->get_sorted_animation_list();
+	Array animations;
+	for (const StringName &n : sorted) {
+		animations.push_back(String(n));
+	}
+
+	result["scene_path"] = scene_root->get_scene_file_path();
+	result["node_path"] = String(ap->get_path());
+	result["animations"] = animations;
+	result["current_animation"] = String(ap->get_current_animation());
+	result["assigned_animation"] = String(ap->get_assigned_animation());
+	result["current_position"] = ap->get_current_animation_position();
+	result["current_length"] = ap->get_current_animation_length();
+	result["active"] = ap->is_active();
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_get_tilemap_info(const Dictionary &p_args) const {
+	Dictionary result;
+	const String node_path = p_args.get("node_path", "");
+	if (node_path.is_empty()) {
+		result["error"] = "node_path is required.";
+		return result;
+	}
+
+	String error;
+	Node *scene_root = _resolve_scene_root(p_args.get("scene_path", ""), error);
+	if (scene_root == nullptr) {
+		result["error"] = error;
+		return result;
+	}
+
+	Node *node = _resolve_node_target(scene_root, node_path, error);
+	if (node == nullptr) {
+		result["error"] = error;
+		return result;
+	}
+
+	TileMap *tm = Object::cast_to<TileMap>(node);
+	if (tm == nullptr) {
+		result["error"] = "Node is not a TileMap.";
+		return result;
+	}
+
+	result["scene_path"] = scene_root->get_scene_file_path();
+	result["node_path"] = String(tm->get_path());
+	result["layers_count"] = tm->get_layers_count();
+
+	const Ref<TileSet> ts = tm->get_tileset();
+	if (ts.is_valid()) {
+		result["tileset_resource_path"] = ts->get_path();
+	} else {
+		result["tileset_resource_path"] = String();
+	}
+
+	const Rect2i ur = tm->get_used_rect();
+	Dictionary urd;
+	urd["x"] = ur.position.x;
+	urd["y"] = ur.position.y;
+	urd["w"] = ur.size.x;
+	urd["h"] = ur.size.y;
+	result["used_rect"] = urd;
+
+	Array layer_names;
+	const int lc = tm->get_layers_count();
+	for (int i = 0; i < lc; i++) {
+		layer_names.push_back(tm->get_layer_name(i));
+	}
+	result["layer_names"] = layer_names;
+
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_get_navigation_region_info(const Dictionary &p_args) const {
+	Dictionary result;
+	const String node_path = p_args.get("node_path", "");
+	if (node_path.is_empty()) {
+		result["error"] = "node_path is required.";
+		return result;
+	}
+
+	String error;
+	Node *scene_root = _resolve_scene_root(p_args.get("scene_path", ""), error);
+	if (scene_root == nullptr) {
+		result["error"] = error;
+		return result;
+	}
+
+	Node *node = _resolve_node_target(scene_root, node_path, error);
+	if (node == nullptr) {
+		result["error"] = error;
+		return result;
+	}
+
+	result["scene_path"] = scene_root->get_scene_file_path();
+	result["node_path"] = String(node->get_path());
+
+	if (NavigationRegion3D *r3 = Object::cast_to<NavigationRegion3D>(node)) {
+		result["dimension"] = "3d";
+		result["enabled"] = r3->is_enabled();
+		result["navigation_layers"] = r3->get_navigation_layers();
+		result["is_baking"] = r3->is_baking();
+		const AABB b = r3->get_bounds();
+		Dictionary bd;
+		bd["position"] = _json_safe_variant(b.position);
+		bd["size"] = _json_safe_variant(b.size);
+		result["bounds"] = bd;
+		const Ref<NavigationMesh> nm = r3->get_navigation_mesh();
+		result["has_navigation_mesh"] = nm.is_valid();
+		return result;
+	}
+
+	if (NavigationRegion2D *r2 = Object::cast_to<NavigationRegion2D>(node)) {
+		result["dimension"] = "2d";
+		result["enabled"] = r2->is_enabled();
+		result["navigation_layers"] = r2->get_navigation_layers();
+		result["is_baking"] = r2->is_baking();
+		const Rect2 b = r2->get_bounds();
+		Dictionary bd;
+		bd["x"] = b.position.x;
+		bd["y"] = b.position.y;
+		bd["w"] = b.size.x;
+		bd["h"] = b.size.y;
+		result["bounds"] = bd;
+		const Ref<NavigationPolygon> np = r2->get_navigation_polygon();
+		result["has_navigation_polygon"] = np.is_valid();
+		return result;
+	}
+
+	result["error"] = "Node is not a NavigationRegion2D or NavigationRegion3D.";
+	return result;
+}
+
 void YeetAIDock::_collect_project_entries(const String &p_dir_path, int p_depth, int p_max_depth, const Vector<String> &p_include_extensions, Array &r_entries, int &r_entry_count) const {
 	if (r_entry_count >= MAX_PROJECT_TREE_ENTRIES) {
 		return;
@@ -3058,6 +4733,8 @@ String YeetAIDock::_build_system_prompt() const {
 	return String() +
 			"You are Crosshair AI embedded inside the editor.\n"
 			"You are building playable Godot game slices, not just isolated assets.\n"
+			"You are queried through an OpenAI-compatible `/v1/chat/completions` API (local models such as Qwen3.5 are common). "
+			"Reply with a single JSON object only: no markdown code fences, no analysis before or after the JSON, no `<think>` blocks.\n"
 			"You must respond with valid JSON only.\n"
 			"You can use exactly one of these JSON shapes:\n"
 			"{\"type\":\"tool_call\",\"tool\":\"get_project_tree\",\"arguments\":{\"root\":\"res://\",\"max_depth\":3,\"include_extensions\":[\".godot\",\".tscn\",\".gd\"]}}\n"
@@ -3092,11 +4769,49 @@ String YeetAIDock::_build_system_prompt() const {
 			"{\"type\":\"tool_call\",\"tool\":\"stop_playing_scene\",\"arguments\":{}}\n"
 			"{\"type\":\"tool_call\",\"tool\":\"remove_node\",\"arguments\":{\"scene_path\":\"res://levels/main.tscn\",\"node_path\":\"GeneratedNode\"}}\n"
 			"{\"type\":\"tool_call\",\"tool\":\"set_node_property\",\"arguments\":{\"scene_path\":\"res://levels/main.tscn\",\"node_path\":\"GeneratedNode\",\"property\":\"position\",\"value\":{\"x\":0,\"y\":1,\"z\":0}}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"write_project_file\",\"arguments\":{\"path\":\"res://notes.txt\",\"contents\":\"hello\",\"overwrite\":true}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"save_all_scenes\",\"arguments\":{}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"reload_scene\",\"arguments\":{\"scene_path\":\"res://levels/main.tscn\"}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"set_editor_main_screen\",\"arguments\":{\"screen\":\"3D\"}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"select_file\",\"arguments\":{\"path\":\"res://scripts/player.gd\"}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"get_unsaved_scenes\",\"arguments\":{}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"reparent_node\",\"arguments\":{\"scene_path\":\"res://levels/main.tscn\",\"node_path\":\"Crate\",\"new_parent_path\":\"GameplayRoot\"}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"rename_node\",\"arguments\":{\"scene_path\":\"res://levels/main.tscn\",\"node_path\":\"Crate\",\"new_name\":\"PhysicsCrate\"}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"file_exists\",\"arguments\":{\"path\":\"res://scripts/player.gd\"}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"list_directory\",\"arguments\":{\"path\":\"res://scripts/\",\"max_entries\":50,\"include_extensions\":[\".gd\"]}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"duplicate_node\",\"arguments\":{\"scene_path\":\"res://levels/main.tscn\",\"node_path\":\"Crate\",\"parent_path\":\".\",\"new_name\":\"Crate2\"}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"edit_script\",\"arguments\":{\"script_path\":\"res://scripts/player.gd\",\"line\":10,\"column\":0}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"move_child\",\"arguments\":{\"scene_path\":\"res://levels/main.tscn\",\"node_path\":\"Crate\",\"new_index\":0}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"create_project_folder\",\"arguments\":{\"path\":\"res://generated/\"}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"delete_project_file\",\"arguments\":{\"path\":\"res://tmp.txt\",\"confirm\":true}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"get_editor_log\",\"arguments\":{\"max_lines\":120}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"capture_editor_viewport\",\"arguments\":{\"target\":\"editor_3d\",\"max_width\":640}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"get_debug_snapshot\",\"arguments\":{\"max_log_lines\":60}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"grep_project_files\",\"arguments\":{\"query\":\"func _physics_process\",\"path\":\"res://\",\"max_results\":30}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"get_autoloads\",\"arguments\":{}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"get_node_groups\",\"arguments\":{\"scene_path\":\"res://levels/main.tscn\",\"node_path\":\"Player\"}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"get_node_collision_layers\",\"arguments\":{\"scene_path\":\"res://levels/main.tscn\",\"node_path\":\"Player\"}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"move_project_file\",\"arguments\":{\"from_path\":\"res://scripts/old.gd\",\"to_path\":\"res://scripts/new.gd\"}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"get_animation_player_state\",\"arguments\":{\"scene_path\":\"res://levels/main.tscn\",\"node_path\":\"Player/AnimationPlayer\"}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"get_tilemap_info\",\"arguments\":{\"scene_path\":\"res://levels/main.tscn\",\"node_path\":\"TileMap\"}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"get_navigation_region_info\",\"arguments\":{\"scene_path\":\"res://levels/main.tscn\",\"node_path\":\"NavigationRegion3D\"}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"capture_game_viewport\",\"arguments\":{\"max_width\":640}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"get_runtime_debugger_state\",\"arguments\":{}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"editor_undo\",\"arguments\":{\"steps\":1}}\n"
+			"{\"type\":\"tool_call\",\"tool\":\"batch_tool_calls\",\"arguments\":{\"dry_run\":true,\"calls\":[{\"tool\":\"add_node\",\"arguments\":{\"parent_path\":\".\",\"node_type\":\"Node3D\",\"node_name\":\"Test\"}}]}}\n"
 			"{\"type\":\"final\",\"message\":\"Your answer here\"}\n"
 			"Core behavior:\n"
 			"- Never wrap JSON in markdown.\n"
 			"- You will receive a live project/editor snapshot in a separate system message. Use it first.\n"
-			"- Prefer one `batch_tool_calls` request for multi-step changes, but keep each reply's JSON small enough to finish in one response; use multiple tool_call rounds if many edits are needed.\n"
+			"- **GDScript vs editor batches:** Never put `create_gdscript_file` or `update_gdscript_file` in the same `batch_tool_calls` as any other tool. GDScript payloads are large; mixing them with scene/editor steps causes truncation. Pattern: tool_call #1 = `batch_tool_calls` with only non-GDScript tools (scene, inputs, meshes, materials, `attach_script`, `write_project_file` for non-.gd, etc.); tool_call #2 = `batch_tool_calls` whose `calls` array contains **only** `create_gdscript_file` and/or `update_gdscript_file` (you may include multiple script steps in that batch). The editor rejects mixed batches.\n"
+			"- Prefer one editor `batch_tool_calls` for multi-step scene work when the JSON stays small; use additional rounds for more editor work or for GDScript-only batches as above.\n"
+			"- If your JSON is cut off or invalid, raise Editor Setting `yeet_ai/chat/max_tokens` and raise the inference server’s max output tokens; large batches need high headroom on both sides.\n"
+			"- Reliability: When the user asks for multiple outcomes (movement + jump + color + mesh shape), you must implement all of them. A single `add_primitive_mesh` is never sufficient for \"controllable\" or \"WASD\" requests.\n"
+			"- `batch_tool_calls` supports `dry_run:true` to list resolved calls without executing.\n"
+			"- `capture_game_viewport` grabs the embedded running game (after play); `capture_editor_viewport` grabs the 2D/3D editor view.\n"
+			"- Enable Editor Settings `yeet_ai/chat/vision_enabled` to send screenshot base64 to vision-capable chat models (uses OpenAI-style image_url content parts).\n"
+			"- `get_runtime_debugger_state` reads the script debugger (errors, warnings, stack file/line when broken).\n"
+			"- `editor_undo` runs the editor undo stack (default one step; max 50).\n"
 			"- Before wiring signals, inspect `get_node_api` if you do not know the signal or method names.\n"
 			"- Before writing gameplay, inspect existing scripts and input actions so you reuse conventions.\n"
 			"- Prefer `update_gdscript_file` over recreating files when iterating.\n"
@@ -3111,6 +4826,7 @@ String YeetAIDock::_build_system_prompt() const {
 			"- `add_primitive_mesh` mesh_type values: box (size:{x,y,z}), sphere (radius, height), capsule (radius, height), cylinder (top_radius, bottom_radius, height), plane (size:{x,z} — 2D, no y).\n"
 			"- For physics floors/walls use `add_node` StaticBody3D first, then `add_primitive_mesh` + `add_collision_shape` as children.\n"
 			"- For a playable character use `add_node` CharacterBody3D, then `add_collision_shape` + `attach_script` as children.\n"
+			"- Player controller requests (WASD, jump, space, \"control\"): always combine input (`get_input_actions` / `create_input_action`), physics body + collision, movement script, and visual (mesh/material). Never ship only the mesh.\n"
 			"- `set_node_property` args: scene_path, node_path, property (string), value. Example: {\"property\":\"position\",\"value\":{\"x\":0,\"y\":5,\"z\":0}}.\n"
 			"Context tools:\n"
 			"- `get_project_tree` lists project files and directories.\n"
@@ -3119,9 +4835,23 @@ String YeetAIDock::_build_system_prompt() const {
 			"- `get_project_settings` reads key project settings such as main scene and project name.\n"
 			"- `get_input_actions` reads current input actions and bindings.\n"
 			"- `get_open_scenes`, `get_current_scene`, `get_selected_nodes`, `get_scene_tree`, `get_node_details`, and `get_node_api` inspect editor state and scene capabilities.\n"
+			"- `get_unsaved_scenes` lists scenes with unsaved edits.\n"
+			"- `file_exists` checks whether a res:// path exists as a file or directory and returns size/type for files.\n"
+			"- `list_directory` lists one directory level under res:// (optional extension filter).\n"
+			"- `get_editor_log` returns recent editor Output / error / warning lines (newest first).\n"
+			"- `capture_editor_viewport` captures the 2D or 3D editor viewport as PNG (base64); use after focusing the right tab.\n"
+			"- `get_debug_snapshot` bundles log tail, current scene, selection, unsaved scenes, and play state for quick diagnosis.\n"
+			"- `grep_project_files` searches file contents under res:// (substring; optional extensions and case sensitivity).\n"
+			"- `get_autoloads` lists project autoload singletons and script paths.\n"
+			"- `get_node_groups` and `get_node_collision_layers` read groups and physics layers/masks for a node.\n"
+			"- `get_animation_player_state`, `get_tilemap_info`, and `get_navigation_region_info` summarize those node types.\n"
 			"Write tools:\n"
-			"- `create_scene_file`, `open_scene`, `save_current_scene`, `add_node`, `instantiate_scene`, `add_primitive_mesh`, `add_collision_shape`, `set_node_property`, `remove_node`, `create_standard_material`, `assign_resource_to_property`, `attach_script`, `create_gdscript_file`, `update_gdscript_file`, `connect_signal`, `create_input_action`, and `set_main_scene` mutate the project.\n"
+			"- `create_scene_file`, `open_scene`, `save_current_scene`, `save_all_scenes`, `reload_scene`, `add_node`, `reparent_node`, `rename_node`, `duplicate_node`, `move_child`, `instantiate_scene`, `add_primitive_mesh`, `add_collision_shape`, `set_node_property`, `remove_node`, `create_standard_material`, `assign_resource_to_property`, `attach_script`, `create_gdscript_file`, `update_gdscript_file`, `write_project_file`, `create_project_folder`, `delete_project_file` (requires confirm:true), `connect_signal`, `create_input_action`, and `set_main_scene` mutate the project.\n"
+			"- In `batch_tool_calls`, `create_gdscript_file` / `update_gdscript_file` cannot appear alongside any other tool in the same batch (use a dedicated GDScript-only batch).\n"
+			"- `set_editor_main_screen` switches the main editor tab (e.g. 2D, 3D, Script, Game, AssetLib).\n"
+			"- `select_file` focuses a file in the FileSystem dock; `edit_script` opens a .gd script in the script editor at an optional line.\n"
 			"- `play_current_scene`, `play_main_scene`, and `stop_playing_scene` control editor play mode.\n"
+			"- `move_project_file` renames/moves a file under res:// (safe extensions only); destination must not exist.\n"
 			"Response policy:\n"
 			"- After each tool result, either call another tool or return `final`.\n"
 			"- Keep final answers concise and specific about what changed.\n";
@@ -3190,6 +4920,51 @@ String YeetAIDock::_extract_message_content(const Dictionary &p_response_json) c
 	return text;
 }
 
+bool YeetAIDock::_try_merge_adjacent_tool_call_json(const String &p_cleaned, Dictionary &r_envelope) const {
+	const String &s = p_cleaned;
+	for (int p = 0; p < s.length(); p++) {
+		if (s[p] != '{') {
+			continue;
+		}
+		const int e1 = find_json_object_end(s, p);
+		if (e1 == -1) {
+			continue;
+		}
+		Dictionary d1;
+		if (!_parse_json_dictionary_quiet(s.substr(p, e1 - p + 1), d1)) {
+			continue;
+		}
+		int q = e1 + 1;
+		while (q < s.length() && _is_json_ws(s[q])) {
+			q++;
+		}
+		if (q < s.length() && s[q] == ',') {
+			q++;
+		}
+		while (q < s.length() && _is_json_ws(s[q])) {
+			q++;
+		}
+		if (q >= s.length() || s[q] != '{') {
+			continue;
+		}
+		const int e2 = find_json_object_end(s, q);
+		if (e2 == -1) {
+			continue;
+		}
+		Dictionary d2;
+		if (!_parse_json_dictionary_quiet(s.substr(q, e2 - q + 1), d2)) {
+			continue;
+		}
+		if (_merge_tool_call_json_pair(d1, d2, r_envelope)) {
+			return true;
+		}
+		if (_merge_tool_call_json_pair(d2, d1, r_envelope)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 Dictionary YeetAIDock::_extract_response_envelope(const String &p_content) const {
 	String cleaned = p_content.strip_edges();
 	cleaned = strip_reasoning_markers(cleaned);
@@ -3201,9 +4976,17 @@ Dictionary YeetAIDock::_extract_response_envelope(const String &p_content) const
 		"<|end|>",
 		"</s>",
 	};
-	for (const char *token : stop_tokens) {
-		if (cleaned.ends_with(token)) {
-			cleaned = cleaned.substr(0, cleaned.length() - String(token).length()).strip_edges();
+	for (int strip_pass = 0; strip_pass < 8; strip_pass++) {
+		bool any = false;
+		for (const char *token : stop_tokens) {
+			const String tok(token);
+			if (cleaned.ends_with(tok)) {
+				cleaned = cleaned.substr(0, cleaned.length() - tok.length()).strip_edges();
+				any = true;
+			}
+		}
+		if (!any) {
+			break;
 		}
 	}
 
@@ -3219,6 +5002,14 @@ Dictionary YeetAIDock::_extract_response_envelope(const String &p_content) const
 
 	Dictionary parsed;
 	if (_parse_json_dictionary_quiet(cleaned, parsed)) {
+		Dictionary norm = _normalize_envelope(parsed);
+		if (_envelope_normalized_is_dispatchable(norm)) {
+			return norm;
+		}
+	}
+
+	// Two-object split: {"arguments":{...}}, {"tool":"...","type":"tool_call"}
+	if (_try_merge_adjacent_tool_call_json(cleaned, parsed)) {
 		return _normalize_envelope(parsed);
 	}
 
@@ -3227,6 +5018,8 @@ Dictionary YeetAIDock::_extract_response_envelope(const String &p_content) const
 	static const char *json_markers[] = {
 		"{\"type\":\"tool_call\"",
 		"{\"type\": \"tool_call\"",
+		"{\"tool\":",
+		"{\"tool\": ",
 		"{\"type\":\"final\"",
 		"{\"type\": \"final\"",
 	};
@@ -3249,7 +5042,10 @@ Dictionary YeetAIDock::_extract_response_envelope(const String &p_content) const
 			}
 			const String sub = cleaned.substr(pos, obj_end - pos + 1);
 			if (_parse_json_dictionary_quiet(sub, parsed)) {
-				return _normalize_envelope(parsed);
+				Dictionary norm = _normalize_envelope(parsed);
+				if (_envelope_normalized_is_dispatchable(norm)) {
+					return norm;
+				}
 			}
 		}
 	}
@@ -3258,11 +5054,15 @@ Dictionary YeetAIDock::_extract_response_envelope(const String &p_content) const
 	const int json_end = cleaned.rfind("}");
 	if (json_start != -1 && json_end != -1 && json_end > json_start) {
 		if (_parse_json_dictionary_quiet(cleaned.substr(json_start, json_end - json_start + 1), parsed)) {
-			return _normalize_envelope(parsed);
+			Dictionary norm = _normalize_envelope(parsed);
+			if (_envelope_normalized_is_dispatchable(norm)) {
+				return norm;
+			}
 		}
 	}
 
-	for (int p = 0; p < cleaned.length(); p++) {
+	// Prefer later JSON objects (tool payloads usually follow commentary).
+	for (int p = cleaned.length() - 1; p >= 0; p--) {
 		if (cleaned[p] != '{') {
 			continue;
 		}
@@ -3271,8 +5071,12 @@ Dictionary YeetAIDock::_extract_response_envelope(const String &p_content) const
 			continue;
 		}
 		const String sub = cleaned.substr(p, obj_end - p + 1);
-		if (_parse_json_dictionary_quiet(sub, parsed)) {
-			return _normalize_envelope(parsed);
+		if (!_parse_json_dictionary_quiet(sub, parsed)) {
+			continue;
+		}
+		Dictionary norm = _normalize_envelope(parsed);
+		if (_envelope_normalized_is_dispatchable(norm)) {
+			return norm;
 		}
 	}
 
@@ -3281,7 +5085,7 @@ Dictionary YeetAIDock::_extract_response_envelope(const String &p_content) const
 	// Truncated or malformed tool JSON is common when max_tokens is too low for batch_tool_calls.
 	if (cleaned.contains("\"type\":\"tool_call\"") || cleaned.contains("\"batch_tool_calls\"") || cleaned.contains("batch_tool_calls")) {
 		fallback["message"] = TTR("The model output was not valid JSON. Common causes: (1) response truncated by the completion token limit, (2) reasoning / commentary before the JSON that confused an older parser (try rebuilding), (3) malformed JSON from the model.\n\n"
-				"In Editor Settings, search for `yeet_ai` and raise `yeet_ai/chat/max_tokens` (16384 or higher is recommended for large batch_tool_calls). You can also ask the model to use smaller batches or fewer steps per reply.\n\n"
+				"In Editor Settings, search for `yeet_ai` and raise `yeet_ai/chat/max_tokens` (32768 or higher for large batches). On the inference server, raise max output tokens too—client settings do nothing if the server caps lower. Never mix `create_gdscript_file`/`update_gdscript_file` with other tools in one `batch_tool_calls`; use a GDScript-only batch in a follow-up tool_call round.\n\n"
 				"--- Raw output (preview) ---\n") +
 				_truncate_preview(cleaned, 4000);
 	} else {

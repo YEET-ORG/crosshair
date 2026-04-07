@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "core/math/rect2i.h"
 #include "core/object/property_info.h"
 #include "scene/gui/box_container.h"
 
@@ -52,6 +53,13 @@ class YeetAIDock : public VBoxContainer {
 	bool intro_message_added = false;
 	String turn_context_prompt;
 
+	// Async game screenshot callback (EditorRun); only touched on the main thread.
+	bool game_screenshot_done = false;
+	int64_t game_screenshot_w = 0;
+	int64_t game_screenshot_h = 0;
+	String game_screenshot_path;
+
+	void _on_game_screenshot_cb(int64_t p_w, int64_t p_h, const String &p_path, Rect2i p_rect);
 	void _send_prompt();
 	void _clear_chat();
 	void _on_prompt_gui_input(const Ref<InputEvent> &p_event);
@@ -65,6 +73,7 @@ class YeetAIDock : public VBoxContainer {
 	void _handle_model_response(const String &p_content);
 	ToolExecutionResult _execute_tool(const String &p_tool_name, const Dictionary &p_args) const;
 	String _build_runtime_context_prompt() const;
+	String _build_task_hints_for_user_prompt(const String &p_user_prompt) const;
 	Node *_resolve_scene_root(const String &p_scene_path, String &r_error) const;
 	Node *_resolve_node_target(Node *p_scene_root, const String &p_node_path, String &r_error) const;
 	void _set_owner_recursive(Node *p_node, Node *p_owner) const;
@@ -100,6 +109,36 @@ class YeetAIDock : public VBoxContainer {
 	Dictionary _tool_stop_playing_scene() const;
 	Dictionary _tool_remove_node(const Dictionary &p_args) const;
 	Dictionary _tool_set_node_property(const Dictionary &p_args) const;
+	Dictionary _tool_write_project_file(const Dictionary &p_args) const;
+	Dictionary _tool_save_all_scenes() const;
+	Dictionary _tool_reload_scene(const Dictionary &p_args) const;
+	Dictionary _tool_set_editor_main_screen(const Dictionary &p_args) const;
+	Dictionary _tool_select_file(const Dictionary &p_args) const;
+	Dictionary _tool_get_unsaved_scenes() const;
+	Dictionary _tool_reparent_node(const Dictionary &p_args) const;
+	Dictionary _tool_rename_node(const Dictionary &p_args) const;
+	Dictionary _tool_file_exists(const Dictionary &p_args) const;
+	Dictionary _tool_list_directory(const Dictionary &p_args) const;
+	Dictionary _tool_duplicate_node(const Dictionary &p_args) const;
+	Dictionary _tool_edit_script(const Dictionary &p_args) const;
+	Dictionary _tool_move_child(const Dictionary &p_args) const;
+	Dictionary _tool_create_project_folder(const Dictionary &p_args) const;
+	Dictionary _tool_delete_project_file(const Dictionary &p_args) const;
+	Dictionary _tool_get_editor_log(const Dictionary &p_args) const;
+	Dictionary _tool_capture_editor_viewport(const Dictionary &p_args) const;
+	Dictionary _tool_get_debug_snapshot(const Dictionary &p_args) const;
+	Dictionary _tool_grep_project_files(const Dictionary &p_args) const;
+	Dictionary _tool_get_autoloads() const;
+	Dictionary _tool_get_node_groups(const Dictionary &p_args) const;
+	Dictionary _tool_get_node_collision_layers(const Dictionary &p_args) const;
+	Dictionary _tool_move_project_file(const Dictionary &p_args) const;
+	Dictionary _tool_get_animation_player_state(const Dictionary &p_args) const;
+	Dictionary _tool_get_tilemap_info(const Dictionary &p_args) const;
+	Dictionary _tool_get_navigation_region_info(const Dictionary &p_args) const;
+	Dictionary _tool_capture_game_viewport(const Dictionary &p_args) const;
+	Dictionary _tool_get_runtime_debugger_state() const;
+	Dictionary _tool_editor_undo(const Dictionary &p_args) const;
+	void _grep_project_files_recursive(const String &p_dir, const String &p_query, bool p_case_sensitive, const Vector<String> &p_extensions, int p_max_bytes, int p_max_matches, int &r_match_count, Array &r_matches) const;
 	void _collect_project_entries(const String &p_dir_path, int p_depth, int p_max_depth, const Vector<String> &p_include_extensions, Array &r_entries, int &r_entry_count) const;
 	void _find_project_entries(const String &p_dir_path, const String &p_query, int p_depth, int p_max_depth, const Vector<String> &p_include_extensions, Array &r_entries, int &r_entry_count, int p_max_results) const;
 	Dictionary _serialize_node(Node *p_node, int p_depth, int p_max_depth, const Vector<String> &p_include_properties, int &r_node_count) const;
@@ -112,12 +151,17 @@ class YeetAIDock : public VBoxContainer {
 	bool _parse_json_dictionary_quiet(const String &p_text, Dictionary &r_result) const;
 	String _get_editor_setting_string(const String &p_setting, const String &p_default) const;
 	int _get_editor_setting_int(const String &p_setting, int p_default) const;
+	float _get_editor_setting_float(const String &p_setting, float p_default) const;
+	bool _get_editor_setting_bool(const String &p_setting, bool p_default) const;
+	Dictionary _make_user_message_with_optional_vision(const String &p_tool_name, const Dictionary &p_tool_payload) const;
 	String _build_system_prompt() const;
 	String _escape_bbcode(const String &p_text) const;
 	String _extract_message_content(const Dictionary &p_response_json) const;
 	Dictionary _extract_response_envelope(const String &p_content) const;
+	bool _try_merge_adjacent_tool_call_json(const String &p_cleaned, Dictionary &r_envelope) const;
 	Dictionary _normalize_envelope(const Dictionary &p_envelope) const;
 	Dictionary _normalize_batch_tool_arguments(const Dictionary &p_args) const;
+	Dictionary _parse_one_batch_call(const Variant &p_call_var, int p_index, const Dictionary &p_shared_arguments) const;
 	Vector<String> _variant_array_to_string_vector(const Array &p_values) const;
 	bool _is_allowed_text_file(const String &p_path) const;
 

@@ -31,6 +31,7 @@
 #pragma once
 
 #include "core/os/thread.h"
+#include "core/variant/array.h"
 #include "editor/docks/editor_dock.h"
 #include "scene/gui/button.h"
 #include "scene/gui/line_edit.h"
@@ -184,6 +185,9 @@ public:
 	void deinit();
 
 	void clear();
+
+	/// Returns recent log lines as an array of dictionaries: `type` (std/std_rich/error/warning/editor), `text`, `count`. Newest entries first.
+	Array get_recent_messages(int p_max_lines = 200) const;
 
 	EditorLog();
 	~EditorLog();

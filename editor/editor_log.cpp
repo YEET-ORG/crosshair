@@ -31,6 +31,7 @@
 #include "editor_log.h"
 
 #include "core/io/resource_loader.h"
+#include "core/variant/dictionary.h"
 #include "core/object/callable_mp.h"
 #include "core/object/message_queue.h"
 #include "core/object/undo_redo.h"
@@ -246,6 +247,59 @@ void EditorLog::_clear_request() {
 
 void EditorLog::clear() {
 	_clear_request();
+}
+
+Array EditorLog::get_recent_messages(int p_max_lines) const {
+	Array out;
+	if (p_max_lines <= 0) {
+		return out;
+	}
+
+	auto strip_bbcode_urls = [](String p_text) {
+		// Unwrap [url]...[/url] and normalize [lb] placeholders used by the error handler.
+		String s = p_text;
+		for (int safety = 0; safety < 256; safety++) {
+			const int a = s.find("[url]");
+			if (a == -1) {
+				break;
+			}
+			const int b = s.find("[/url]", a);
+			if (b == -1) {
+				break;
+			}
+			const String inner = s.substr(a + 5, b - a - 5);
+			s = s.substr(0, a) + inner + s.substr(b + 6);
+		}
+		return s.replace("[lb]", "[");
+	};
+
+	int collected = 0;
+	for (int i = messages.size() - 1; i >= 0 && collected < p_max_lines; i--) {
+		const LogMessage &msg = messages[i];
+		Dictionary d;
+		switch (msg.type) {
+			case MSG_TYPE_STD:
+				d["type"] = "std";
+				break;
+			case MSG_TYPE_STD_RICH:
+				d["type"] = "std_rich";
+				break;
+			case MSG_TYPE_ERROR:
+				d["type"] = "error";
+				break;
+			case MSG_TYPE_WARNING:
+				d["type"] = "warning";
+				break;
+			case MSG_TYPE_EDITOR:
+				d["type"] = "editor";
+				break;
+		}
+		d["text"] = strip_bbcode_urls(msg.text);
+		d["count"] = msg.count;
+		out.push_back(d);
+		collected++;
+	}
+	return out;
 }
 
 void EditorLog::_process_message(const String &p_msg, MessageType p_type, bool p_clear) {

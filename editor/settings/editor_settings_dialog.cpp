@@ -30,6 +30,10 @@
 
 #include "editor_settings_dialog.h"
 
+#ifdef MODULE_YEET_AI_ENABLED
+#include "modules/yeet_ai/editor/yeet_ai_settings_panel.h"
+#endif
+
 #include "core/config/engine.h"
 #include "core/config/project_settings.h"
 #include "core/input/input_map.h"
@@ -224,6 +228,12 @@ void EditorSettingsDialog::popup_edit_settings() {
 
 	_update_shortcuts();
 	set_process_shortcut_input(true);
+
+#ifdef MODULE_YEET_AI_ENABLED
+	if (yeet_ai_settings_panel) {
+		yeet_ai_settings_panel->reload_from_settings();
+	}
+#endif
 
 	// Restore valid window bounds or pop up at default size.
 	Rect2 saved_size;
@@ -878,6 +888,15 @@ void EditorSettingsDialog::drop_data_fw(const Point2 &p_point, const Variant &p_
 void EditorSettingsDialog::_tabs_tab_changed(int p_tab) {
 	_focus_current_search_box();
 
+#ifdef MODULE_YEET_AI_ENABLED
+	if (yeet_ai_settings_panel) {
+		const int crosshair_idx = tabs->get_tab_idx_from_control(tab_crosshair);
+		if (p_tab == crosshair_idx) {
+			yeet_ai_settings_panel->reload_from_settings();
+		}
+	}
+#endif
+
 	// When tab has switched, shortcuts may have changed.
 	_update_dynamic_property_hints();
 	inspector->get_inspector()->update_tree();
@@ -1065,6 +1084,15 @@ EditorSettingsDialog::EditorSettingsDialog() {
 	mc->add_child(shortcuts);
 
 	SET_DRAG_FORWARDING_GCD(shortcuts, EditorSettingsDialog);
+
+#ifdef MODULE_YEET_AI_ENABLED
+	tab_crosshair = memnew(VBoxContainer);
+	tabs->add_child(tab_crosshair);
+	tab_crosshair->set_name(TTRC("Crosshair"));
+	yeet_ai_settings_panel = memnew(YeetAISettingsPanel);
+	yeet_ai_settings_panel->set_v_size_flags(Control::SIZE_EXPAND_FILL);
+	tab_crosshair->add_child(yeet_ai_settings_panel);
+#endif
 
 	// Adding event dialog
 	shortcut_editor = memnew(InputEventConfigurationDialog);

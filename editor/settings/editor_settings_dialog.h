@@ -31,7 +31,12 @@
 #pragma once
 
 #include "editor/inspector/editor_inspector.h"
+#include "modules/modules_enabled.gen.h"
 #include "scene/gui/dialogs.h"
+
+#ifdef MODULE_YEET_AI_ENABLED
+class YeetAISettingsPanel;
+#endif
 
 class CheckButton;
 class EditorEventSearchBar;
@@ -50,6 +55,10 @@ class EditorSettingsDialog : public AcceptDialog {
 	TabContainer *tabs = nullptr;
 	Control *tab_general = nullptr;
 	Control *tab_shortcuts = nullptr;
+#ifdef MODULE_YEET_AI_ENABLED
+	Control *tab_crosshair = nullptr;
+	YeetAISettingsPanel *yeet_ai_settings_panel = nullptr;
+#endif
 
 	LineEdit *search_box = nullptr;
 	CheckButton *advanced_switch = nullptr;

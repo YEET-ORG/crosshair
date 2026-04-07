@@ -19,6 +19,7 @@ class YeetAIEditorPlugin : public EditorPlugin {
 	EditorDock *editor_dock = nullptr;
 
 	void _ensure_editor_settings();
+	void _register_crosshair_editor_setting_hints();
 	bool _is_ai_enabled() const;
 	void _deferred_add_ai_dock();
 	void _add_ai_dock();
