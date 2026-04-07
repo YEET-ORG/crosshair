@@ -9,19 +9,27 @@
 
 #include "core/math/rect2i.h"
 #include "core/object/property_info.h"
+#include "core/os/mutex.h"
+#include "core/os/thread.h"
+#include "core/templates/hash_set.h"
+#include "core/templates/vector.h"
 #include "scene/gui/box_container.h"
 
-#include "core/templates/vector.h"
-
 class Button;
+class ColorRect;
 class HTTPRequest;
 class InputEvent;
+class ItemList;
 class Label;
+class LineEdit;
 class MarginContainer;
 class Node;
 class PanelContainer;
+class PopupPanel;
+class ProgressBar;
 class Resource;
 class RichTextLabel;
+class ScrollContainer;
 class TextEdit;
 
 class YeetAIDock : public VBoxContainer {
@@ -33,12 +41,23 @@ class YeetAIDock : public VBoxContainer {
 		String display_text;
 	};
 
+	// Parallel record used for chat rebuild (retry, session load)
+	struct MessageRecord {
+		String role;
+		String text;
+	};
+
+	// ── Core UI ──────────────────────────────────────────────────────────────
+	ColorRect *_status_dot = nullptr;
 	Label *status_label = nullptr;
 	RichTextLabel *chat_log = nullptr;
+	RichTextLabel *stream_label = nullptr;
+	ScrollContainer *chat_scroll = nullptr;
 	TextEdit *prompt_input = nullptr;
 	Button *send_button = nullptr;
+	Button *stop_button = nullptr;
 	Button *clear_button = nullptr;
-	HTTPRequest *request = nullptr;
+	HTTPRequest *request = nullptr; // kept (unused) – _on_request_completed still defined
 
 	PanelContainer *header_panel = nullptr;
 	PanelContainer *chat_panel = nullptr;
@@ -47,31 +66,116 @@ class YeetAIDock : public VBoxContainer {
 
 	void _apply_dock_theme();
 
+	// ── Token counter ─────────────────────────────────────────────────────────
+	Label *_token_count_label = nullptr;
+	void _update_token_counter();
+
+	// ── Tool progress bar ─────────────────────────────────────────────────────
+	ProgressBar *_tool_progress_bar = nullptr;
+	void _update_tool_progress_bar();
+
+	// ── Session file tracker ──────────────────────────────────────────────────
+	HashSet<String> _session_modified_files;
+	RichTextLabel *_files_modified_label = nullptr; // RichTextLabel for meta links
+	void _update_files_modified_label();
+	void _on_files_meta_clicked(const Variant &p_meta);
+
+	// ── Model selector ────────────────────────────────────────────────────────
+	Button *_model_selector_button = nullptr;
+	PopupPanel *_model_popup = nullptr;
+	LineEdit *_model_search_edit = nullptr;
+	ItemList *_model_item_list = nullptr;
+	HTTPRequest *_model_tags_request = nullptr;
+
+	void _on_model_selector_pressed();
+	void _populate_model_list(const String &p_filter = String());
+	void _on_model_search_changed(const String &p_text);
+	void _on_model_item_activated(int p_index);
+	void _on_model_tags_request_completed(int p_result, int p_response_code, const PackedStringArray &p_headers, const PackedByteArray &p_body);
+	void _update_model_button_label();
+
+	// ── Conversation state ────────────────────────────────────────────────────
 	Array conversation_messages;
+	Vector<MessageRecord> _chat_records; // parallel to chat_log content for rebuild
 	bool waiting_for_response = false;
 	int tool_round_trips = 0;
 	bool intro_message_added = false;
+	bool _session_loaded = false;
 	String turn_context_prompt;
 
-	// Async game screenshot callback (EditorRun); only touched on the main thread.
+	// ── Prompt history ────────────────────────────────────────────────────────
+	Vector<String> _prompt_history;
+	int _prompt_history_index = -1;
+	String _prompt_history_draft;
+	void _history_navigate(int p_direction);
+
+	// ── SSE Streaming ─────────────────────────────────────────────────────────
+	Thread _stream_thread;
+	Mutex _stream_mutex;
+	bool _stream_active = false;
+	volatile bool _stream_should_stop = false;
+	bool _stream_done_flag = false;
+	bool _stream_error_flag = false;
+	String _stream_error_msg;
+	Vector<String> _pending_chunks;
+	String _stream_accumulated;
+	String _stream_endpoint;
+	Vector<String> _stream_req_headers;
+	String _stream_req_body;
+
+	void _start_streaming();
+	void _cancel_streaming();
+	static void _stream_thread_trampoline(void *p_user);
+	void _stream_thread_body();
+	void _drain_stream_queue();
+	void _finalize_stream();
+
+	// ── Typing indicator ──────────────────────────────────────────────────────
+	bool _typing_indicator_active = false;
+	float _typing_dot_time = 0.0f;
+
+	// ── Animation ─────────────────────────────────────────────────────────────
+	float _anim_time = 0.0f;
+
+	void _update_animation(double p_delta);
+	void _update_stream_label();
+	void _scroll_to_bottom();
+
+	// ── Async game screenshot ──────────────────────────────────────────────────
 	bool game_screenshot_done = false;
 	int64_t game_screenshot_w = 0;
 	int64_t game_screenshot_h = 0;
 	String game_screenshot_path;
 
 	void _on_game_screenshot_cb(int64_t p_w, int64_t p_h, const String &p_path, Rect2i p_rect);
+
+	// ── User actions ──────────────────────────────────────────────────────────
 	void _send_prompt();
 	void _clear_chat();
+	void _on_stop_pressed();
 	void _on_prompt_gui_input(const Ref<InputEvent> &p_event);
+	void _on_chat_meta_clicked(const Variant &p_meta);
+
+	// ── Chat rendering ────────────────────────────────────────────────────────
 	void _append_message(const String &p_role, const String &p_text);
+	void _rebuild_chat_log();
 	void _append_tool_result(const String &p_tool_name, const Dictionary &p_args, const ToolExecutionResult &p_result);
+	void _append_status_row(const String &p_text);
 	String _humanize_tool_name(const String &p_tool) const;
+	String _icon_for_tool(const String &p_tool_name) const;
 	Vector<String> _collect_relevant_paths(const Dictionary &p_args, const Dictionary &p_payload) const;
 	String _truncate_preview(const String &p_text, int p_max_chars) const;
+	String _apply_gdscript_highlighting(const String &p_text) const;
+
+	// ── Session persistence ───────────────────────────────────────────────────
+	void _save_session() const;
+	void _load_session();
+
+	// ── Request / response cycle ──────────────────────────────────────────────
 	void _set_waiting(bool p_waiting, const String &p_status);
 	void _request_model_response();
 	void _handle_model_response(const String &p_content);
-	ToolExecutionResult _execute_tool(const String &p_tool_name, const Dictionary &p_args) const;
+	ToolExecutionResult _execute_tool(const String &p_tool_name, const Dictionary &p_args); // not const — tracks modified files
 	String _build_runtime_context_prompt() const;
 	String _build_task_hints_for_user_prompt(const String &p_user_prompt) const;
 	Node *_resolve_scene_root(const String &p_scene_path, String &r_error) const;
@@ -88,7 +192,7 @@ class YeetAIDock : public VBoxContainer {
 	Dictionary _tool_get_scene_tree(const Dictionary &p_args) const;
 	Dictionary _tool_get_node_details(const Dictionary &p_args) const;
 	Dictionary _tool_get_node_api(const Dictionary &p_args) const;
-	Dictionary _tool_batch_tool_calls(const Dictionary &p_args) const;
+	Dictionary _tool_batch_tool_calls(const Dictionary &p_args);
 	Dictionary _tool_open_scene(const Dictionary &p_args) const;
 	Dictionary _tool_save_current_scene() const;
 	Dictionary _tool_create_scene_file(const Dictionary &p_args) const;
@@ -173,4 +277,5 @@ protected:
 
 public:
 	YeetAIDock();
+	~YeetAIDock();
 };

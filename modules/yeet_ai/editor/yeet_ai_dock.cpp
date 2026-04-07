@@ -56,6 +56,20 @@
 #include "scene/3d/physics/collision_shape_3d.h"
 #include "scene/3d/mesh_instance_3d.h"
 #include "scene/main/node.h"
+#include "core/crypto/crypto.h"
+#include "core/io/http_client.h"
+#include "core/math/math_funcs.h"
+#include "core/os/mutex.h"
+#include "core/os/thread.h"
+#include "core/os/time.h"
+#include "editor/file_system/editor_paths.h"
+#include "scene/gui/color_rect.h"
+#include "scene/gui/item_list.h"
+#include "scene/gui/line_edit.h"
+#include "scene/gui/popup.h"
+#include "scene/gui/progress_bar.h"
+#include "scene/gui/scroll_container.h"
+#include "scene/gui/separator.h"
 #include "scene/main/http_request.h"
 #include "scene/main/viewport.h"
 #include "scene/animation/animation_player.h"
@@ -289,6 +303,79 @@ static bool _is_json_ws(char32_t c) {
 	return c == ' ' || c == '\t' || c == '\n' || c == '\r';
 }
 
+// ── URL parsing for streaming ──────────────────────────────────────────────────
+static bool yeet_parse_url(const String &p_url, String &r_host, int &r_port, String &r_path, bool &r_use_tls) {
+	int scheme_end = p_url.find("://");
+	if (scheme_end < 0) {
+		return false;
+	}
+	const String scheme = p_url.substr(0, scheme_end).to_lower().strip_edges();
+	r_use_tls = (scheme == "https");
+	const String rest = p_url.substr(scheme_end + 3);
+	int slash = rest.find("/");
+	String host_part;
+	if (slash < 0) {
+		host_part = rest;
+		r_path = "/";
+	} else {
+		host_part = rest.substr(0, slash);
+		r_path = rest.substr(slash);
+	}
+	int colon = host_part.rfind(":");
+	if (colon >= 0) {
+		r_host = host_part.substr(0, colon).strip_edges();
+		r_port = host_part.substr(colon + 1).strip_edges().to_int();
+	} else {
+		r_host = host_part.strip_edges();
+		r_port = r_use_tls ? 443 : 80;
+	}
+	return !r_host.is_empty();
+}
+
+// Streaming used TLSOptions::client_unsafe() for all https:// URLs. In mbedTLS that clears the TLS
+// hostname/SNI field, and many remote APIs (CDN, reverse proxy) require SNI to complete the handshake.
+// Use TLSOptions::client() for public hosts (proper SNI + default CA bundle); keep unsafe for LAN/loopback.
+static bool yeet_stream_host_prefers_insecure_tls(const String &p_host) {
+	const String h = p_host.to_lower().strip_edges();
+	if (h == "localhost" || h == "127.0.0.1" || h == "::1") {
+		return true;
+	}
+	if (h.begins_with("127.")) {
+		return true;
+	}
+	if (h.begins_with("10.")) {
+		return true;
+	}
+	if (h.begins_with("192.168.")) {
+		return true;
+	}
+	if (h.begins_with("172.")) {
+		const PackedStringArray parts = h.split(".");
+		if (parts.size() >= 2) {
+			const int o2 = parts[1].to_int();
+			if (o2 >= 16 && o2 <= 31) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+static String yeet_describe_http_client_status(HTTPClient::Status p_s) {
+	switch (p_s) {
+		case HTTPClient::STATUS_CANT_RESOLVE:
+			return TTR("Could not resolve the hostname (DNS). Check the URL and network.");
+		case HTTPClient::STATUS_CANT_CONNECT:
+			return TTR("TCP connect failed (refused or timeout). Check host, port, and that the inference server is running.");
+		case HTTPClient::STATUS_TLS_HANDSHAKE_ERROR:
+			return TTR("TLS handshake failed. Local servers (Ollama, LM Studio, vLLM) usually need http://127.0.0.1:PORT/... not https://. For a remote https:// API, check the URL in a browser, try another network, and disable VPN/firewall/proxy interference.");
+		case HTTPClient::STATUS_CONNECTION_ERROR:
+			return TTR("Connection error after connect.");
+		default:
+			return vformat(TTR("HTTP client status code %d."), (int)p_s);
+	}
+}
+
 bool is_valid_input_action_name(const String &p_name) {
 	if (p_name.is_empty()) {
 		return false;
@@ -406,17 +493,23 @@ void YeetAIDock::_apply_dock_theme() {
 	const Color font_color = get_theme_color(SNAME("font_color"), EditorStringName(Editor));
 	const Color font_muted = get_theme_color(SNAME("font_disabled_color"), EditorStringName(Editor));
 
-	if (chat_log) {
-		if (font_size > 0) {
-			chat_log->add_theme_font_size_override(SNAME("normal_font_size"), font_size);
-			chat_log->add_theme_font_size_override(SNAME("bold_font_size"), font_size);
-			chat_log->add_theme_font_size_override(SNAME("italics_font_size"), font_size);
-			chat_log->add_theme_font_size_override(SNAME("mono_font_size"), MAX(11, font_size - 1));
+	auto apply_log_theme = [&](RichTextLabel *log) {
+		if (!log) {
+			return;
 		}
-		chat_log->add_theme_color_override(SNAME("default_color"), font_color);
-		chat_log->add_theme_constant_override(SNAME("line_separation"), int(3.0f * EDSCALE));
-		chat_log->add_theme_constant_override(SNAME("paragraph_separation"), int(6.0f * EDSCALE));
-	}
+		if (font_size > 0) {
+			log->add_theme_font_size_override(SNAME("normal_font_size"), font_size);
+			log->add_theme_font_size_override(SNAME("bold_font_size"), font_size);
+			log->add_theme_font_size_override(SNAME("italics_font_size"), font_size);
+			log->add_theme_font_size_override(SNAME("mono_font_size"), MAX(11, font_size - 1));
+		}
+		log->add_theme_color_override(SNAME("default_color"), font_color);
+		// Cursor-like chat density: tighter baseline rhythm.
+		log->add_theme_constant_override(SNAME("line_separation"), int(2.0f * EDSCALE));
+		log->add_theme_constant_override(SNAME("paragraph_separation"), int(4.0f * EDSCALE));
+	};
+	apply_log_theme(chat_log);
+	apply_log_theme(stream_label);
 
 	if (prompt_input && font_size > 0) {
 		prompt_input->add_theme_font_size_override(SNAME("font_size"), font_size);
@@ -455,6 +548,17 @@ YeetAIDock::YeetAIDock() {
 	header_panel->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	main_column->add_child(header_panel);
 
+	// Thin progress bar below header, visible during multi-tool round trips
+	_tool_progress_bar = memnew(ProgressBar);
+	_tool_progress_bar->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	_tool_progress_bar->set_custom_minimum_size(Size2(0, 4) * EDSCALE);
+	_tool_progress_bar->set_show_percentage(false);
+	_tool_progress_bar->set_min(0.0);
+	_tool_progress_bar->set_max(1.0);
+	_tool_progress_bar->set_value(0.0);
+	_tool_progress_bar->set_visible(false);
+	main_column->add_child(_tool_progress_bar);
+
 	MarginContainer *header_mc = memnew(MarginContainer);
 	header_mc->add_theme_constant_override("margin_left", int(12.0f * EDSCALE));
 	header_mc->add_theme_constant_override("margin_right", int(12.0f * EDSCALE));
@@ -471,6 +575,13 @@ YeetAIDock::YeetAIDock() {
 	title->set_text(TTR("Crosshair AI"));
 	title->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	header_row->add_child(title);
+
+	// Animated status dot (pulses while the AI is active)
+	_status_dot = memnew(ColorRect);
+	_status_dot->set_custom_minimum_size(Size2(8, 8) * EDSCALE);
+	_status_dot->set_v_size_flags(Control::SIZE_SHRINK_CENTER);
+	_status_dot->set_color(Color(0.5f, 0.5f, 0.5f, 0.35f));
+	header_row->add_child(_status_dot);
 
 	status_label = memnew(Label);
 	status_label->set_horizontal_alignment(HORIZONTAL_ALIGNMENT_RIGHT);
@@ -492,7 +603,7 @@ YeetAIDock::YeetAIDock() {
 	chat_panel_mc->add_theme_constant_override("margin_bottom", int(10.0f * EDSCALE));
 	chat_panel->add_child(chat_panel_mc);
 
-	ScrollContainer *chat_scroll = memnew(ScrollContainer);
+	chat_scroll = memnew(ScrollContainer);
 	chat_scroll->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 	chat_scroll->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	chat_scroll->set_vertical_scroll_mode(ScrollContainer::SCROLL_MODE_AUTO);
@@ -504,14 +615,44 @@ YeetAIDock::YeetAIDock() {
 	chat_margin->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 	chat_scroll->add_child(chat_margin);
 
+	// MarginContainer places every child in the same rect; two RichTextLabels would fully overlap.
+	// Stack history + live stream vertically so prior messages and tool output stay visible.
+	VBoxContainer *chat_column = memnew(VBoxContainer);
+	chat_column->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	chat_column->set_v_size_flags(Control::SIZE_EXPAND_FILL);
+	chat_column->add_theme_constant_override("separation", int(6.0f * EDSCALE));
+	chat_margin->add_child(chat_column);
+
 	chat_log = memnew(RichTextLabel);
 	chat_log->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	chat_log->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 	chat_log->set_fit_content(true);
 	chat_log->set_scroll_active(false);
 	chat_log->set_selection_enabled(true);
 	chat_log->set_context_menu_enabled(true);
 	chat_log->set_use_bbcode(true);
-	chat_margin->add_child(chat_log);
+	chat_column->add_child(chat_log);
+
+	// Live streaming label — in-progress assistant tokens; sits below chat history while active
+	stream_label = memnew(RichTextLabel);
+	stream_label->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	stream_label->set_v_size_flags(Control::SIZE_SHRINK_BEGIN);
+	stream_label->set_fit_content(true);
+	stream_label->set_scroll_active(false);
+	stream_label->set_use_bbcode(true);
+	stream_label->set_visible(false);
+	chat_column->add_child(stream_label);
+
+	// Files-modified tracker label (RichTextLabel for meta links)
+	_files_modified_label = memnew(RichTextLabel);
+	_files_modified_label->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	_files_modified_label->set_fit_content(true);
+	_files_modified_label->set_scroll_active(false);
+	_files_modified_label->set_use_bbcode(true);
+	_files_modified_label->set_selection_enabled(false);
+	_files_modified_label->set_visible(false);
+	_files_modified_label->connect("meta_clicked", callable_mp(this, &YeetAIDock::_on_files_meta_clicked));
+	main_column->add_child(_files_modified_label);
 
 	input_panel = memnew(PanelContainer);
 	input_panel->set_h_size_flags(Control::SIZE_EXPAND_FILL);
@@ -529,8 +670,8 @@ YeetAIDock::YeetAIDock() {
 	input_mc->add_child(input_column);
 
 	prompt_input = memnew(TextEdit);
-	prompt_input->set_custom_minimum_size(Size2(0, 100) * EDSCALE);
-	prompt_input->set_placeholder(TTR("Describe what you want. The assistant can read the project and run tools to edit scenes. (Ctrl+Enter to send)"));
+	prompt_input->set_custom_minimum_size(Size2(0, 92) * EDSCALE);
+	prompt_input->set_placeholder(TTR("Ask Crosshair AI to inspect files, run tools, and edit scenes/scripts. (Ctrl+Enter)"));
 	prompt_input->connect("gui_input", callable_mp(this, &YeetAIDock::_on_prompt_gui_input));
 	input_column->add_child(prompt_input);
 
@@ -541,14 +682,24 @@ YeetAIDock::YeetAIDock() {
 
 	send_button = memnew(Button);
 	send_button->set_text(TTR("Send"));
+	send_button->set_theme_type_variation("FlatButton");
 	send_button->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	send_button->connect(SceneStringName(pressed), callable_mp(this, &YeetAIDock::_send_prompt));
 	button_row->add_child(send_button);
 
+	// Stop button — visible only while the AI is generating
+	stop_button = memnew(Button);
+	stop_button->set_text(TTR("Stop"));
+	stop_button->set_theme_type_variation("FlatButton");
+	stop_button->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	stop_button->set_visible(false);
+	stop_button->connect(SceneStringName(pressed), callable_mp(this, &YeetAIDock::_on_stop_pressed));
+	button_row->add_child(stop_button);
+
 	clear_button = memnew(Button);
 	clear_button->set_theme_type_variation("FlatButton");
 	clear_button->set_text(TTR("Clear"));
-	clear_button->set_h_size_flags(Control::SIZE_SHRINK_CENTER);
+	clear_button->set_h_size_flags(Control::SIZE_SHRINK_END);
 	clear_button->connect(SceneStringName(pressed), callable_mp(this, &YeetAIDock::_clear_chat));
 	button_row->add_child(clear_button);
 
@@ -559,6 +710,24 @@ YeetAIDock::YeetAIDock() {
 	add_child(request);
 }
 
+YeetAIDock::~YeetAIDock() {
+	_cancel_streaming();
+}
+
+void YeetAIDock::_on_files_meta_clicked(const Variant &p_meta) {
+	const String meta = String(p_meta);
+	if (meta.is_empty()) {
+		return;
+	}
+	if (meta.begins_with("http://") || meta.begins_with("https://")) {
+		OS::get_singleton()->shell_open(meta);
+		return;
+	}
+	if (meta.begins_with("res://")) {
+		EditorNode::get_singleton()->load_scene_or_resource(meta);
+	}
+}
+
 void YeetAIDock::_notification(int p_what) {
 	if (p_what == NOTIFICATION_ENTER_TREE || p_what == NOTIFICATION_THEME_CHANGED) {
 		_apply_dock_theme();
@@ -566,10 +735,18 @@ void YeetAIDock::_notification(int p_what) {
 	if (p_what == NOTIFICATION_THEME_CHANGED) {
 		if (!intro_message_added) {
 			intro_message_added = true;
-			_append_message("assistant", TTR("Minimal v0 is ready. I can inspect the project, scenes, selected nodes, and perform basic scene edits."));
+			_append_message("assistant", TTR("Crosshair AI is ready. I can inspect the project, scenes, selected nodes, and perform scene and script edits."));
 		}
 		send_button->set_button_icon(get_editor_theme_icon(SNAME("Play")));
+		stop_button->set_button_icon(get_editor_theme_icon(SNAME("Stop")));
 		clear_button->set_button_icon(get_editor_theme_icon(SNAME("Clear")));
+	}
+	if (p_what == NOTIFICATION_PROCESS) {
+		_drain_stream_queue();
+		_update_animation(get_process_delta_time());
+	}
+	if (p_what == NOTIFICATION_EXIT_TREE) {
+		_cancel_streaming();
 	}
 }
 
@@ -580,6 +757,439 @@ void YeetAIDock::_on_game_screenshot_cb(int64_t p_w, int64_t p_h, const String &
 	game_screenshot_path = p_path;
 	game_screenshot_done = true;
 }
+
+// ── SSE Streaming ─────────────────────────────────────────────────────────────
+
+void YeetAIDock::_stream_thread_trampoline(void *p_user) {
+	static_cast<YeetAIDock *>(p_user)->_stream_thread_body();
+}
+
+void YeetAIDock::_start_streaming() {
+	_stream_accumulated = "";
+	_stream_done_flag = false;
+	_stream_error_flag = false;
+	_stream_error_msg = "";
+	_stream_should_stop = false;
+	_stream_active = true;
+
+	stream_label->clear();
+	stream_label->set_visible(true);
+
+	_stream_thread.start(&YeetAIDock::_stream_thread_trampoline, this);
+}
+
+void YeetAIDock::_cancel_streaming() {
+	if (!_stream_active && !_stream_thread.is_started()) {
+		return;
+	}
+	_stream_should_stop = true;
+	if (_stream_thread.is_started()) {
+		_stream_thread.wait_to_finish();
+	}
+	_stream_active = false;
+	{
+		MutexLock lock(_stream_mutex);
+		_pending_chunks.clear();
+		_stream_done_flag = false;
+		_stream_error_flag = false;
+	}
+}
+
+void YeetAIDock::_stream_thread_body() {
+	String host;
+	int port = 80;
+	String path;
+	bool use_tls = false;
+
+	if (!yeet_parse_url(_stream_endpoint, host, port, path, use_tls)) {
+		MutexLock lock(_stream_mutex);
+		_stream_error_flag = true;
+		_stream_error_msg = "Failed to parse endpoint URL: " + _stream_endpoint;
+		_stream_done_flag = true;
+		return;
+	}
+
+	HTTPClient *client = HTTPClient::create();
+	client->set_blocking_mode(false);
+
+	Ref<TLSOptions> tls_opts;
+	if (use_tls) {
+		if (yeet_stream_host_prefers_insecure_tls(host)) {
+			tls_opts = TLSOptions::client_unsafe(Ref<X509Certificate>());
+		} else {
+			tls_opts = TLSOptions::client();
+		}
+	}
+
+	Error conn_err = client->connect_to_host(host, port, tls_opts);
+	if (conn_err != OK) {
+		memdelete(client);
+		MutexLock lock(_stream_mutex);
+		_stream_error_flag = true;
+		_stream_error_msg = vformat("connect_to_host failed (err %d)", (int)conn_err);
+		_stream_done_flag = true;
+		return;
+	}
+
+	// Poll until connected
+	while (true) {
+		if (_stream_should_stop) {
+			memdelete(client);
+			MutexLock lock(_stream_mutex);
+			_stream_done_flag = true;
+			return;
+		}
+		HTTPClient::Status s = client->get_status();
+		if (s == HTTPClient::STATUS_CONNECTED) {
+			break;
+		}
+		if (s == HTTPClient::STATUS_CONNECTING || s == HTTPClient::STATUS_RESOLVING) {
+			client->poll();
+			OS::get_singleton()->delay_usec(5000);
+			continue;
+		}
+		memdelete(client);
+		MutexLock lock(_stream_mutex);
+		_stream_error_flag = true;
+		_stream_error_msg = vformat(TTR("Connection failed (status %d): %s"), (int)s, yeet_describe_http_client_status(s));
+		_stream_done_flag = true;
+		return;
+	}
+
+	// Send the HTTP POST request
+	const CharString body_utf8 = _stream_req_body.utf8();
+	Error req_err = client->request(
+			HTTPClient::METHOD_POST,
+			path,
+			_stream_req_headers,
+			reinterpret_cast<const uint8_t *>(body_utf8.get_data()),
+			body_utf8.length());
+
+	if (req_err != OK) {
+		memdelete(client);
+		MutexLock lock(_stream_mutex);
+		_stream_error_flag = true;
+		_stream_error_msg = vformat("Request send failed (err %d)", (int)req_err);
+		_stream_done_flag = true;
+		return;
+	}
+
+	// Poll until the server starts responding
+	while (true) {
+		if (_stream_should_stop) {
+			memdelete(client);
+			MutexLock lock(_stream_mutex);
+			_stream_done_flag = true;
+			return;
+		}
+		HTTPClient::Status s = client->get_status();
+		if (s == HTTPClient::STATUS_BODY || s == HTTPClient::STATUS_CONNECTED) {
+			break;
+		}
+		if (s == HTTPClient::STATUS_REQUESTING) {
+			client->poll();
+			OS::get_singleton()->delay_usec(5000);
+			continue;
+		}
+		memdelete(client);
+		MutexLock lock(_stream_mutex);
+		_stream_error_flag = true;
+		_stream_error_msg = vformat(TTR("Waiting for response failed (status %d): %s"), (int)s, yeet_describe_http_client_status(s));
+		_stream_done_flag = true;
+		return;
+	}
+
+	if (!client->has_response()) {
+		memdelete(client);
+		MutexLock lock(_stream_mutex);
+		_stream_error_flag = true;
+		_stream_error_msg = "No response from server.";
+		_stream_done_flag = true;
+		return;
+	}
+
+	const int resp_code = client->get_response_code();
+	if (resp_code < 200 || resp_code >= 300) {
+		String err_body;
+		while (client->get_status() == HTTPClient::STATUS_BODY && !_stream_should_stop) {
+			client->poll();
+			PackedByteArray chunk = client->read_response_body_chunk();
+			if (!chunk.is_empty()) {
+				err_body += String::utf8(reinterpret_cast<const char *>(chunk.ptr()), chunk.size());
+			}
+			OS::get_singleton()->delay_usec(1000);
+		}
+		memdelete(client);
+		MutexLock lock(_stream_mutex);
+		_stream_error_flag = true;
+		_stream_error_msg = vformat("HTTP %d: %s", resp_code, err_body.substr(0, 400));
+		_stream_done_flag = true;
+		return;
+	}
+
+	// ── Read SSE body ──────────────────────────────────────────────────────────
+	String sse_buf;
+	bool sse_done = false;
+
+	while (!sse_done && client->get_status() == HTTPClient::STATUS_BODY) {
+		if (_stream_should_stop) {
+			break;
+		}
+		client->poll();
+		PackedByteArray raw = client->read_response_body_chunk();
+		if (raw.is_empty()) {
+			OS::get_singleton()->delay_usec(1000);
+			continue;
+		}
+		sse_buf += String::utf8(reinterpret_cast<const char *>(raw.ptr()), raw.size());
+
+		// Process all complete lines in the buffer
+		while (!sse_done) {
+			int nl = sse_buf.find("\n");
+			if (nl < 0) {
+				break;
+			}
+			String line = sse_buf.substr(0, nl).strip_edges();
+			sse_buf = sse_buf.substr(nl + 1);
+
+			if (!line.begins_with("data:")) {
+				continue;
+			}
+			const String sse_payload = line.substr(5).strip_edges();
+			if (sse_payload == "[DONE]") {
+				sse_done = true;
+				break;
+			}
+
+			// Parse delta JSON
+			Ref<JSON> jobj;
+			jobj.instantiate();
+			if (jobj->parse(sse_payload) != OK) {
+				continue;
+			}
+			const Variant parsed = jobj->get_data();
+			if (parsed.get_type() != Variant::DICTIONARY) {
+				continue;
+			}
+			const Dictionary d = parsed;
+			const Array choices = d.get("choices", Array());
+			if (choices.is_empty()) {
+				continue;
+			}
+			const Variant c0v = choices[0];
+			if (c0v.get_type() != Variant::DICTIONARY) {
+				continue;
+			}
+			const Dictionary c0 = c0v;
+			const Variant dv = c0.get("delta", Variant());
+			if (dv.get_type() != Variant::DICTIONARY) {
+				continue;
+			}
+			const Dictionary delta = dv;
+			const String content_chunk = delta.get("content", "");
+			if (content_chunk.is_empty()) {
+				continue;
+			}
+			MutexLock lock(_stream_mutex);
+			_pending_chunks.push_back(content_chunk);
+		}
+	}
+
+	memdelete(client);
+	MutexLock lock(_stream_mutex);
+	_stream_done_flag = true;
+}
+
+void YeetAIDock::_drain_stream_queue() {
+	if (!_stream_active) {
+		return;
+	}
+
+	// Collect pending data under lock
+	Vector<String> chunks;
+	bool done = false;
+	bool had_error = false;
+	String error_msg;
+	{
+		MutexLock lock(_stream_mutex);
+		chunks = _pending_chunks;
+		_pending_chunks.clear();
+		done = _stream_done_flag;
+		had_error = _stream_error_flag;
+		error_msg = _stream_error_msg;
+	}
+
+	bool updated = !chunks.is_empty();
+	for (const String &chunk : chunks) {
+		_stream_accumulated += chunk;
+	}
+	if (updated) {
+		_update_stream_label();
+	}
+
+	if (done) {
+		if (_stream_thread.is_started()) {
+			_stream_thread.wait_to_finish();
+		}
+		_stream_active = false;
+
+		stream_label->set_visible(false);
+		stream_label->clear();
+
+		if (had_error) {
+			_set_waiting(false, TTR("Error"));
+			_append_message("assistant", TTR("Streaming error: ") + error_msg);
+		} else {
+			_finalize_stream();
+		}
+	}
+}
+
+void YeetAIDock::_finalize_stream() {
+	// Hand the fully accumulated SSE text off to the existing response handler.
+	// This re-uses all existing JSON parsing, tool-call dispatch, etc.
+	_handle_model_response(_stream_accumulated);
+}
+
+// ── Animation & live-stream UI ────────────────────────────────────────────────
+
+void YeetAIDock::_update_animation(double p_delta) {
+	_anim_time += float(p_delta);
+
+	// Pulse the status dot with a sine-wave alpha when active
+	if (waiting_for_response && _status_dot) {
+		const float alpha = 0.35f + 0.65f * (0.5f + 0.5f * Math::sin(_anim_time * 4.5f));
+		Color dot_color = get_theme_color(SNAME("accent_color"), EditorStringName(Editor));
+		dot_color.a = alpha;
+		_status_dot->set_color(dot_color);
+	}
+}
+
+void YeetAIDock::_update_stream_label() {
+	if (!stream_label) {
+		return;
+	}
+
+	const Color font_color = get_theme_color(SNAME("font_color"), EditorStringName(Editor));
+	const Color accent = get_theme_color(SNAME("accent_color"), EditorStringName(Editor));
+	const Color success = get_theme_color(SNAME("success_color"), EditorStringName(Editor));
+
+	stream_label->clear();
+
+	// Role header
+	stream_label->push_color(success);
+	stream_label->push_bold();
+	stream_label->add_text(TTR("Assistant"));
+	stream_label->pop();
+	stream_label->pop();
+	stream_label->push_color(accent);
+	stream_label->add_text("  ");
+	stream_label->add_text(String::utf8("\xe2\x80\xa2")); // •
+	stream_label->pop();
+	stream_label->append_text("\n");
+
+	stream_label->push_indent(1);
+	stream_label->push_color(font_color);
+	stream_label->append_text(_escape_bbcode(_stream_accumulated));
+
+	// Static block cursor (no periodic full redraw — avoids flicker)
+	stream_label->push_color(accent);
+	stream_label->add_text(String::utf8("\xe2\x96\x8b")); // ▋
+	stream_label->pop();
+	stream_label->pop();
+	stream_label->pop();
+
+	_scroll_to_bottom();
+}
+
+void YeetAIDock::_scroll_to_bottom() {
+	if (chat_scroll) {
+		// Deferred so layout is computed first
+		callable_mp((ScrollContainer *)chat_scroll, &ScrollContainer::set_v_scroll)
+				.call_deferred(INT32_MAX);
+	}
+}
+
+void YeetAIDock::_on_stop_pressed() {
+	_cancel_streaming();
+	_set_waiting(false, TTR("Stopped"));
+	stream_label->set_visible(false);
+	stream_label->clear();
+
+	if (!_stream_accumulated.is_empty()) {
+		const String partial = _stream_accumulated + "\n\n" + TTR("[Stopped by user]");
+		_append_message("assistant", partial);
+		conversation_messages.append(make_message("assistant", _stream_accumulated));
+	}
+	_stream_accumulated = "";
+}
+
+void YeetAIDock::_append_status_row(const String &p_text) {
+	const Color dim = get_theme_color(SNAME("font_disabled_color"), EditorStringName(Editor));
+	const int base_fs = has_theme_font_size(SNAME("font_size"), EditorStringName(Editor))
+			? get_theme_font_size(SNAME("font_size"), EditorStringName(Editor))
+			: 0;
+
+	if (base_fs > 0) {
+		chat_log->push_font_size(MAX(10, int(base_fs * 0.84f)));
+	}
+	chat_log->push_color(dim);
+	chat_log->push_italics();
+	chat_log->add_text("  " + p_text);
+	chat_log->pop(); // italics
+	chat_log->pop(); // color
+	if (base_fs > 0) {
+		chat_log->pop(); // font_size
+	}
+	chat_log->append_text("\n\n");
+	_scroll_to_bottom();
+}
+
+String YeetAIDock::_icon_for_tool(const String &p_tool_name) const {
+	const String s = p_tool_name.to_lower();
+	// Write / create / update
+	if (s.contains("write") || s.contains("update_gdscript") || s.contains("create_gdscript")) {
+		return String::utf8("\xe2\x9c\x8e "); // ✎
+	}
+	// Create nodes / scenes / folders
+	if (s.contains("create") || s.contains("add_node") || s.contains("instantiate") || s.contains("add_primitive") || s.contains("add_collision")) {
+		return String::utf8("\xe2\x9c\x9a "); // ✚
+	}
+	// Delete / remove
+	if (s.contains("delete") || s.contains("remove")) {
+		return String::utf8("\xe2\x9c\x96 "); // ✖
+	}
+	// Move / rename / reparent
+	if (s.contains("move") || s.contains("rename") || s.contains("reparent")) {
+		return String::utf8("\xe2\x86\x92 "); // →
+	}
+	// Play / run / stop scene
+	if (s.contains("play") || s.contains("run")) {
+		return String::utf8("\xe2\x96\xb6 "); // ▶
+	}
+	if (s.contains("stop_playing")) {
+		return String::utf8("\xe2\x96\xa0 "); // ■
+	}
+	// Screenshot / capture
+	if (s.contains("capture") || s.contains("screenshot")) {
+		return String::utf8("\xe2\x8c\x96 "); // ⌖
+	}
+	// Save
+	if (s.contains("save")) {
+		return String::utf8("\xe2\x9c\x94 "); // ✔
+	}
+	// Attach / connect
+	if (s.contains("attach") || s.contains("connect") || s.contains("assign")) {
+		return String::utf8("\xe2\x97\x8e "); // ◎
+	}
+	// Read / get / list / find / grep
+	if (s.contains("read") || s.contains("get") || s.contains("list") || s.contains("find") || s.contains("grep")) {
+		return String::utf8("\xe2\x97\x89 "); // ◉
+	}
+	return String::utf8("\xe2\x97\x86 "); // ◆ default
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 void YeetAIDock::_send_prompt() {
 	if (waiting_for_response) {
@@ -610,15 +1220,16 @@ void YeetAIDock::_on_prompt_gui_input(const Ref<InputEvent> &p_event) {
 }
 
 void YeetAIDock::_clear_chat() {
-	if (waiting_for_response) {
-		request->cancel_request();
-	}
+	_cancel_streaming();
+	_set_waiting(false, TTR("Ready"));
 
-	waiting_for_response = false;
 	conversation_messages.clear();
 	turn_context_prompt = String();
 	chat_log->clear();
-	status_label->set_text(TTR("Ready"));
+	stream_label->set_visible(false);
+	stream_label->clear();
+	_stream_accumulated = "";
+
 	_append_message("assistant", TTR("Chat cleared. Ask me about the current project."));
 }
 
@@ -641,19 +1252,26 @@ void YeetAIDock::_append_message(const String &p_role, const String &p_text) {
 	}
 
 	const Color label_color = (p_role == "user") ? accent : ((p_role == "assistant") ? success : ((p_role == "tool") ? warning : dim));
+	const int base_fs = has_theme_font_size(SNAME("font_size"), EditorStringName(Editor))
+			? get_theme_font_size(SNAME("font_size"), EditorStringName(Editor))
+			: 14;
+	const int label_fs = MAX(10, int(base_fs * 0.84f));
 
-	chat_log->push_color(accent);
-	chat_log->add_text(String::utf8("\xe2\x94\x82")); // Box drawings light vertical U+2502
-	chat_log->add_text(" ");
-	chat_log->pop();
-
+	// Role row.
+	chat_log->push_font_size(label_fs);
 	chat_log->push_color(label_color);
 	chat_log->push_bold();
 	chat_log->add_text(label);
 	chat_log->pop();
 	chat_log->pop();
+	chat_log->pop();
+	chat_log->push_color(dim);
+	chat_log->add_text("  ");
+	chat_log->add_text(String::utf8("\xe2\x80\xa2")); // •
+	chat_log->pop();
 	chat_log->append_text("\n");
 
+	// Message body.
 	chat_log->push_indent(1);
 	chat_log->push_color(font_base);
 	chat_log->append_text(_escape_bbcode(p_text));
@@ -661,7 +1279,7 @@ void YeetAIDock::_append_message(const String &p_role, const String &p_text) {
 	chat_log->pop();
 
 	chat_log->append_text("\n\n");
-	chat_log->scroll_to_line(MAX(0, chat_log->get_line_count() - 1));
+	_scroll_to_bottom();
 }
 
 void YeetAIDock::_append_tool_result(const String &p_tool_name, const Dictionary &p_args, const ToolExecutionResult &p_result) {
@@ -669,89 +1287,126 @@ void YeetAIDock::_append_tool_result(const String &p_tool_name, const Dictionary
 	const Color font_dim = get_theme_color(SNAME("font_disabled_color"), EditorStringName(Editor));
 	const Color accent = get_theme_color(SNAME("accent_color"), EditorStringName(Editor));
 	const Color success = get_theme_color(SNAME("success_color"), EditorStringName(Editor));
+	const Color warning = get_theme_color(SNAME("warning_color"), EditorStringName(Editor));
 	const Color error = get_theme_color(SNAME("error_color"), EditorStringName(Editor));
 
-	const int base_fs = get_theme_font_size(SNAME("font_size"), EditorStringName(Editor));
+	const int base_fs = has_theme_font_size(SNAME("font_size"), EditorStringName(Editor))
+			? get_theme_font_size(SNAME("font_size"), EditorStringName(Editor))
+			: 14;
 	const int caption_fs = MAX(10, int(base_fs * 0.82f));
 
 	const String title = _humanize_tool_name(p_tool_name);
+	const String icon = _icon_for_tool(p_tool_name);
+	const Vector<String> paths = _collect_relevant_paths(p_args, p_result.payload);
 
-	chat_log->push_color(accent);
-	chat_log->add_text(String::utf8("\xe2\x94\x82")); // U+2502
-	chat_log->add_text(" ");
+	// ── Compact card header ────────────────────────────────────────────────────
+	// "  icon  Tool Name   path/to/file   ·  ✓ OK"
+	// ─────────────────────────────────────────────
+	chat_log->push_color(font_dim);
+	chat_log->add_text("  "); // slight indent, no vertical bar (distinguishes from chat messages)
 	chat_log->pop();
 
-	chat_log->push_color(font_base);
-	chat_log->push_bold();
+	// Icon glyph
+	chat_log->push_color(font_dim);
+	chat_log->add_text(icon);
+	chat_log->pop();
+
+	// Tool action label (dim, smaller)
+	chat_log->push_font_size(caption_fs);
+	chat_log->push_color(font_dim);
 	chat_log->add_text(title);
 	chat_log->pop();
 	chat_log->pop();
 
-	chat_log->push_color(font_dim);
-	chat_log->add_text("  ·  ");
-	chat_log->pop();
+	// Primary path inline (warning/yellow for visibility, monospace)
+	if (!paths.is_empty()) {
+		chat_log->add_text("  ");
+		chat_log->push_color(warning);
+		chat_log->push_mono();
+		chat_log->push_font_size(caption_fs);
+		// Shorten path: keep last two segments for readability
+		const String p = paths[0];
+		const int last_slash = p.rfind("/");
+		const String short_path = (last_slash > 4) ? ("\xe2\x80\xa6" + p.substr(last_slash)) : p; // …/filename
+		chat_log->add_text(short_path);
+		chat_log->pop();
+		chat_log->pop();
+		chat_log->pop();
+		if (paths.size() > 1) {
+			chat_log->push_color(font_dim);
+			chat_log->push_font_size(caption_fs);
+			chat_log->add_text(vformat(" +%d", paths.size() - 1));
+			chat_log->pop();
+			chat_log->pop();
+		}
+	}
 
+	// Status badge  ·  ✓ OK  or  ✗ Err
+	chat_log->push_color(font_dim);
+	chat_log->add_text("  \xe2\x80\xb9"); // ‹ arrow right-pointing
+	chat_log->pop();
 	chat_log->push_color(p_result.ok ? success : error);
-	chat_log->push_bold();
-	chat_log->add_text(p_result.ok ? TTR("OK") : TTR("ERR"));
+	chat_log->push_font_size(caption_fs);
+	chat_log->add_text(p_result.ok
+					? String::utf8("  \xe2\x9c\x93") // ✓
+					: String::utf8("  \xe2\x9c\x97")); // ✗
 	chat_log->pop();
 	chat_log->pop();
 
 	chat_log->append_text("\n");
 
-	chat_log->push_indent(1);
-
-	const Vector<String> paths = _collect_relevant_paths(p_args, p_result.payload);
-	if (!paths.is_empty()) {
+	// ── Additional paths (if multiple) ────────────────────────────────────────
+	if (paths.size() > 1) {
+		chat_log->push_indent(1);
 		chat_log->push_font_size(caption_fs);
-		chat_log->push_color(font_dim);
-		chat_log->add_text(TTR("Files"));
-		chat_log->pop();
-		chat_log->pop();
-		chat_log->append_text("\n");
-		for (int i = 0; i < paths.size(); i++) {
+		for (int i = 1; i < paths.size(); i++) {
 			chat_log->push_color(font_dim);
-			chat_log->add_text(paths.size() > 1 ? "• " : "");
+			chat_log->add_text("  \xe2\x80\xa2 "); // •
 			chat_log->pop();
-			chat_log->push_color(font_base);
+			chat_log->push_color(warning);
 			chat_log->push_mono();
 			chat_log->add_text(paths[i]);
 			chat_log->pop();
 			chat_log->pop();
 			chat_log->append_text("\n");
 		}
+		chat_log->pop();
+		chat_log->pop();
 	}
 
-	const String args_compact = _truncate_preview(JSON::stringify(p_args), 220);
-	chat_log->push_font_size(caption_fs);
-	chat_log->push_color(font_dim);
-	chat_log->add_text(TTR("Arguments"));
-	chat_log->pop();
-	chat_log->pop();
-	chat_log->append_text("\n");
-	chat_log->push_color(font_dim);
-	chat_log->push_mono();
-	chat_log->append_text(_escape_bbcode(args_compact));
-	chat_log->pop();
-	chat_log->pop();
-	chat_log->append_text("\n");
+	// ── Compact output preview (collapsed, dim monospace) ─────────────────────
+	const String preview = _truncate_preview(p_result.display_text, 280);
+	if (!preview.is_empty() && !p_result.ok) {
+		// Always show output on error so the user sees what went wrong
+		chat_log->push_indent(1);
+		chat_log->push_font_size(caption_fs);
+		chat_log->push_color(error);
+		chat_log->push_mono();
+		chat_log->append_text(_escape_bbcode(preview));
+		chat_log->pop();
+		chat_log->pop();
+		chat_log->pop();
+		chat_log->pop();
+		chat_log->append_text("\n");
+	} else if (!preview.is_empty()) {
+		// On success: single-line dim preview (first 120 chars)
+		const String one_line = _truncate_preview(preview.replace("\n", " "), 120);
+		if (!one_line.strip_edges().is_empty()) {
+			chat_log->push_indent(1);
+			chat_log->push_font_size(caption_fs);
+			chat_log->push_color(font_dim);
+			chat_log->push_mono();
+			chat_log->append_text(_escape_bbcode(one_line));
+			chat_log->pop();
+			chat_log->pop();
+			chat_log->pop();
+			chat_log->pop();
+			chat_log->append_text("\n");
+		}
+	}
 
-	const String preview = _truncate_preview(p_result.display_text, 520);
-	chat_log->push_font_size(caption_fs);
-	chat_log->push_color(font_dim);
-	chat_log->add_text(TTR("Output"));
-	chat_log->pop();
-	chat_log->pop();
 	chat_log->append_text("\n");
-	chat_log->push_color(font_base);
-	chat_log->push_mono();
-	chat_log->append_text(_escape_bbcode(preview));
-	chat_log->pop();
-	chat_log->pop();
-
-	chat_log->pop();
-	chat_log->append_text("\n\n");
-	chat_log->scroll_to_line(MAX(0, chat_log->get_line_count() - 1));
+	_scroll_to_bottom();
 }
 
 String YeetAIDock::_humanize_tool_name(const String &p_tool) const {
@@ -801,8 +1456,28 @@ String YeetAIDock::_truncate_preview(const String &p_text, int p_max_chars) cons
 
 void YeetAIDock::_set_waiting(bool p_waiting, const String &p_status) {
 	waiting_for_response = p_waiting;
-	send_button->set_disabled(p_waiting);
+
+	// Swap Send ↔ Stop buttons
+	send_button->set_visible(!p_waiting);
+	stop_button->set_visible(p_waiting);
+
 	status_label->set_text(p_status);
+
+	// Status dot: accent color pulsing when active, dim when idle
+	if (_status_dot) {
+		if (p_waiting) {
+			Color dot = get_theme_color(SNAME("accent_color"), EditorStringName(Editor));
+			dot.a = 1.0f;
+			_status_dot->set_color(dot);
+		} else {
+			_status_dot->set_color(Color(0.5f, 0.5f, 0.5f, 0.35f));
+		}
+	}
+
+	set_process(p_waiting);
+	if (!p_waiting) {
+		_anim_time = 0.0f;
+	}
 }
 
 void YeetAIDock::_request_model_response() {
@@ -887,14 +1562,14 @@ void YeetAIDock::_request_model_response() {
 		headers.push_back("X-Title: Crosshair");
 	}
 
-	const Error err = request->request(endpoint, headers, HTTPClient::METHOD_POST, JSON::stringify(payload));
-	if (err != OK) {
-		_append_message("assistant", vformat(TTR("Failed to start request: %s"), itos(err)));
-		_set_waiting(false, TTR("Request failed"));
-		return;
-	}
+	// Enable SSE streaming — all OpenAI-compatible providers support this.
+	payload["stream"] = true;
 
+	_stream_endpoint = endpoint;
+	_stream_req_headers = headers;
+	_stream_req_body = JSON::stringify(payload);
 	_set_waiting(true, TTR("Thinking..."));
+	_start_streaming();
 }
 
 void YeetAIDock::_on_request_completed(int p_result, int p_response_code, const PackedStringArray &p_headers, const PackedByteArray &p_body) {
@@ -970,6 +1645,8 @@ void YeetAIDock::_handle_model_response(const String &p_content) {
 		conversation_messages.append(_make_user_message_with_optional_vision(tool_name, tool_payload));
 
 		tool_round_trips++;
+		// Show a subtle planning indicator before the next model call
+		_append_status_row(TTR("Planning next moves\xe2\x80\xa6")); // …
 		_request_model_response();
 		return;
 	}
@@ -1078,7 +1755,7 @@ String YeetAIDock::_build_task_hints_for_user_prompt(const String &p_user_prompt
 	return out;
 }
 
-YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_name, const Dictionary &p_args) const {
+YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_name, const Dictionary &p_args) {
 	ToolExecutionResult result;
 
 	if (p_tool_name == "get_project_tree") {
@@ -2129,7 +2806,7 @@ Dictionary YeetAIDock::_parse_one_batch_call(const Variant &p_call_var, int p_in
 	return out;
 }
 
-Dictionary YeetAIDock::_tool_batch_tool_calls(const Dictionary &p_args) const {
+Dictionary YeetAIDock::_tool_batch_tool_calls(const Dictionary &p_args) {
 	Dictionary result;
 	Array calls;
 	if (p_args.has("calls")) {
