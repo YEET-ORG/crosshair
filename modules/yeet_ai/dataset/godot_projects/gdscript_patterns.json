@@ -1,0 +1,1520 @@
+[
+  {
+    "pattern_name": "2D Area2D top-down movement with AnimatedSprite2D",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "2d/dodge_the_creeps/player.gd",
+    "extends_class": "Area2D",
+    "script_content": "extends Area2D\n\nsignal hit\n\n@export var speed = 400\nvar screen_size\n\nfunc _ready():\n\tscreen_size = get_viewport_rect().size\n\thide()\n\nfunc _process(delta):\n\tvar velocity = Vector2.ZERO\n\tif Input.is_action_pressed(&\"move_right\"):\n\t\tvelocity.x += 1\n\tif Input.is_action_pressed(&\"move_left\"):\n\t\tvelocity.x -= 1\n\tif Input.is_action_pressed(&\"move_down\"):\n\t\tvelocity.y += 1\n\tif Input.is_action_pressed(&\"move_up\"):\n\t\tvelocity.y -= 1\n\n\tif velocity.length() > 0:\n\t\tvelocity = velocity.normalized() * speed\n\t\t$AnimatedSprite2D.play()\n\telse:\n\t\t$AnimatedSprite2D.stop()\n\n\tposition += velocity * delta\n\tposition = position.clamp(Vector2.ZERO, screen_size)\n\n\tif velocity.x != 0:\n\t\t$AnimatedSprite2D.animation = &\"right\"\n\t\t$AnimatedSprite2D.flip_v = false\n\t\t$Trail.rotation = 0\n\t\t$AnimatedSprite2D.flip_h = velocity.x < 0\n\telif velocity.y != 0:\n\t\t$AnimatedSprite2D.animation = &\"up\"\n\t\trotation = PI if velocity.y > 0 else 0\n\nfunc start(pos):\n\tposition = pos\n\trotation = 0\n\tshow()\n\t$CollisionShape2D.disabled = false\n\nfunc _on_body_entered(_body):\n\thide()\n\thit.emit()\n\t$CollisionShape2D.set_deferred(&\"disabled\", true)",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Area2D",
+          "node_name": "Player"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player",
+          "node_type": "AnimatedSprite2D",
+          "node_name": "AnimatedSprite2D"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Player",
+          "node_name": "CollisionShape2D",
+          "shape_type": "circle",
+          "parameters": {
+            "radius": 20
+          }
+        }
+      },
+      {
+        "tool": "create_input_action",
+        "arguments": {
+          "action_name": "move_right",
+          "events": [
+            {
+              "type": "key",
+              "physical_keycode": "D"
+            }
+          ]
+        }
+      },
+      {
+        "tool": "create_input_action",
+        "arguments": {
+          "action_name": "move_left",
+          "events": [
+            {
+              "type": "key",
+              "physical_keycode": "A"
+            }
+          ]
+        }
+      },
+      {
+        "tool": "create_input_action",
+        "arguments": {
+          "action_name": "move_up",
+          "events": [
+            {
+              "type": "key",
+              "physical_keycode": "W"
+            }
+          ]
+        }
+      },
+      {
+        "tool": "create_input_action",
+        "arguments": {
+          "action_name": "move_down",
+          "events": [
+            {
+              "type": "key",
+              "physical_keycode": "S"
+            }
+          ]
+        }
+      },
+      {
+        "tool": "attach_script",
+        "arguments": {
+          "node_path": "Player",
+          "script_content": "extends Area2D\n\nsignal hit\n\n@export var speed = 400\nvar screen_size\n\nfunc _ready():\n\tscreen_size = get_viewport_rect().size\n\nfunc _process(delta):\n\tvar velocity = Vector2.ZERO\n\tif Input.is_action_pressed(&\"move_right\"):\n\t\tvelocity.x += 1\n\tif Input.is_action_pressed(&\"move_left\"):\n\t\tvelocity.x -= 1\n\tif Input.is_action_pressed(&\"move_down\"):\n\t\tvelocity.y += 1\n\tif Input.is_action_pressed(&\"move_up\"):\n\t\tvelocity.y -= 1\n\n\tif velocity.length() > 0:\n\t\tvelocity = velocity.normalized() * speed\n\tmove_and_slide()"
+        }
+      }
+    ],
+    "description": "2D top-down movement using Area2D with WASD input, sprite flipping, and collision detection via signals"
+  },
+  {
+    "pattern_name": "HUD CanvasLayer with score, messages, and buttons",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "2d/dodge_the_creeps/hud.gd",
+    "extends_class": "CanvasLayer",
+    "script_content": "extends CanvasLayer\n\nsignal start_game\n\nfunc show_message(text):\n\t$MessageLabel.text = text\n\t$MessageLabel.show()\n\t$MessageTimer.start()\n\nfunc show_game_over():\n\tshow_message(\"Game Over\")\n\tawait $MessageTimer.timeout\n\t$MessageLabel.text = \"Dodge the\\nCreeps\"\n\t$MessageLabel.show()\n\tawait get_tree().create_timer(1).timeout\n\t$StartButton.show()\n\nfunc update_score(score):\n\t$ScoreLabel.text = str(score)\n\nfunc _on_StartButton_pressed():\n\t$StartButton.hide()\n\tstart_game.emit()\n\nfunc _on_MessageTimer_timeout():\n\t$MessageLabel.hide()",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "CanvasLayer",
+          "node_name": "HUD"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "HUD",
+          "node_type": "Label",
+          "node_name": "ScoreLabel"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "HUD",
+          "node_type": "Label",
+          "node_name": "MessageLabel"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "HUD",
+          "node_type": "Button",
+          "node_name": "StartButton"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "HUD",
+          "node_type": "Timer",
+          "node_name": "MessageTimer"
+        }
+      },
+      {
+        "tool": "attach_script",
+        "arguments": {
+          "node_path": "HUD",
+          "script_content": "extends CanvasLayer\n\nsignal start_game"
+        }
+      }
+    ],
+    "description": "HUD overlay using CanvasLayer with score display, timed messages, and start button"
+  },
+  {
+    "pattern_name": "Game spawner main scene with timers and PackedScene instantiation",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "2d/dodge_the_creeps/main.gd",
+    "extends_class": "Node",
+    "script_content": "extends Node\n\n@export var mob_scene: PackedScene\nvar score\n\nfunc game_over():\n\t$ScoreTimer.stop()\n\t$MobTimer.stop()\n\t$HUD.show_game_over()\n\t$Music.stop()\n\t$DeathSound.play()\n\nfunc new_game():\n\tget_tree().call_group(&\"mobs\", &\"queue_free\")\n\tscore = 0\n\t$Player.start($StartPosition.position)\n\t$StartTimer.start()\n\t$HUD.update_score(score)\n\t$HUD.show_message(\"Get Ready\")\n\t$Music.play()\n\nfunc _on_MobTimer_timeout():\n\tvar mob = mob_scene.instantiate()\n\tvar mob_spawn_location = get_node(^\"MobPath/MobSpawnLocation\")\n\tmob_spawn_location.progress_ratio = randf()\n\tmob.position = mob_spawn_location.position\n\tvar direction = mob_spawn_location.rotation + PI / 2\n\tdirection += randf_range(-PI / 4, PI / 4)\n\tmob.rotation = direction\n\tvar velocity = Vector2(randf_range(150.0, 250.0), 0.0)\n\tmob.linear_velocity = velocity.rotated(direction)\n\tadd_child(mob)\n\nfunc _on_ScoreTimer_timeout():\n\tscore += 1\n\t$HUD.update_score(score)",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node",
+          "node_name": "Main"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Main",
+          "node_type": "Timer",
+          "node_name": "MobTimer"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Main",
+          "node_type": "Timer",
+          "node_name": "ScoreTimer"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Main",
+          "node_type": "Timer",
+          "node_name": "StartTimer"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Main",
+          "node_type": "AudioStreamPlayer",
+          "node_name": "Music"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Main",
+          "node_type": "AudioStreamPlayer",
+          "node_name": "DeathSound"
+        }
+      }
+    ],
+    "description": "Main game scene orchestrator with mob spawning along Path2D, score timer, and audio management"
+  },
+  {
+    "pattern_name": "RigidBody2D enemy with auto-cleanup on screen exit",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "2d/dodge_the_creeps/mob.gd",
+    "extends_class": "RigidBody2D",
+    "script_content": "extends RigidBody2D\n\nfunc _ready():\n\tvar mob_types = Array($AnimatedSprite2D.sprite_frames.get_animation_names())\n\t$AnimatedSprite2D.animation = mob_types.pick_random()\n\t$AnimatedSprite2D.play()\n\nfunc _on_VisibilityNotifier2D_screen_exited():\n\tqueue_free()",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "RigidBody2D",
+          "node_name": "Mob"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Mob",
+          "node_type": "AnimatedSprite2D",
+          "node_name": "AnimatedSprite2D"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Mob",
+          "node_type": "VisibleOnScreenNotifier2D",
+          "node_name": "VisibilityNotifier2D"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Mob",
+          "node_name": "CollisionShape2D",
+          "shape_type": "capsule"
+        }
+      }
+    ],
+    "description": "RigidBody2D mob that picks random animation and auto-frees when off-screen using VisibilityNotifier2D"
+  },
+  {
+    "pattern_name": "State machine base class with enter/exit/handle_input/update",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "2d/finite_state_machine/state_machine/state.gd",
+    "extends_class": "Node",
+    "script_content": "extends Node\n\nsignal finished(next_state_name: StringName)\n\nfunc enter() -> void:\n\tpass\n\nfunc exit() -> void:\n\tpass\n\nfunc handle_input(_input_event: InputEvent) -> void:\n\tpass\n\nfunc update(_delta: float) -> void:\n\tpass\n\nfunc _on_animation_finished(_anim_name: String) -> void:\n\tpass",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node",
+          "node_name": "State"
+        }
+      },
+      {
+        "tool": "attach_script",
+        "arguments": {
+          "node_path": "State",
+          "script_content": "extends Node\n\nsignal finished(next_state_name: StringName)\n\nfunc enter() -> void:\n\tpass\n\nfunc exit() -> void:\n\tpass\n\nfunc handle_input(_input_event: InputEvent) -> void:\n\tpass\n\nfunc update(_delta: float) -> void:\n\tpass"
+        }
+      }
+    ],
+    "description": "Abstract state base class with enter/exit/handle_input/update pattern for state machines"
+  },
+  {
+    "pattern_name": "State machine controller with stack-based state transitions",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "2d/finite_state_machine/state_machine/state_machine.gd",
+    "extends_class": "Node",
+    "script_content": "extends Node\n\nsignal state_changed(current_state: Node)\n\n@export var start_state: NodePath\nvar states_map := {}\nvar states_stack := []\nvar current_state: Node = null\nvar _active: bool = false:\n\tset(value):\n\t\t_active = value\n\t\tset_active(value)\n\nfunc _enter_tree() -> void:\n\tif start_state.is_empty():\n\t\tstart_state = get_child(0).get_path()\n\tfor child in get_children():\n\t\tvar err: bool = child.finished.connect(_change_state)\n\t\tif err:\n\t\t\tprinterr(err)\n\tinitialize(start_state)\n\nfunc initialize(initial_state: NodePath) -> void:\n\t_active = true\n\tstates_stack.push_front(get_node(initial_state))\n\tcurrent_state = states_stack[0]\n\tcurrent_state.enter()\n\nfunc set_active(value: bool) -> void:\n\tset_physics_process(value)\n\tset_process_input(value)\n\tif not _active:\n\t\tstates_stack = []\n\t\tcurrent_state = null\n\nfunc _unhandled_input(input_event: InputEvent) -> void:\n\tcurrent_state.handle_input(input_event)\n\nfunc _physics_process(delta: float) -> void:\n\tcurrent_state.update(delta)\n\nfunc _change_state(state_name: String) -> void:\n\tif not _active:\n\t\treturn\n\tcurrent_state.exit()\n\tif state_name == \"previous\":\n\t\tstates_stack.pop_front()\n\telse:\n\t\tstates_stack[0] = states_map[state_name]\n\tcurrent_state = states_stack[0]\n\tstate_changed.emit(current_state)\n\tif state_name != \"previous\":\n\t\tcurrent_state.enter()",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node",
+          "node_name": "StateMachine"
+        }
+      },
+      {
+        "tool": "attach_script",
+        "arguments": {
+          "node_path": "StateMachine",
+          "script_content": "extends Node\n\nsignal state_changed(current_state: Node)\n\n@export var start_state: NodePath\nvar states_map := {}\nvar states_stack := []\nvar current_state: Node = null"
+        }
+      }
+    ],
+    "description": "Stack-based state machine with pushdown automaton support, signal-driven state transitions"
+  },
+  {
+    "pattern_name": "Idle state extending ground state with animation and transitions",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "2d/finite_state_machine/player/states/motion/on_ground/idle.gd",
+    "extends_class": "on_ground.gd",
+    "script_content": "extends \"on_ground.gd\"\n\nfunc enter() -> void:\n\towner.get_node(^\"AnimationPlayer\").play(PLAYER_STATE.idle)\n\nfunc handle_input(input_event: InputEvent) -> void:\n\treturn super.handle_input(input_event)\n\nfunc update(_delta: float) -> void:\n\tvar input_direction: Vector2 = get_input_direction()\n\tif input_direction:\n\t\tfinished.emit(PLAYER_STATE.move)",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node",
+          "node_name": "Idle"
+        }
+      },
+      {
+        "tool": "attach_script",
+        "arguments": {
+          "node_path": "Idle",
+          "script_content": "extends \"on_ground.gd\"\n\nfunc enter() -> void:\n\towner.get_node(^\"AnimationPlayer\").play(PLAYER_STATE.idle)\n\nfunc update(_delta: float) -> void:\n\tvar input_direction: Vector2 = get_input_direction()\n\tif input_direction:\n\t\tfinished.emit(PLAYER_STATE.move)"
+        }
+      }
+    ],
+    "description": "Idle state inheriting from on_ground state, transitions to move when directional input detected"
+  },
+  {
+    "pattern_name": "Move state with walk/run speeds and CharacterBody2D movement",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "2d/finite_state_machine/player/states/motion/on_ground/move.gd",
+    "extends_class": "on_ground.gd",
+    "script_content": "extends \"on_ground.gd\"\n\n@export var max_walk_speed := 450.0\n@export var max_run_speed := 700.0\n\nfunc enter() -> void:\n\tspeed = 0.0\n\tvelocity = Vector2()\n\tvar input_direction := get_input_direction()\n\tupdate_look_direction(input_direction)\n\towner.get_node(^\"AnimationPlayer\").play(PLAYER_STATE.walk)\n\nfunc handle_input(input_event: InputEvent) -> void:\n\treturn super.handle_input(input_event)\n\nfunc update(_delta: float) -> void:\n\tvar input_direction := get_input_direction()\n\tif input_direction.is_zero_approx():\n\t\tfinished.emit(PLAYER_STATE.idle)\n\tupdate_look_direction(input_direction)\n\n\tif Input.is_action_pressed(&\"run\"):\n\t\tspeed = max_run_speed\n\telse:\n\t\tspeed = max_walk_speed\n\n\tvar collision_info := move(speed, input_direction)\n\tif not collision_info:\n\t\treturn\n\tif speed == max_run_speed and collision_info.collider.is_in_group(&\"environment\"):\n\t\treturn\n\nfunc move(p_speed: float, direction: Vector2) -> KinematicCollision2D:\n\towner.velocity = direction.normalized() * p_speed\n\towner.move_and_slide()\n\tif owner.get_slide_collision_count() == 0:\n\t\treturn null\n\treturn owner.get_slide_collision(0)",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node",
+          "node_name": "Move"
+        }
+      },
+      {
+        "tool": "attach_script",
+        "arguments": {
+          "node_path": "Move",
+          "script_content": "extends \"on_ground.gd\"\n\n@export var max_walk_speed := 450.0\n@export var max_run_speed := 700.0\n\nfunc enter() -> void:\n\tspeed = 0.0\n\tvelocity = Vector2()\n\nfunc update(_delta: float) -> void:\n\tvar input_direction := get_input_direction()\n\tif input_direction.is_zero_approx():\n\t\tfinished.emit(PLAYER_STATE.idle)\n\n\tif Input.is_action_pressed(&\"run\"):\n\t\tspeed = max_run_speed\n\telse:\n\t\tspeed = max_walk_speed"
+        }
+      }
+    ],
+    "description": "Walk/run movement state with speed switching and collision detection"
+  },
+  {
+    "pattern_name": "CharacterBody2D with WASD movement, gravity, and jump",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "2d/kinematic_character/player/player.gd",
+    "extends_class": "CharacterBody2D",
+    "script_content": "extends CharacterBody2D\n\nconst WALK_FORCE = 600\nconst WALK_MAX_SPEED = 200\nconst STOP_FORCE = 1300\nconst JUMP_SPEED = 200\n\n@onready var gravity := float(ProjectSettings.get_setting(\"physics/2d/default_gravity\"))\n\nfunc _physics_process(delta: float) -> void:\n\tvar walk := WALK_FORCE * (Input.get_axis(&\"move_left\", &\"move_right\"))\n\tif abs(walk) < WALK_FORCE * 0.2:\n\t\tvelocity.x = move_toward(velocity.x, 0, STOP_FORCE * delta)\n\telse:\n\t\tvelocity.x += walk * delta\n\tvelocity.x = clamp(velocity.x, -WALK_MAX_SPEED, WALK_MAX_SPEED)\n\n\tvelocity.y += gravity * delta\n\tmove_and_slide()\n\n\tif is_on_floor() and Input.is_action_just_pressed(&\"jump\"):\n\t\tvelocity.y = -JUMP_SPEED",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "CharacterBody2D",
+          "node_name": "Player"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Player",
+          "node_name": "CollisionShape2D",
+          "shape_type": "capsule",
+          "parameters": {
+            "radius": 10,
+            "height": 30
+          }
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player",
+          "node_type": "Sprite2D",
+          "node_name": "Sprite2D"
+        }
+      },
+      {
+        "tool": "create_input_action",
+        "arguments": {
+          "action_name": "move_left",
+          "events": [
+            {
+              "type": "key",
+              "physical_keycode": "A"
+            }
+          ]
+        }
+      },
+      {
+        "tool": "create_input_action",
+        "arguments": {
+          "action_name": "move_right",
+          "events": [
+            {
+              "type": "key",
+              "physical_keycode": "D"
+            }
+          ]
+        }
+      },
+      {
+        "tool": "create_input_action",
+        "arguments": {
+          "action_name": "jump",
+          "events": [
+            {
+              "type": "key",
+              "physical_keycode": "Space"
+            }
+          ]
+        }
+      }
+    ],
+    "description": "2D platformer CharacterBody2D with force-based horizontal movement, gravity, and jump"
+  },
+  {
+    "pattern_name": "CharacterBody2D with NavigationAgent2D pathfinding",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "2d/navigation/character.gd",
+    "extends_class": "CharacterBody2D",
+    "script_content": "extends CharacterBody2D\n\nvar movement_speed := 200.0\n\n@onready var navigation_agent: NavigationAgent2D = $NavigationAgent2D\n\nfunc _ready() -> void:\n\tnavigation_agent.path_desired_distance = 2.0\n\tnavigation_agent.target_desired_distance = 2.0\n\tnavigation_agent.debug_enabled = true\n\nfunc _unhandled_input(input_event: InputEvent) -> void:\n\tif not input_event.is_action_pressed(&\"click\"):\n\t\treturn\n\tset_movement_target(get_global_mouse_position())\n\nfunc set_movement_target(movement_target: Vector2) -> void:\n\tnavigation_agent.target_position = movement_target\n\nfunc _physics_process(_delta: float) -> void:\n\tif navigation_agent.is_navigation_finished():\n\t\treturn\n\tvar current_agent_position: Vector2 = global_position\n\tvar next_path_position: Vector2 = navigation_agent.get_next_path_position()\n\tvelocity = current_agent_position.direction_to(next_path_position) * movement_speed\n\tmove_and_slide()",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "CharacterBody2D",
+          "node_name": "Character"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Character",
+          "node_type": "NavigationAgent2D",
+          "node_name": "NavigationAgent2D"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Character",
+          "node_name": "CollisionShape2D",
+          "shape_type": "circle",
+          "parameters": {
+            "radius": 15
+          }
+        }
+      },
+      {
+        "tool": "add_navigation_region",
+        "arguments": {
+          "dimensions": "2D"
+        }
+      }
+    ],
+    "description": "2D click-to-move character using NavigationAgent2D for pathfinding with move_and_slide"
+  },
+  {
+    "pattern_name": "RigidBody2D platformer player with _integrate_forces movement",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "2d/physics_platformer/player/player.gd",
+    "extends_class": "RigidBody2D",
+    "script_content": "class_name Player\nextends RigidBody2D\n\nconst WALK_ACCEL = 1000.0\nconst WALK_DEACCEL = 1000.0\nconst WALK_MAX_VELOCITY = 200.0\nconst AIR_ACCEL = 250.0\nconst AIR_DEACCEL = 250.0\nconst JUMP_VELOCITY = 380.0\nconst STOP_JUMP_FORCE = 450.0\nconst MAX_FLOOR_AIRBORNE_TIME = 0.15\n\nvar jumping: bool = false\nvar stopping_jump: bool = false\nvar floor_h_velocity: float = 0.0\nvar airborne_time: float = 1e20\n\nfunc _integrate_forces(state: PhysicsDirectBodyState2D) -> void:\n\tvar velocity := state.get_linear_velocity()\n\tvar step := state.get_step()\n\tvar move_left := Input.is_action_pressed(&\"move_left\")\n\tvar move_right := Input.is_action_pressed(&\"move_right\")\n\tvar jump := Input.is_action_pressed(&\"jump\")\n\n\tvelocity.x -= floor_h_velocity\n\tfloor_h_velocity = 0.0\n\n\tvar found_floor: bool = false\n\tfor contact_index in state.get_contact_count():\n\t\tvar collision_normal := state.get_contact_local_normal(contact_index)\n\t\tif collision_normal.dot(Vector2(0, -1)) > 0.6:\n\t\t\tfound_floor = true\n\n\tif found_floor:\n\t\tairborne_time = 0.0\n\telse:\n\t\tairborne_time += step\n\n\tvar on_floor := airborne_time < MAX_FLOOR_AIRBORNE_TIME\n\n\tif on_floor:\n\t\tif move_left and not move_right:\n\t\t\tif velocity.x > -WALK_MAX_VELOCITY:\n\t\t\t\tvelocity.x -= WALK_ACCEL * step\n\t\telif move_right and not move_left:\n\t\t\tif velocity.x < WALK_MAX_VELOCITY:\n\t\t\t\tvelocity.x += WALK_ACCEL * step\n\t\telse:\n\t\t\tvar xv := absf(velocity.x)\n\t\t\txv -= WALK_DEACCEL * step\n\t\t\tif xv < 0: xv = 0\n\t\t\tvelocity.x = signf(velocity.x) * xv\n\t\tif not jumping and jump:\n\t\t\tvelocity.y = -JUMP_VELOCITY\n\t\t\tjumping = true\n\n\tvelocity += state.get_total_gravity() * step\n\tstate.set_linear_velocity(velocity)",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "RigidBody2D",
+          "node_name": "Player"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Player",
+          "node_name": "CollisionShape2D",
+          "shape_type": "capsule"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player",
+          "node_type": "Sprite2D",
+          "node_name": "Sprite2D"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player",
+          "node_type": "AnimationPlayer",
+          "node_name": "AnimationPlayer"
+        }
+      }
+    ],
+    "description": "RigidBody2D platformer using _integrate_forces for floor detection, acceleration, and jump with coyote time"
+  },
+  {
+    "pattern_name": "3D CharacterBody3D with camera-relative WASD movement and jump",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "3d/kinematic_character/player/cubio.gd",
+    "extends_class": "CharacterBody3D",
+    "script_content": "extends CharacterBody3D\n\nconst MAX_SPEED = 3.5\nconst JUMP_SPEED = 6.5\nconst ACCELERATION = 4\nconst DECELERATION = 4\n\n@onready var camera: Camera3D = $Target/Camera3D\n@onready var gravity := float(-ProjectSettings.get_setting(\"physics/3d/default_gravity\"))\n@onready var start_position := position\n\nfunc _physics_process(delta: float) -> void:\n\tif Input.is_action_just_pressed(&\"reset_position\") or global_position.y < -6.0:\n\t\tposition = start_position\n\t\tvelocity = Vector3.ZERO\n\t\treset_physics_interpolation()\n\n\tvar dir := Vector3()\n\tdir.x = Input.get_axis(&\"move_left\", &\"move_right\")\n\tdir.z = Input.get_axis(&\"move_forward\", &\"move_back\")\n\n\tvar cam_basis := camera.global_transform.basis\n\tcam_basis = cam_basis.rotated(cam_basis.x, -cam_basis.get_euler().x)\n\tdir = cam_basis * dir\n\n\tif dir.length_squared() > 1:\n\t\tdir /= dir.length()\n\n\tvelocity.y += delta * gravity\n\n\tvar hvel := velocity\n\thvel.y = 0\n\tvar target := dir * MAX_SPEED\n\tvar acceleration := ACCELERATION if dir.dot(hvel) > 0 else DECELERATION\n\thvel = hvel.lerp(target, acceleration * delta)\n\n\tvelocity.x = hvel.x\n\tvelocity.z = hvel.z\n\tmove_and_slide()\n\n\tif is_on_floor() and Input.is_action_pressed(&\"jump\"):\n\t\tvelocity.y = JUMP_SPEED",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "CharacterBody3D",
+          "node_name": "Player"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player",
+          "node_type": "Node3D",
+          "node_name": "Target"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player/Target",
+          "node_type": "Camera3D",
+          "node_name": "Camera3D"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Player",
+          "node_name": "CollisionShape3D",
+          "shape_type": "capsule",
+          "parameters": {
+            "radius": 0.5,
+            "height": 1.6
+          }
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player",
+          "node_type": "MeshInstance3D",
+          "node_name": "Mesh"
+        }
+      }
+    ],
+    "description": "3D CharacterBody3D with camera-relative movement, gravity, lerp-based acceleration/deceleration, and jump"
+  },
+  {
+    "pattern_name": "3D CharacterBody3D platformer with directional facing and bounce",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "3d/squash_the_creeps/Player.gd",
+    "extends_class": "CharacterBody3D",
+    "script_content": "extends CharacterBody3D\n\nsignal hit\n\n@export var speed = 14\n@export var jump_impulse = 20\n@export var bounce_impulse = 16\n@export var fall_acceleration = 75\n\nfunc _physics_process(delta):\n\tvar direction = Vector3.ZERO\n\tif Input.is_action_pressed(&\"move_right\"): direction.x += 1\n\tif Input.is_action_pressed(&\"move_left\"): direction.x -= 1\n\tif Input.is_action_pressed(&\"move_back\"): direction.z += 1\n\tif Input.is_action_pressed(&\"move_forward\"): direction.z -= 1\n\n\tif direction != Vector3.ZERO:\n\t\tdirection = direction.normalized()\n\t\tbasis = Basis.looking_at(direction)\n\t\t$AnimationPlayer.speed_scale = 4\n\telse:\n\t\t$AnimationPlayer.speed_scale = 1\n\n\tvelocity.x = direction.x * speed\n\tvelocity.z = direction.z * speed\n\n\tif is_on_floor() and Input.is_action_just_pressed(&\"jump\"):\n\t\tvelocity.y += jump_impulse\n\n\tvelocity.y -= fall_acceleration * delta\n\tmove_and_slide()\n\n\tfor index in range(get_slide_collision_count()):\n\t\tvar collision = get_slide_collision(index)\n\t\tif collision.get_collider().is_in_group(&\"mob\"):\n\t\t\tvar mob = collision.get_collider()\n\t\t\tif Vector3.UP.dot(collision.get_normal()) > 0.1:\n\t\t\t\tmob.squash()\n\t\t\t\tvelocity.y = bounce_impulse\n\t\t\t\tbreak\n\n\trotation.x = PI / 6 * velocity.y / jump_impulse\n\nfunc die():\n\thit.emit()\n\tqueue_free()\n\nfunc _on_MobDetector_body_entered(_body):\n\tdie()",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "CharacterBody3D",
+          "node_name": "Player"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player",
+          "node_type": "AnimationPlayer",
+          "node_name": "AnimationPlayer"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Player",
+          "node_name": "CollisionShape3D",
+          "shape_type": "capsule"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player",
+          "node_type": "Area3D",
+          "node_name": "MobDetector"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Player/MobDetector",
+          "node_name": "CollisionShape3D",
+          "shape_type": "sphere"
+        }
+      }
+    ],
+    "description": "3D platformer with directional facing via Basis.looking_at, bounce on enemy heads, and mob collision detection"
+  },
+  {
+    "pattern_name": "3D Mob with CharacterBody3D, look_at orientation, and screen cleanup",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "3d/squash_the_creeps/Mob.gd",
+    "extends_class": "CharacterBody3D",
+    "script_content": "extends CharacterBody3D\n\nsignal squashed\n\n@export var min_speed = 10\n@export var max_speed = 18\n\nfunc _physics_process(_delta):\n\tmove_and_slide()\n\nfunc initialize(start_position, player_position):\n\tvar target = Vector3(player_position.x, start_position.y, player_position.z)\n\tlook_at_from_position(start_position, target, Vector3.UP)\n\trotate_y(randf_range(-PI / 4, PI / 4))\n\tvar random_speed = randf_range(min_speed, max_speed)\n\tvelocity = Vector3.FORWARD * random_speed\n\tvelocity = velocity.rotated(Vector3.UP, rotation.y)\n\t$AnimationPlayer.speed_scale = random_speed / min_speed\n\nfunc squash():\n\tsquashed.emit()\n\tqueue_free()\n\nfunc _on_visible_on_screen_notifier_screen_exited():\n\tqueue_free()",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "CharacterBody3D",
+          "node_name": "Mob"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Mob",
+          "node_type": "AnimationPlayer",
+          "node_name": "AnimationPlayer"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Mob",
+          "node_name": "CollisionShape3D",
+          "shape_type": "box"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Mob",
+          "node_type": "VisibleOnScreenNotifier3D",
+          "node_name": "VisibleOnScreenNotifier3D"
+        }
+      }
+    ],
+    "description": "3D mob using CharacterBody3D with look_at initialization, random speed, and auto-cleanup when off-screen"
+  },
+  {
+    "pattern_name": "3D NavigationAgent3D click-to-move with path visualization",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "3d/navigation/character.gd",
+    "extends_class": "Marker3D",
+    "script_content": "extends Marker3D\n\n@export var character_speed := 10.0\n@export var show_path: bool = true\n\nvar _nav_path_line: Line3D\n\n@onready var _nav_agent := $NavigationAgent3D as NavigationAgent3D\n\nfunc _ready() -> void:\n\t_nav_path_line = Line3D.new()\n\tadd_child(_nav_path_line)\n\t_nav_path_line.set_as_top_level(true)\n\nfunc _physics_process(delta: float) -> void:\n\tif _nav_agent.is_navigation_finished():\n\t\treturn\n\tvar next_position := _nav_agent.get_next_path_position()\n\tvar offset := next_position - global_position\n\tglobal_position = global_position.move_toward(next_position, delta * character_speed)\n\toffset.y = 0\n\tif not offset.is_zero_approx():\n\t\tlook_at(global_position + offset, Vector3.UP)\n\nfunc set_target_position(target_position: Vector3) -> void:\n\t_nav_agent.set_target_position(target_position)\n\tif show_path:\n\t\tvar start_position := global_transform.origin\n\t\tvar navigation_map := get_world_3d().get_navigation_map()\n\t\tvar path := NavigationServer3D.map_get_path(navigation_map, start_position, target_position, true)\n\t\t_nav_path_line.draw_path(path)",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Marker3D",
+          "node_name": "Character"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Character",
+          "node_type": "NavigationAgent3D",
+          "node_name": "NavigationAgent3D"
+        }
+      },
+      {
+        "tool": "add_navigation_region",
+        "arguments": {
+          "dimensions": "3D"
+        }
+      }
+    ],
+    "description": "3D click-to-move using NavigationAgent3D with path visualization via Line3D and look_at rotation"
+  },
+  {
+    "pattern_name": "RigidBody3D player with ShapeCast3D ground check and impulses",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "3d/rigidbody_character/player/cubio.gd",
+    "extends_class": "RigidBody3D",
+    "script_content": "extends RigidBody3D\n\n@onready var shape_cast: ShapeCast3D = $ShapeCast3D\n@onready var camera: Camera3D = $Target/Camera3D\n@onready var start_position := position\n\nfunc _physics_process(delta: float) -> void:\n\tif Input.is_action_just_pressed(&\"reset_position\") or global_position.y < -6.0:\n\t\tposition = start_position\n\t\tlinear_velocity = Vector3.ZERO\n\t\treset_physics_interpolation()\n\n\tvar dir := Vector3()\n\tdir.x = Input.get_axis(&\"move_left\", &\"move_right\")\n\tdir.z = Input.get_axis(&\"move_forward\", &\"move_back\")\n\n\tvar cam_basis := camera.global_transform.basis\n\tcam_basis = cam_basis.rotated(cam_basis.x, -cam_basis.get_euler().x)\n\tdir = cam_basis * dir\n\n\tapply_central_impulse(dir.normalized() * 5.0 * delta)\n\n\tif on_ground():\n\t\tapply_central_impulse(dir.normalized() * 10.0 * delta)\n\t\tif Input.is_action_pressed(&\"jump\"):\n\t\t\tlinear_velocity.y = 7\n\nfunc on_ground() -> bool:\n\treturn shape_cast.is_colliding()",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "RigidBody3D",
+          "node_name": "Player"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player",
+          "node_type": "ShapeCast3D",
+          "node_name": "ShapeCast3D"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player",
+          "node_type": "Node3D",
+          "node_name": "Target"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player/Target",
+          "node_type": "Camera3D",
+          "node_name": "Camera3D"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Player",
+          "node_name": "CollisionShape3D",
+          "shape_type": "capsule"
+        }
+      }
+    ],
+    "description": "RigidBody3D player using apply_central_impulse for movement with ShapeCast3D ground detection"
+  },
+  {
+    "pattern_name": "VehicleBody3D with steering, turbo, headlights, and audio",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "3d/truck_town/vehicles/vehicle.gd",
+    "extends_class": "VehicleBody3D",
+    "script_content": "extends VehicleBody3D\n\nconst STEER_SPEED = 1.5\nconst STEER_LIMIT = 0.4\n\n@export var engine_force_value := 40.0\n\nvar _steer_target := 0.0\n\nfunc _physics_process(delta: float) -> void:\n\t_steer_target = Input.get_axis(&\"turn_right\", &\"turn_left\")\n\t_steer_target *= STEER_LIMIT\n\n\tif DisplayServer.is_touchscreen_available() or Input.is_action_pressed(&\"accelerate\"):\n\t\tvar speed := linear_velocity.length()\n\t\tif speed < 5.0 and not is_zero_approx(speed):\n\t\t\tengine_force = clampf(engine_force_value * 5.0 / speed, 0.0, 100.0)\n\t\telse:\n\t\t\tengine_force = engine_force_value\n\t\tif not DisplayServer.is_touchscreen_available():\n\t\t\tengine_force *= Input.get_action_strength(&\"accelerate\")\n\telse:\n\t\tengine_force = 0.0\n\n\tif Input.is_action_pressed(&\"reverse\"):\n\t\tengine_force = -engine_force_value\n\n\tsteering = move_toward(steering, _steer_target, STEER_SPEED * delta)",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "VehicleBody3D",
+          "node_name": "Vehicle"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Vehicle",
+          "node_type": "MeshInstance3D",
+          "node_name": "Body"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Vehicle",
+          "node_name": "CollisionShape3D",
+          "shape_type": "box"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Vehicle",
+          "node_type": "AudioStreamPlayer",
+          "node_name": "EngineSound"
+        }
+      }
+    ],
+    "description": "VehicleBody3D with smooth steering, engine force scaling at low speeds, and reverse support"
+  },
+  {
+    "pattern_name": "JSON save/load system with var_to_str conversion",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "loading/serialization/save_load_json.gd",
+    "extends_class": "Button",
+    "script_content": "extends Button\n\n@export var game_node: NodePath\n@export var player_node: NodePath\n\nconst SAVE_PATH = \"user://save_json.json\"\n\nfunc save_game() -> void:\n\tvar file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)\n\tvar player := get_node(player_node)\n\tvar save_dict := {\n\t\tplayer = {\n\t\t\tposition = var_to_str(player.position),\n\t\t\thealth = var_to_str(player.health),\n\t\t\trotation = var_to_str(player.sprite.rotation),\n\t\t},\n\t\tenemies = [],\n\t}\n\tfor enemy in get_tree().get_nodes_in_group(&\"enemy\"):\n\t\tsave_dict.enemies.push_back({position = var_to_str(enemy.position)})\n\tfile.store_line(JSON.stringify(save_dict))\n\nfunc load_game() -> void:\n\tvar file := FileAccess.open(SAVE_PATH, FileAccess.READ)\n\tvar json := JSON.new()\n\tjson.parse(file.get_line())\n\tvar save_dict := json.get_data() as Dictionary\n\tvar player := get_node(player_node) as Player\n\tplayer.position = str_to_var(save_dict.player.position)\n\tplayer.health = str_to_var(save_dict.player.health)\n\tplayer.sprite.rotation = str_to_var(save_dict.player.rotation)\n\tget_tree().call_group(&\"enemy\", &\"queue_free\")\n\tvar game := get_node(game_node)\n\tfor enemy_config: Dictionary in save_dict.enemies:\n\t\tvar enemy: Enemy = preload(\"res://enemy.tscn\").instantiate()\n\t\tenemy.position = str_to_var(enemy_config.position)\n\t\tgame.add_child(enemy)",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Button",
+          "node_name": "SaveButton"
+        }
+      },
+      {
+        "tool": "attach_script",
+        "arguments": {
+          "node_path": "SaveButton",
+          "script_content": "extends Button\n\nconst SAVE_PATH = \"user://save_json.json\"\n\nfunc save_game() -> void:\n\tvar file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)\n\tvar save_dict := {player = {position = var_to_str(player.position)}}\n\tfile.store_line(JSON.stringify(save_dict))\n\nfunc load_game() -> void:\n\tvar file := FileAccess.open(SAVE_PATH, FileAccess.READ)\n\tvar json := JSON.new()\n\tjson.parse(file.get_line())\n\tvar save_dict := json.get_data() as Dictionary"
+        }
+      }
+    ],
+    "description": "Save/load system using JSON with var_to_str/str_to_var for Vector2 conversion and enemy re-instantiation"
+  },
+  {
+    "pattern_name": "Multiplayer CharacterBody2D with @rpc and authority",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "networking/multiplayer_bomber/player.gd",
+    "extends_class": "CharacterBody2D",
+    "script_content": "extends CharacterBody2D\n\nconst MOTION_SPEED = 90.0\nconst BOMB_RATE = 0.5\n\n@export var synced_position := Vector2()\n@export var stunned: bool = false\n\nvar last_bomb_time := BOMB_RATE\nvar current_anim: String = \"\"\n\nfunc _ready() -> void:\n\tstunned = false\n\tposition = synced_position\n\tif str(name).is_valid_int():\n\t\t$\"Inputs/InputsSync\".set_multiplayer_authority(str(name).to_int())\n\nfunc _physics_process(delta: float) -> void:\n\tif multiplayer.multiplayer_peer == null or str(multiplayer.get_unique_id()) == str(name):\n\t\tinputs.update()\n\tif multiplayer.multiplayer_peer == null or is_multiplayer_authority():\n\t\tsynced_position = position\n\t\tlast_bomb_time += delta\n\t\tif not stunned and is_multiplayer_authority() and inputs.bombing and last_bomb_time >= BOMB_RATE:\n\t\t\tlast_bomb_time = 0.0\n\t\t\t$\"../../BombSpawner\".spawn([position, str(name).to_int()])\n\telse:\n\t\tposition = synced_position\n\tif not stunned:\n\t\tvelocity = inputs.motion * MOTION_SPEED\n\t\tmove_and_slide()\n\n\tvar new_anim := &\"standing\"\n\tif inputs.motion.y < 0: new_anim = &\"walk_up\"\n\telif inputs.motion.y > 0: new_anim = &\"walk_down\"\n\telif inputs.motion.x < 0: new_anim = &\"walk_left\"\n\telif inputs.motion.x > 0: new_anim = &\"walk_right\"\n\tif stunned: new_anim = &\"stunned\"\n\tif new_anim != current_anim:\n\t\tcurrent_anim = new_anim\n\t\t$anim.play(current_anim)\n\n@rpc(\"call_local\")\nfunc set_player_name(value: String) -> void:\n\t$label.text = value\n\t$label.modulate = gamestate.get_player_color(value)\n\n@rpc(\"call_local\")\nfunc exploded(_by_who: int) -> void:\n\tif stunned: return\n\tstunned = true\n\t$anim.play(&\"stunned\")",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "CharacterBody2D",
+          "node_name": "Player"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player",
+          "node_type": "AnimatedSprite2D",
+          "node_name": "anim"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player",
+          "node_type": "Label",
+          "node_name": "label"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Player",
+          "node_name": "CollisionShape2D",
+          "shape_type": "circle"
+        }
+      }
+    ],
+    "description": "Multiplayer CharacterBody2D with set_multiplayer_authority, @rpc annotations, and synced position"
+  },
+  {
+    "pattern_name": "High-performance bullet system using PhysicsServer2D directly",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "2d/bullet_shower/bullets.gd",
+    "extends_class": "Node2D",
+    "script_content": "extends Node2D\n\nconst BULLET_COUNT = 500\nconst SPEED_MIN = 20\nconst SPEED_MAX = 80\nconst bullet_image := preload(\"res://bullet.png\")\n\nvar bullets := []\nvar shape := RID()\n\nclass Bullet:\n\tvar position := Vector2()\n\tvar speed := 1.0\n\tvar body := RID()\n\nfunc _ready() -> void:\n\tshape = PhysicsServer2D.circle_shape_create()\n\tPhysicsServer2D.shape_set_data(shape, 8)\n\tfor _i in BULLET_COUNT:\n\t\tvar bullet := Bullet.new()\n\t\tbullet.speed = randf_range(SPEED_MIN, SPEED_MAX)\n\t\tbullet.body = PhysicsServer2D.body_create()\n\t\tPhysicsServer2D.body_set_space(bullet.body, get_world_2d().get_space())\n\t\tPhysicsServer2D.body_add_shape(bullet.body, shape)\n\t\tPhysicsServer2D.body_set_collision_mask(bullet.body, 0)\n\t\tbullet.position = Vector2(randf_range(0, get_viewport_rect().size.x), randf_range(0, get_viewport_rect().size.y))\n\t\tvar transform2d := Transform2D()\n\t\ttransform2d.origin = bullet.position\n\t\tPhysicsServer2D.body_set_state(bullet.body, PhysicsServer2D.BODY_STATE_TRANSFORM, transform2d)\n\t\tbullets.push_back(bullet)\n\nfunc _physics_process(delta: float) -> void:\n\tvar transform2d := Transform2D()\n\tfor bullet: Bullet in bullets:\n\t\tbullet.position.x -= bullet.speed * delta\n\t\tif bullet.position.x < -16:\n\t\t\tbullet.position.x = get_viewport_rect().size.x + 16\n\t\ttransform2d.origin = bullet.position\n\t\tPhysicsServer2D.body_set_state(bullet.body, PhysicsServer2D.BODY_STATE_TRANSFORM, transform2d)\n\nfunc _draw() -> void:\n\tvar offset := -bullet_image.get_size() * 0.5\n\tfor bullet: Bullet in bullets:\n\t\tdraw_texture(bullet_image, bullet.position + offset)\n\nfunc _exit_tree() -> void:\n\tfor bullet: Bullet in bullets:\n\t\tPhysicsServer2D.free_rid(bullet.body)\n\tPhysicsServer2D.free_rid(shape)\n\tbullets.clear()",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "BulletShower"
+        }
+      },
+      {
+        "tool": "attach_script",
+        "arguments": {
+          "node_path": "BulletShower",
+          "script_content": "extends Node2D\n\nconst BULLET_COUNT = 500\n\nfunc _ready() -> void:\n\tpass\n\nfunc _physics_process(delta: float) -> void:\n\tpass\n\nfunc _draw() -> void:\n\tpass"
+        }
+      }
+    ],
+    "description": "High-performance 500-bullet system using PhysicsServer2D RIDs directly, custom _draw rendering, and proper cleanup"
+  },
+  {
+    "pattern_name": "TileMapLayer with runtime collision modification and transparency animation",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "2d/dynamic_tilemap_layers/level/tile_map.gd",
+    "extends_class": "TileMapLayer",
+    "script_content": "extends TileMapLayer\n\nvar player_in_secret: bool = false\nvar layer_alpha := 1.0\n\nfunc _ready() -> void:\n\tset_process(false)\n\nfunc _process(delta: float) -> void:\n\tif player_in_secret:\n\t\tif layer_alpha > 0.3:\n\t\t\tlayer_alpha = move_toward(layer_alpha, 0.3, delta)\n\t\t\tself_modulate = Color(1, 1, 1, layer_alpha)\n\t\telse:\n\t\t\tset_process(false)\n\telse:\n\t\tif layer_alpha < 1.0:\n\t\t\tlayer_alpha = move_toward(layer_alpha, 1.0, delta)\n\t\t\tself_modulate = Color(1, 1, 1, layer_alpha)\n\t\telse:\n\t\t\tset_process(false)\n\nfunc _use_tile_data_runtime_update(_coords: Vector2i) -> bool:\n\treturn true\n\nfunc _tile_data_runtime_update(_coords: Vector2i, tile_data: TileData) -> void:\n\ttile_data.set_collision_polygons_count(0, 0)\n\nfunc _on_secret_detector_body_entered(body: Node2D) -> void:\n\tif body is not CharacterBody2D: return\n\tplayer_in_secret = true\n\tset_process(true)\n\nfunc _on_secret_detector_body_exited(body: Node2D) -> void:\n\tif body is not CharacterBody2D: return\n\tplayer_in_secret = false\n\tset_process(true)",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "TileMapLayer",
+          "node_name": "SecretLayer"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "SecretLayer",
+          "node_type": "Area2D",
+          "node_name": "SecretDetector"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "SecretLayer/SecretDetector",
+          "node_name": "CollisionShape2D",
+          "shape_type": "rectangle"
+        }
+      }
+    ],
+    "description": "TileMapLayer with dynamic transparency for secret areas, runtime collision modification via _tile_data_runtime_update"
+  },
+  {
+    "pattern_name": "Audio effects toggle system using AudioServer bus control",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "audio/audio_effects/audio_effects.gd",
+    "extends_class": "Control",
+    "script_content": "extends Control\n\nfunc _on_toggle_music_toggled(button_pressed: bool) -> void:\n\tif button_pressed:\n\t\t$SoundEffects/Music.play()\n\telse:\n\t\t$SoundEffects/Music.stop()\n\nfunc _on_ding_button_pressed() -> void:\n\t$SoundEffects/Ding.play()\n\nfunc _on_glass_button_pressed() -> void:\n\t$SoundEffects/Glass.play()\n\nfunc _on_toggle_amplify_toggled(button_pressed: bool) -> void:\n\tAudioServer.set_bus_effect_enabled(0, 0, button_pressed)\n\nfunc _on_toggle_reverb_toggled(button_pressed: bool) -> void:\n\tAudioServer.set_bus_effect_enabled(0, 16, button_pressed)\n\nfunc _on_toggle_chorus_toggled(button_pressed: bool) -> void:\n\tAudioServer.set_bus_effect_enabled(0, 3, button_pressed)\n\nfunc _on_toggle_compressor_toggled(button_pressed: bool) -> void:\n\tAudioServer.set_bus_effect_enabled(0, 4, button_pressed)",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Control",
+          "node_name": "AudioPanel"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "AudioPanel",
+          "node_type": "VBoxContainer",
+          "node_name": "SoundEffects"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "AudioPanel/SoundEffects",
+          "node_type": "AudioStreamPlayer",
+          "node_name": "Music"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "AudioPanel/SoundEffects",
+          "node_type": "AudioStreamPlayer",
+          "node_name": "Ding"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "AudioPanel",
+          "node_type": "CheckButton",
+          "node_name": "ToggleReverb"
+        }
+      }
+    ],
+    "description": "Audio effects control panel using AudioServer.set_bus_effect_enabled to toggle effects on audio bus"
+  },
+  {
+    "pattern_name": "Drag and drop with _get_drag_data, _can_drop_data, _drop_data",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "gui/drag_and_drop/drag_drop_script.gd",
+    "extends_class": "ColorPickerButton",
+    "script_content": "extends ColorPickerButton\n\nfunc _get_drag_data(_at_position: Vector2) -> Color:\n\tvar cpb := ColorPickerButton.new()\n\tcpb.color = color\n\tcpb.size = Vector2(80.0, 50.0)\n\tvar preview := Control.new()\n\tpreview.add_child(cpb)\n\tcpb.position = -0.5 * cpb.size\n\tset_drag_preview(preview)\n\treturn color\n\nfunc _can_drop_data(_at_position: Vector2, data: Variant) -> bool:\n\treturn typeof(data) == TYPE_COLOR\n\nfunc _drop_data(_at_position: Vector2, data: Variant) -> void:\n\tcolor = data",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "ColorPickerButton",
+          "node_name": "ColorPicker"
+        }
+      },
+      {
+        "tool": "attach_script",
+        "arguments": {
+          "node_path": "ColorPicker",
+          "script_content": "extends ColorPickerButton\n\nfunc _get_drag_data(_at_position: Vector2) -> Color:\n\tvar cpb := ColorPickerButton.new()\n\tcpb.color = color\n\tset_drag_preview(cpb)\n\treturn color\n\nfunc _can_drop_data(_at_position: Vector2, data: Variant) -> bool:\n\treturn typeof(data) == TYPE_COLOR\n\nfunc _drop_data(_at_position: Vector2, data: Variant) -> void:\n\tcolor = data"
+        }
+      }
+    ],
+    "description": "Godot drag and drop pattern with _get_drag_data, _can_drop_data, _drop_data override methods"
+  },
+  {
+    "pattern_name": "Dynamic split-screen camera with shader parameters",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "viewport/dynamic_split_screen/camera_controller.gd",
+    "extends_class": "Node3D",
+    "script_content": "extends Node3D\n\n@export var max_separation := 20.0\n@export var split_line_thickness := 3.0\n@export var split_line_color := Color.BLACK\n@export var adaptive_split_line_thickness: bool = true\n\n@onready var player1: CharacterBody3D = $\"../Player1\"\n@onready var player2: CharacterBody3D = $\"../Player2\"\n@onready var view: TextureRect = $View\n@onready var viewport1: SubViewport = $Viewport1\n@onready var viewport2: SubViewport = $Viewport2\n@onready var camera1: Camera3D = viewport1.get_node(^\"Camera1\")\n@onready var camera2: Camera3D = viewport2.get_node(^\"Camera2\")\n\nfunc _ready() -> void:\n\t_on_size_changed()\n\t_update_splitscreen()\n\tget_viewport().size_changed.connect(_on_size_changed)\n\tview.material.set_shader_parameter(&\"viewport1\", viewport1.get_texture())\n\tview.material.set_shader_parameter(&\"viewport2\", viewport2.get_texture())\n\nfunc _process(_delta: float) -> void:\n\t_move_cameras()\n\t_update_splitscreen()\n\nfunc _move_cameras() -> void:\n\tvar position_difference := _get_position_difference_in_world()\n\tvar distance := clampf(_get_horizontal_length(position_difference), 0, max_separation)\n\tposition_difference = position_difference.normalized() * distance\n\tcamera1.position.x = player1.position.x + position_difference.x / 2.0\n\tcamera1.position.z = player1.position.z + position_difference.z / 2.0\n\tcamera2.position.x = player2.position.x - position_difference.x / 2.0\n\tcamera2.position.z = player2.position.z - position_difference.z / 2.0\n\nfunc _update_splitscreen() -> void:\n\tvar screen_size := get_viewport().get_visible_rect().size\n\tvar player1_position := camera1.unproject_position(player1.position) / screen_size\n\tvar player2_position := camera2.unproject_position(player2.position) / screen_size\n\tview.material.set_shader_parameter(&\"split_active\", _is_split_state())\n\tview.material.set_shader_parameter(&\"player1_position\", player1_position)\n\tview.material.set_shader_parameter(&\"player2_position\", player2_position)\n\nfunc _is_split_state() -> bool:\n\tvar position_difference := _get_position_difference_in_world()\n\treturn _get_horizontal_length(position_difference) > max_separation",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node3D",
+          "node_name": "CameraController"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "CameraController",
+          "node_type": "SubViewport",
+          "node_name": "Viewport1"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "CameraController/Viewport1",
+          "node_type": "Camera3D",
+          "node_name": "Camera1"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "CameraController",
+          "node_type": "SubViewport",
+          "node_name": "Viewport2"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "CameraController/Viewport2",
+          "node_type": "Camera3D",
+          "node_name": "Camera2"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "CameraController",
+          "node_type": "TextureRect",
+          "node_name": "View"
+        }
+      }
+    ],
+    "description": "Dynamic split-screen system with two SubViewports, shader-driven split line, and adaptive camera positioning"
+  },
+  {
+    "pattern_name": "FPS CharacterBody3D with mouse look, voxel interaction, and crouch/sprint",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "3d/voxel/player/player.gd",
+    "extends_class": "CharacterBody3D",
+    "script_content": "extends CharacterBody3D\n\nconst MOVEMENT_SPEED_GROUND = 70.0\nconst MOVEMENT_SPEED_AIR = 13.0\nconst MOVEMENT_JUMP_VELOCITY = 9.0\nconst EYE_HEIGHT_STAND = 1.6\nconst EYE_HEIGHT_CROUCH = 1.4\n\nvar _mouse_motion := Vector2()\n\n@onready var head: Node3D = $Head\n@onready var camera: Camera3D = $Head/Camera3D\n@onready var raycast: RayCast3D = $Head/RayCast3D\n\nfunc _ready() -> void:\n\tInput.mouse_mode = Input.MOUSE_MODE_CAPTURED\n\nfunc _process(_delta: float) -> void:\n\t_mouse_motion.y = clampf(_mouse_motion.y, -1560, 1560)\n\ttransform.basis = Basis.from_euler(Vector3(0, _mouse_motion.x * -0.001, 0))\n\thead.transform.basis = Basis.from_euler(Vector3(_mouse_motion.y * -0.001, 0, 0))\n\nfunc _physics_process(delta: float) -> void:\n\tvar crouching: bool = Input.is_action_pressed(&\"crouch\")\n\tvar sprinting: bool = Input.is_action_pressed(&\"move_sprint\")\n\thead.transform.origin.y = lerpf(head.transform.origin.y, EYE_HEIGHT_CROUCH if crouching else EYE_HEIGHT_STAND, 1.0 - exp(-delta * 16.0))\n\tvar movement_vec2: Vector2 = Input.get_vector(&\"move_left\", &\"move_right\", &\"move_forward\", &\"move_back\")\n\tvar movement: Vector3 = transform.basis * (Vector3(movement_vec2.x, 0, movement_vec2.y))\n\tif is_on_floor():\n\t\tmovement *= MOVEMENT_SPEED_GROUND\n\telse:\n\t\tmovement *= MOVEMENT_SPEED_AIR\n\tif crouching: movement *= 0.5\n\tif sprinting: movement *= 1.375\n\n\tif not is_on_floor():\n\t\tvelocity += get_gravity() * delta\n\n\tvelocity += Vector3(movement.x, 0, movement.z) * delta\n\tvar friction_delta := exp(-(12.5 if is_on_floor() else 2.25) * delta)\n\tvelocity = Vector3(velocity.x * friction_delta, velocity.y, velocity.z * friction_delta)\n\tmove_and_slide()\n\n\tif is_on_floor() and Input.is_action_pressed(&\"jump\"):\n\t\tvelocity.y = MOVEMENT_JUMP_VELOCITY\n\nfunc _input(input_event: InputEvent) -> void:\n\tif input_event is InputEventMouseMotion:\n\t\tif Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:\n\t\t\t_mouse_motion += input_event.screen_relative",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "CharacterBody3D",
+          "node_name": "Player"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player",
+          "node_type": "Node3D",
+          "node_name": "Head"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player/Head",
+          "node_type": "Camera3D",
+          "node_name": "Camera3D"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player/Head",
+          "node_type": "RayCast3D",
+          "node_name": "RayCast3D"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Player",
+          "node_name": "CollisionShape3D",
+          "shape_type": "capsule",
+          "parameters": {
+            "radius": 0.5,
+            "height": 1.8
+          }
+        }
+      }
+    ],
+    "description": "FPS controller with mouse capture, Basis.from_euler rotation, crouch/sprint, and exponential friction"
+  },
+  {
+    "pattern_name": "3D platformer CharacterBody3D with AnimationTree blending",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "3d/platformer/player/player.gd",
+    "extends_class": "CharacterBody3D",
+    "script_content": "class_name Player\nextends CharacterBody3D\n\nconst MAX_SPEED: float = 6.0\nconst JUMP_VELOCITY: float = 12.5\nconst ACCEL: float = 14.0\nconst DEACCEL: float = 14.0\n\nvar coins: int = 0\n\n@onready var _camera := $Target/Camera3D as Camera3D\n@onready var _animation_tree := $AnimationTree as AnimationTree\n\nfunc _physics_process(delta: float) -> void:\n\tvelocity += gravity * delta\n\n\tvar cam_basis := _camera.get_global_transform().basis\n\tvar movement_vec2 := Input.get_vector(&\"move_left\", &\"move_right\", &\"move_forward\", &\"move_back\")\n\tvar movement_direction := cam_basis * Vector3(movement_vec2.x, 0, movement_vec2.y)\n\tmovement_direction.y = 0\n\tmovement_direction = movement_direction.normalized()\n\n\tif is_on_floor():\n\t\tif movement_direction.length() > 0.1:\n\t\t\thorizontal_speed += ACCEL * delta\n\t\telse:\n\t\t\thorizontal_speed -= DEACCEL * delta\n\t\tif not jumping and Input.is_action_pressed(&\"jump\"):\n\t\t\tvelocity.y = JUMP_VELOCITY\n\telse:\n\t\tif movement_direction.length() > 0.1:\n\t\t\thorizontal_velocity += movement_direction * (ACCEL * 0.5 * delta)\n\n\tmove_and_slide()\n\n\tif is_on_floor():\n\t\t_animation_tree[&\"parameters/run/blend_amount\"] = horizontal_speed / MAX_SPEED\n\t\t_animation_tree[&\"parameters/speed/blend_amount\"] = minf(1.0, horizontal_speed / (MAX_SPEED * 0.5))\n\n\t_animation_tree[&\"parameters/state/blend_amount\"] = anim\n\t_animation_tree[&\"parameters/air_dir/blend_amount\"] = clampf(-velocity.y / 4 + 0.5, 0, 1)",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "CharacterBody3D",
+          "node_name": "Player"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player",
+          "node_type": "Node3D",
+          "node_name": "Target"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player/Target",
+          "node_type": "Camera3D",
+          "node_name": "Camera3D"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player",
+          "node_type": "AnimationTree",
+          "node_name": "AnimationTree"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Player",
+          "node_name": "CollisionShape3D",
+          "shape_type": "capsule"
+        }
+      }
+    ],
+    "description": "3D platformer with AnimationTree blend parameters for run/walk/idle/jump state blending"
+  },
+  {
+    "pattern_name": "PhantomCamera2D player with interaction system and camera priority",
+    "source_repo": "ramokz/phantom-camera",
+    "source_path": "addons/phantom_camera/examples/scripts/2D/player_character_body_2d.gd",
+    "extends_class": "CharacterBody2D",
+    "script_content": "extends CharacterBody2D\n\nconst SPEED = 350.0\nconst JUMP_VELOCITY = -750.0\n\nvar gravity: int = 2400\nvar _is_interactive: bool\nvar _movement_disabled: bool\nvar _active_pcam: PhantomCamera2D\n\nfunc _physics_process(delta: float) -> void:\n\tif not is_on_floor():\n\t\tvelocity.y += gravity * delta\n\tif Input.is_action_just_pressed(\"ui_accept\") and is_on_floor():\n\t\tvelocity.y = JUMP_VELOCITY\n\tif _movement_disabled: return\n\n\tvar input_dir := Input.get_axis(\"move_left\", \"move_right\")\n\tif input_dir:\n\t\tvelocity.x = input_dir * SPEED\n\t\tif input_dir > 0:\n\t\t\t%PlayerSprite.set_flip_h(false)\n\t\telif input_dir < 0:\n\t\t\t%PlayerSprite.set_flip_h(true)\n\telse:\n\t\tvelocity.x = move_toward(velocity.x, 0, SPEED)\n\tmove_and_slide()",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "CharacterBody2D",
+          "node_name": "Player"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player",
+          "node_type": "PhantomCamera2D",
+          "node_name": "PlayerPhantomCamera2D"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Player",
+          "node_name": "CollisionShape2D",
+          "shape_type": "capsule"
+        }
+      }
+    ],
+    "description": "2D platformer with PhantomCamera2D integration for camera priority switching on interaction"
+  },
+  {
+    "pattern_name": "PhantomCamera3D third-person CharacterBody3D controller",
+    "source_repo": "ramokz/phantom-camera",
+    "source_path": "addons/phantom_camera/examples/scripts/3D/player_controller.gd",
+    "extends_class": "CharacterBody3D",
+    "script_content": "extends CharacterBody3D\n\n@export var SPEED: float = 5.0\n@export var JUMP_VELOCITY: float = 4.5\n@export var enable_gravity = true\n\nvar gravity: float = 9.8\nvar movement_enabled: bool = true\n\nfunc _ready() -> void:\n\t_camera = owner.get_node(\"%MainCamera3D\")\n\tfor input in InputMovementDic:\n\t\tvar key_val = InputMovementDic[input].get(\"Key\")\n\t\tvar action_val = InputMovementDic[input].get(\"Action\")\n\t\tvar movement_input = InputEventKey.new()\n\t\tmovement_input.physical_keycode = key_val\n\t\tInputMap.add_action(action_val)\n\t\tInputMap.action_add_event(action_val, movement_input)\n\nfunc _physics_process(delta: float) -> void:\n\tif enable_gravity and not is_on_floor():\n\t\tvelocity.y -= gravity * delta\n\tif not movement_enabled: return\n\n\tvar input_dir: Vector2 = Input.get_vector(\"move_left\", \"move_right\", \"move_up\", \"move_down\")\n\tvar direction: Vector3 = (transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()\n\tif direction:\n\t\tvar move_dir: Vector3 = Vector3.ZERO\n\t\tmove_dir.x = direction.x\n\t\tmove_dir.z = direction.z\n\t\tmove_dir = move_dir.rotated(Vector3.UP, _camera.rotation.y).normalized()\n\t\tvelocity.x = move_dir.x * SPEED\n\t\tvelocity.z = move_dir.z * SPEED\n\telse:\n\t\tvelocity.x = move_toward(velocity.x, 0, SPEED)\n\t\tvelocity.z = move_toward(velocity.z, 0, SPEED)\n\tmove_and_slide()",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "CharacterBody3D",
+          "node_name": "Player"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player",
+          "node_type": "PhantomCamera3D",
+          "node_name": "PlayerPhantomCamera3D"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Player",
+          "node_name": "CollisionShape3D",
+          "shape_type": "capsule"
+        }
+      }
+    ],
+    "description": "3D player controller with PhantomCamera3D, camera-rotated movement, and runtime InputMap registration"
+  },
+  {
+    "pattern_name": "3D RigidBody enemy AI with raycast floor/wall detection",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "3d/platformer/enemy/enemy.gd",
+    "extends_class": "RigidBody3D",
+    "script_content": "extends RigidBody3D\n\nconst ACCEL: float = 5.0\nconst DEACCEL: float = 20.0\nconst MAX_SPEED: float = 2.0\nconst ROT_SPEED: float = 1.0\n\nvar prev_advance: bool = false\nvar dying: bool = false\nvar rot_dir: float = 4.0\n\nfunc _integrate_forces(state: PhysicsDirectBodyState3D) -> void:\n\tvar delta := state.get_step()\n\tvar lin_velocity := state.get_linear_velocity()\n\tvar grav := state.get_total_gravity()\n\tif grav.is_zero_approx(): grav = gravity\n\tlin_velocity += grav * delta\n\n\tif dying:\n\t\tstate.set_linear_velocity(lin_velocity)\n\t\treturn\n\n\tfor i in state.get_contact_count():\n\t\tvar contact_collider := state.get_contact_collider_object(i)\n\t\tif contact_collider is Bullet and contact_collider.enabled:\n\t\t\tdying = true\n\t\t\tstate.set_angular_velocity(-contact_normal.cross(up).normalized() * 33.0)\n\t\t\treturn\n\n\tvar advance: bool = _ray_floor.is_colliding() and not _ray_wall.is_colliding()\n\tvar dir: Vector3 = ($Enemy/Skeleton as Node3D).get_transform().basis.z.normalized()\n\n\tif advance:\n\t\tif dir.dot(lin_velocity) < MAX_SPEED:\n\t\t\tlin_velocity += dir * ACCEL * delta\n\telse:\n\t\tif prev_advance: rot_dir = 1\n\t\tdir = Basis(up, rot_dir * ROT_SPEED * delta) * dir\n\n\tstate.set_linear_velocity(lin_velocity)\n\tprev_advance = advance",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "RigidBody3D",
+          "node_name": "Enemy"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Enemy",
+          "node_type": "RayCast3D",
+          "node_name": "RayFloor"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Enemy",
+          "node_type": "RayCast3D",
+          "node_name": "RayWall"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Enemy",
+          "node_name": "CollisionShape3D",
+          "shape_type": "box"
+        }
+      }
+    ],
+    "description": "3D enemy AI using RigidBody3D _integrate_forces with raycast-based navigation and wall avoidance"
+  },
+  {
+    "pattern_name": "2D RigidBody2D enemy with bullet detection and state machine",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "2d/physics_platformer/enemy/enemy.gd",
+    "extends_class": "RigidBody2D",
+    "script_content": "class_name Enemy\nextends RigidBody2D\n\nconst WALK_SPEED = 50\n\nenum State { WALKING, DYING }\nvar _state := State.WALKING\nvar direction := -1\n\nfunc _integrate_forces(state: PhysicsDirectBodyState2D) -> void:\n\tvar velocity := state.get_linear_velocity()\n\n\tif _state == State.DYING:\n\t\tpass\n\telif _state == State.WALKING:\n\t\tvar wall_side := 0.0\n\t\tfor collider_index in state.get_contact_count():\n\t\t\tvar collider := state.get_contact_collider_object(collider_index)\n\t\t\tvar collision_normal := state.get_contact_local_normal(collider_index)\n\t\t\tif collider is Bullet:\n\t\t\t\t_state = State.DYING\n\t\t\t\tbreak\n\t\t\tif collision_normal.x > 0.9: wall_side = 1.0\n\t\t\telif collision_normal.x < -0.9: wall_side = -1.0\n\t\tif wall_side != 0 and wall_side != direction:\n\t\t\tdirection = -direction\n\t\t\t$Sprite2D.scale.x = -direction\n\t\tvelocity.x = direction * WALK_SPEED\n\n\tstate.set_linear_velocity(velocity)",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "RigidBody2D",
+          "node_name": "Enemy"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Enemy",
+          "node_type": "Sprite2D",
+          "node_name": "Sprite2D"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Enemy",
+          "node_name": "CollisionShape2D",
+          "shape_type": "rectangle"
+        }
+      }
+    ],
+    "description": "2D enemy RigidBody2D with wall-direction switching, bullet detection, and state enum pattern"
+  },
+  {
+    "pattern_name": "Terrain generator with static methods for voxel data",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "3d/voxel/world/terrain_generator.gd",
+    "extends_class": "Resource",
+    "script_content": "class_name TerrainGenerator\nextends Resource\n\nconst RANDOM_BLOCK_PROBABILITY = 0.015\n\nstatic func empty() -> Dictionary[Vector3i, int]:\n\treturn {}\n\nstatic func random_blocks() -> Dictionary[Vector3i, int]:\n\tvar random_data: Dictionary[Vector3i, int] = {}\n\tfor x in Chunk.CHUNK_SIZE:\n\t\tfor y in Chunk.CHUNK_SIZE:\n\t\t\tfor z in Chunk.CHUNK_SIZE:\n\t\t\t\tvar vec := Vector3i(x, y, z)\n\t\t\t\tif randf() < RANDOM_BLOCK_PROBABILITY:\n\t\t\t\t\trandom_data[vec] = randi() % 29 + 1\n\treturn random_data\n\nstatic func flat(chunk_position: Vector3i) -> Dictionary[Vector3i, int]:\n\tvar data: Dictionary[Vector3i, int] = {}\n\tif chunk_position.y != -1: return data\n\tfor x in Chunk.CHUNK_SIZE:\n\t\tfor z in Chunk.CHUNK_SIZE:\n\t\t\tdata[Vector3i(x, 2, z)] = 3  # Grass\n\t\t\tdata[Vector3i(x, 1, z)] = 2  # Dirt\n\t\t\tdata[Vector3i(x, 0, z)] = 2  # Dirt\n\treturn data",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Resource",
+          "node_name": "TerrainGenerator"
+        }
+      },
+      {
+        "tool": "attach_script",
+        "arguments": {
+          "node_path": "TerrainGenerator",
+          "script_content": "class_name TerrainGenerator\nextends Resource\n\nstatic func flat(chunk_position: Vector3i) -> Dictionary:\n\tvar data := {}\n\treturn data"
+        }
+      }
+    ],
+    "description": "Voxel terrain generator using typed Dictionary[Vector3i, int] with static methods for different terrain types"
+  },
+  {
+    "pattern_name": "Runtime save/load with file format detection and multi-type preview",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "loading/runtime_save_load/runtime_save_load.gd",
+    "extends_class": "Control",
+    "script_content": "extends Control\n\nvar zip_reader := ZIPReader.new()\n\nfunc open_file(path: String) -> void:\n\tvar path_lower := path.to_lower()\n\tif path_lower.ends_with(\".png\") or path_lower.ends_with(\".jpg\"):\n\t\tvar image := Image.load_from_file(path)\n\t\ttexture_viewer.texture = ImageTexture.create_from_image(image)\n\telif path_lower.ends_with(\".ogg\"):\n\t\taudio_stream_player.stream = AudioStreamOggVorbis.load_from_file(path)\n\telif path_lower.ends_with(\".gltf\") or path_lower.ends_with(\".glb\"):\n\t\tvar gltf_document := GLTFDocument.new()\n\t\tvar gltf_state := GLTFState.new()\n\t\tvar error := gltf_document.append_from_file(path, gltf_state)\n\t\tif error == OK:\n\t\t\tscene_viewer_root_node = gltf_document.generate_scene(gltf_state)\n\telif path_lower.ends_with(\".zip\"):\n\t\tzip_reader.open(path)\n\t\tfor file in zip_reader.get_files():\n\t\t\tzip_viewer_file_list.add_item(file)\n\telse:\n\t\tvar file_contents := FileAccess.get_file_as_string(path)\n\t\tplain_text_viewer_label.text = file_contents",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Control",
+          "node_name": "FileViewer"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "FileViewer",
+          "node_type": "TextureRect",
+          "node_name": "TextureViewer"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "FileViewer",
+          "node_type": "AudioStreamPlayer",
+          "node_name": "AudioPlayer"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "FileViewer",
+          "node_type": "FileDialog",
+          "node_name": "FileDialog"
+        }
+      }
+    ],
+    "description": "File viewer/manager with automatic format detection for images, audio, 3D scenes, and ZIP archives"
+  },
+  {
+    "pattern_name": "2D top-down player with Area2D collision and clamp",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "2d/bullet_shower/player.gd",
+    "extends_class": "Area2D",
+    "script_content": "extends Area2D\n\n@export var speed = 400\nvar screen_size\n\nfunc _ready():\n\tscreen_size = get_viewport_rect().size\n\nfunc _process(delta):\n\tvar velocity = Vector2.ZERO\n\tif Input.is_action_pressed(&\"move_right\"): velocity.x += 1\n\tif Input.is_action_pressed(&\"move_left\"): velocity.x -= 1\n\tif Input.is_action_pressed(&\"move_down\"): velocity.y += 1\n\tif Input.is_action_pressed(&\"move_up\"): velocity.y -= 1\n\n\tif velocity.length() > 0:\n\t\tvelocity = velocity.normalized() * speed\n\t\tposition += velocity * delta\n\tposition = position.clamp(Vector2.ZERO, screen_size)",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Area2D",
+          "node_name": "Player"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Player",
+          "node_name": "CollisionShape2D",
+          "shape_type": "circle",
+          "parameters": {
+            "radius": 20
+          }
+        }
+      }
+    ],
+    "description": "Minimal 2D top-down movement with Area2D, velocity normalization, and screen clamping"
+  },
+  {
+    "pattern_name": "3D CharacterBody3D with camera follow and physics interpolation",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "3d/physics_interpolation/player.gd",
+    "extends_class": "CharacterBody3D",
+    "script_content": "extends CharacterBody3D\n\nconst SPEED = 5.0\nconst JUMP_VELOCITY = 4.5\n\n@onready var gravity: float = ProjectSettings.get_setting(\"physics/3d/default_gravity\")\n\nfunc _physics_process(delta: float) -> void:\n\tif not is_on_floor():\n\t\tvelocity.y -= gravity * delta\n\n\tif Input.is_action_just_pressed(&\"jump\") and is_on_floor():\n\t\tvelocity.y = JUMP_VELOCITY\n\n\tvar input_dir := Input.get_vector(&\"move_left\", &\"move_right\", &\"move_forward\", &\"move_back\")\n\tvar direction := (transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()\n\tif direction:\n\t\tvelocity.x = direction.x * SPEED\n\t\tvelocity.z = direction.z * SPEED\n\telse:\n\t\tvelocity.x = move_toward(velocity.x, 0, SPEED)\n\t\tvelocity.z = move_toward(velocity.z, 0, SPEED)\n\n\tmove_and_slide()",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "CharacterBody3D",
+          "node_name": "Player"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Player",
+          "node_name": "CollisionShape3D",
+          "shape_type": "capsule",
+          "parameters": {
+            "radius": 0.5,
+            "height": 1.6
+          }
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player",
+          "node_type": "MeshInstance3D",
+          "node_name": "Mesh"
+        }
+      }
+    ],
+    "description": "Standard Godot 4 CharacterBody3D first-person controller template with gravity, jump, and move_toward deceleration"
+  },
+  {
+    "pattern_name": "2D RigidBody2D enemy with patrol and direction switching",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "2d/physics_platformer/enemy/enemy.gd",
+    "extends_class": "RigidBody2D",
+    "script_content": "class_name Enemy\nextends RigidBody2D\n\nconst WALK_SPEED = 50\nenum State { WALKING, DYING }\nvar _state := State.WALKING\nvar direction := -1\n\n@onready var rc_left := $RaycastLeft as RayCast2D\n@onready var rc_right := $RaycastRight as RayCast2D\n\nfunc _integrate_forces(state: PhysicsDirectBodyState2D) -> void:\n\tvar velocity := state.get_linear_velocity()\n\tif _state == State.WALKING:\n\t\tif direction < 0 and not rc_left.is_colliding() and rc_right.is_colliding():\n\t\t\tdirection = -direction\n\t\t\t$Sprite2D.scale.x = -direction\n\t\tvelocity.x = direction * WALK_SPEED\n\tstate.set_linear_velocity(velocity)",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "RigidBody2D",
+          "node_name": "Enemy"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Enemy",
+          "node_type": "RayCast2D",
+          "node_name": "RaycastLeft"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Enemy",
+          "node_type": "RayCast2D",
+          "node_name": "RaycastRight"
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Enemy",
+          "node_type": "Sprite2D",
+          "node_name": "Sprite2D"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Enemy",
+          "node_name": "CollisionShape2D",
+          "shape_type": "rectangle"
+        }
+      }
+    ],
+    "description": "2D enemy patrol using RigidBody2D with RayCast2D edge detection and direction switching"
+  },
+  {
+    "pattern_name": "2D top-down CharacterBody2D with move_and_slide",
+    "source_repo": "godotengine/godot-demo-projects",
+    "source_path": "2d/dynamic_tilemap_layers/player/player.gd",
+    "extends_class": "CharacterBody2D",
+    "script_content": "extends CharacterBody2D\n\n@export var speed := 200.0\n\nfunc _physics_process(_delta: float) -> void:\n\tvar input_direction := Input.get_vector(&\"move_left\", &\"move_right\", &\"move_up\", &\"move_down\")\n\tvelocity = input_direction * speed\n\tmove_and_slide()",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "CharacterBody2D",
+          "node_name": "Player"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Player",
+          "node_name": "CollisionShape2D",
+          "shape_type": "circle",
+          "parameters": {
+            "radius": 16
+          }
+        }
+      },
+      {
+        "tool": "add_child_node",
+        "arguments": {
+          "parent_path": "Player",
+          "node_type": "Sprite2D",
+          "node_name": "Sprite2D"
+        }
+      },
+      {
+        "tool": "create_input_action",
+        "arguments": {
+          "action_name": "move_left",
+          "events": [
+            {
+              "type": "key",
+              "physical_keycode": "A"
+            }
+          ]
+        }
+      },
+      {
+        "tool": "create_input_action",
+        "arguments": {
+          "action_name": "move_right",
+          "events": [
+            {
+              "type": "key",
+              "physical_keycode": "D"
+            }
+          ]
+        }
+      },
+      {
+        "tool": "create_input_action",
+        "arguments": {
+          "action_name": "move_up",
+          "events": [
+            {
+              "type": "key",
+              "physical_keycode": "W"
+            }
+          ]
+        }
+      },
+      {
+        "tool": "create_input_action",
+        "arguments": {
+          "action_name": "move_down",
+          "events": [
+            {
+              "type": "key",
+              "physical_keycode": "S"
+            }
+          ]
+        }
+      }
+    ],
+    "description": "Minimal 2D top-down CharacterBody2D with Input.get_vector and move_and_slide"
+  }
+]

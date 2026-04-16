@@ -1,0 +1,483 @@
+[
+  {
+    "id": "exp_001",
+    "intent": "Explore the project structure to understand what exists",
+    "user_message": "What does my project look like?",
+    "expected_tool_calls": [
+      {
+        "tool": "get_project_tree",
+        "arguments": { "root": "res://", "max_depth": 3 }
+      }
+    ],
+    "reasoning": "First step in any project interaction is understanding the file structure."
+  },
+  {
+    "id": "exp_002",
+    "intent": "Find all scripts related to the player",
+    "user_message": "Find all player-related scripts",
+    "expected_tool_calls": [
+      {
+        "tool": "find_project_files",
+        "arguments": { "query": "player", "include_extensions": [".gd"], "max_results": 20 }
+      }
+    ],
+    "reasoning": "User wants to find scripts by name pattern."
+  },
+  {
+    "id": "exp_003",
+    "intent": "Read a specific script file",
+    "user_message": "Show me the player controller script",
+    "expected_tool_calls": [
+      {
+        "tool": "read_project_file",
+        "arguments": { "path": "res://scripts/player_controller.gd" }
+      }
+    ],
+    "reasoning": "User wants to read a known file path."
+  },
+  {
+    "id": "exp_004",
+    "intent": "Check project settings and main scene",
+    "user_message": "What are my project settings?",
+    "expected_tool_calls": [
+      {
+        "tool": "get_project_settings",
+        "arguments": { "keys": ["application/config/name", "application/run/main_scene", "display/window/size/viewport_width", "display/window/size/viewport_height"] }
+      }
+    ],
+    "reasoning": "User needs to know current project configuration."
+  },
+  {
+    "id": "exp_005",
+    "intent": "Check existing input actions",
+    "user_message": "What input actions are defined?",
+    "expected_tool_calls": [
+      {
+        "tool": "get_input_actions",
+        "arguments": { "include_events": true }
+      }
+    ],
+    "reasoning": "Understanding input mappings before adding gameplay."
+  },
+  {
+    "id": "exp_006",
+    "intent": "Inspect the current scene tree",
+    "user_message": "What nodes are in the current scene?",
+    "expected_tool_calls": [
+      {
+        "tool": "get_current_scene",
+        "arguments": {}
+      },
+      {
+        "tool": "get_scene_tree",
+        "arguments": { "max_depth": 4 }
+      }
+    ],
+    "reasoning": "Need to know what scene is active and its structure."
+  },
+  {
+    "id": "exp_007",
+    "intent": "Get details and API of a specific node",
+    "user_message": "What can the Player node do?",
+    "expected_tool_calls": [
+      {
+        "tool": "get_node_details",
+        "arguments": { "node_path": "Player", "include_properties": ["script", "position"] }
+      },
+      {
+        "tool": "get_node_api",
+        "arguments": { "node_path": "Player" }
+      }
+    ],
+    "reasoning": "Need both the node's state and its available signals/methods."
+  },
+  {
+    "id": "exp_008",
+    "intent": "Create a new 3D scene from scratch",
+    "user_message": "Create a new 3D level called test_level",
+    "expected_tool_calls": [
+      {
+        "tool": "create_scene_file",
+        "arguments": { "scene_path": "res://levels/test_level.tscn", "root_type": "Node3D", "root_name": "TestLevel", "open": true }
+      }
+    ],
+    "reasoning": "Creating a new scene file with 3D root."
+  },
+  {
+    "id": "exp_009",
+    "intent": "Add a floor with physics to a 3D scene",
+    "user_message": "Add a floor to the current scene",
+    "expected_tool_calls": [
+      {
+        "tool": "batch_tool_calls",
+        "arguments": {
+          "shared_arguments": { "scene_path": "res://levels/main.tscn" },
+          "calls": [
+            { "tool": "add_node", "arguments": { "parent_path": ".", "node_type": "StaticBody3D", "node_name": "Floor" } },
+            { "tool": "add_primitive_mesh", "arguments": { "parent_path": "Floor", "node_name": "FloorMesh", "mesh_type": "box", "parameters": { "size": { "x": 20, "y": 0.2, "z": 20 } } } },
+            { "tool": "add_collision_shape", "arguments": { "parent_path": "Floor", "node_name": "FloorCollision", "shape_type": "box", "parameters": { "size": { "x": 20, "y": 0.2, "z": 20 } } } }
+          ]
+        }
+      }
+    ],
+    "reasoning": "A floor needs StaticBody3D + MeshInstance3D + CollisionShape3D as children, best done in a batch."
+  },
+  {
+    "id": "exp_010",
+    "intent": "Create a fully playable WASD character with jump",
+    "user_message": "Make a player I can control with WASD and jump with Space",
+    "expected_tool_calls": [
+      {
+        "tool": "get_input_actions",
+        "arguments": { "include_events": true }
+      },
+      {
+        "tool": "batch_tool_calls",
+        "arguments": {
+          "shared_arguments": { "scene_path": "res://levels/main.tscn" },
+          "calls": [
+            { "tool": "add_node", "arguments": { "parent_path": ".", "node_type": "CharacterBody3D", "node_name": "Player" } },
+            { "tool": "add_primitive_mesh", "arguments": { "parent_path": "Player", "node_name": "PlayerMesh", "mesh_type": "capsule", "parameters": { "radius": 0.45, "height": 1.8 } } },
+            { "tool": "add_collision_shape", "arguments": { "parent_path": "Player", "node_name": "PlayerCollision", "shape_type": "capsule", "parameters": { "radius": 0.45, "height": 1.8 } } },
+            { "tool": "create_input_action", "arguments": { "action_name": "move_forward", "events": [{ "type": "key", "key": "W" }], "deadzone": 0.5 } },
+            { "tool": "create_input_action", "arguments": { "action_name": "move_back", "events": [{ "type": "key", "key": "S" }], "deadzone": 0.5 } },
+            { "tool": "create_input_action", "arguments": { "action_name": "move_left", "events": [{ "type": "key", "key": "A" }], "deadzone": 0.5 } },
+            { "tool": "create_input_action", "arguments": { "action_name": "move_right", "events": [{ "type": "key", "key": "D" }], "deadzone": 0.5 } },
+            { "tool": "create_input_action", "arguments": { "action_name": "jump", "events": [{ "type": "key", "key": "Space" }], "deadzone": 0.5 } }
+          ]
+        }
+      },
+      {
+        "tool": "batch_tool_calls",
+        "arguments": {
+          "calls": [
+            { "tool": "create_gdscript_file", "arguments": { "script_path": "res://scripts/player_controller.gd", "contents": "extends CharacterBody3D\n\nconst SPEED = 5.0\nconst JUMP_VELOCITY = 4.5\n\nvar gravity = ProjectSettings.get_setting(\"physics/3d/default_gravity\")\n\nfunc _physics_process(delta):\n\tif not is_on_floor():\n\t\tvelocity.y -= gravity * delta\n\tif Input.is_action_just_pressed(\"jump\") and is_on_floor():\n\t\tvelocity.y = JUMP_VELOCITY\n\tvar input_dir = Input.get_vector(\"move_left\", \"move_right\", \"move_forward\", \"move_back\")\n\tvar direction = (transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()\n\tif direction:\n\t\tvelocity.x = direction.x * SPEED\n\t\tvelocity.z = direction.z * SPEED\n\telse:\n\t\tvelocity.x = move_toward(velocity.x, 0, SPEED)\n\t\tvelocity.z = move_toward(velocity.z, 0, SPEED)\n\tmove_and_slide()\n" } }
+          ]
+        }
+      },
+      {
+        "tool": "batch_tool_calls",
+        "arguments": {
+          "shared_arguments": { "scene_path": "res://levels/main.tscn" },
+          "calls": [
+            { "tool": "attach_script", "arguments": { "node_path": "Player", "script_path": "res://scripts/player_controller.gd" } },
+            { "tool": "save_current_scene", "arguments": {} }
+          ]
+        }
+      }
+    ],
+    "reasoning": "Full playable character requires: physics body, visual mesh, collision, input actions, movement script, script attachment. GDScript must be in its own batch."
+  },
+  {
+    "id": "exp_011",
+    "intent": "Add a directional light and camera to a 3D scene",
+    "user_message": "Add a sun light and camera to the scene",
+    "expected_tool_calls": [
+      {
+        "tool": "batch_tool_calls",
+        "arguments": {
+          "shared_arguments": { "scene_path": "res://levels/main.tscn" },
+          "calls": [
+            { "tool": "create_light", "arguments": { "light_type": "directional", "name": "SunLight", "shadows": true, "rotation_degrees": { "x": -45, "y": 30, "z": 0 } } },
+            { "tool": "create_camera_3d", "arguments": { "name": "MainCamera", "position": { "x": 0, "y": 5, "z": 10 } } }
+          ]
+        }
+      }
+    ],
+    "reasoning": "Light and camera can be batched together since they're both scene operations."
+  },
+  {
+    "id": "exp_012",
+    "intent": "Save all scenes and play the game",
+    "user_message": "Save everything and play the game",
+    "expected_tool_calls": [
+      {
+        "tool": "save_all_scenes",
+        "arguments": {}
+      },
+      {
+        "tool": "play_main_scene",
+        "arguments": {}
+      }
+    ],
+    "reasoning": "Save before playing to avoid losing changes."
+  },
+  {
+    "id": "exp_013",
+    "intent": "Search for a specific function in project scripts",
+    "user_message": "Where is _physics_process defined?",
+    "expected_tool_calls": [
+      {
+        "tool": "grep_project_files",
+        "arguments": { "query": "func _physics_process", "include_extensions": [".gd"], "max_results": 30 }
+      }
+    ],
+    "reasoning": "Content search across project files."
+  },
+  {
+    "id": "exp_014",
+    "intent": "Debug a running game - check errors",
+    "user_message": "The game is running but something is wrong, check for errors",
+    "expected_tool_calls": [
+      {
+        "tool": "get_runtime_debugger_state",
+        "arguments": {}
+      },
+      {
+        "tool": "get_console_output",
+        "arguments": { "max_lines": 50 }
+      }
+    ],
+    "reasoning": "Check both debugger state and console for runtime errors."
+  },
+  {
+    "id": "exp_015",
+    "intent": "Capture the editor viewport to visually inspect the scene",
+    "user_message": "Take a screenshot of the 3D editor view",
+    "expected_tool_calls": [
+      {
+        "tool": "capture_editor_viewport",
+        "arguments": { "target": "editor_3d", "max_width": 640 }
+      }
+    ],
+    "reasoning": "Vision tool to inspect the current editor state."
+  },
+  {
+    "id": "exp_016",
+    "intent": "Create a 2D platformer player",
+    "user_message": "Make a 2D character with left/right movement",
+    "expected_tool_calls": [
+      {
+        "tool": "get_input_actions",
+        "arguments": { "include_events": true }
+      },
+      {
+        "tool": "batch_tool_calls",
+        "arguments": {
+          "shared_arguments": { "scene_path": "res://levels/main_2d.tscn" },
+          "calls": [
+            { "tool": "create_character_body_2d", "arguments": { "name": "Player2D", "motion_mode": "grounded" } },
+            { "tool": "create_input_action", "arguments": { "action_name": "move_left", "events": [{ "type": "key", "key": "A" }, { "type": "key", "key": "Left" }] } },
+            { "tool": "create_input_action", "arguments": { "action_name": "move_right", "events": [{ "type": "key", "key": "D" }, { "type": "key", "key": "Right" }] } }
+          ]
+        }
+      },
+      {
+        "tool": "batch_tool_calls",
+        "arguments": {
+          "calls": [
+            { "tool": "create_gdscript_file", "arguments": { "script_path": "res://scripts/player_2d.gd", "contents": "extends CharacterBody2D\n\nconst SPEED = 200.0\nconst JUMP_VELOCITY = -400.0\n\nvar gravity = ProjectSettings.get_setting(\"physics/2d/default_gravity\")\n\nfunc _physics_process(delta):\n\tif not is_on_floor():\n\t\tvelocity.y += gravity * delta\n\tvar direction = Input.get_axis(\"move_left\", \"move_right\")\n\tif direction:\n\t\tvelocity.x = direction * SPEED\n\telse:\n\t\tvelocity.x = move_toward(velocity.x, 0, SPEED)\n\tmove_and_slide()\n" } }
+          ]
+        }
+      }
+    ],
+    "reasoning": "2D character needs CharacterBody2D, input actions, and a movement script in a separate batch."
+  },
+  {
+    "id": "exp_017",
+    "intent": "Move a node to a new position",
+    "user_message": "Move the Player node to position (0, 5, 0)",
+    "expected_tool_calls": [
+      {
+        "tool": "set_node_property",
+        "arguments": { "scene_path": "res://levels/main.tscn", "node_path": "Player", "property": "position", "value": { "x": 0, "y": 5, "z": 0 } }
+      }
+    ],
+    "reasoning": "Setting a transform property on a node."
+  },
+  {
+    "id": "exp_018",
+    "intent": "Connect a button press signal",
+    "user_message": "Connect the Button's pressed signal to a handler",
+    "expected_tool_calls": [
+      {
+        "tool": "get_node_api",
+        "arguments": { "node_path": "Button" }
+      },
+      {
+        "tool": "connect_signal",
+        "arguments": { "source_node_path": "Button", "signal_name": "pressed", "target_node_path": "Button", "method_name": "_on_button_pressed" }
+      }
+    ],
+    "reasoning": "Should inspect node API first to confirm signal names, then connect."
+  },
+  {
+    "id": "exp_019",
+    "intent": "Undo the last editor action",
+    "user_message": "Undo that last change",
+    "expected_tool_calls": [
+      {
+        "tool": "editor_undo",
+        "arguments": { "steps": 1 }
+      }
+    ],
+    "reasoning": "Simple undo of the most recent edit."
+  },
+  {
+    "id": "exp_020",
+    "intent": "Create a material and apply it to a mesh",
+    "user_message": "Give the Crate a wooden material",
+    "expected_tool_calls": [
+      {
+        "tool": "create_standard_material",
+        "arguments": {
+          "material_path": "res://materials/wood.tres",
+          "albedo": { "r": 0.7, "g": 0.45, "b": 0.22, "a": 1.0 },
+          "roughness": 0.85,
+          "scene_path": "res://levels/main.tscn",
+          "node_path": "Crate",
+          "property": "material_override"
+        }
+      }
+    ],
+    "reasoning": "Create and assign material in one call."
+  },
+  {
+    "id": "exp_021",
+    "intent": "Check if a file exists before creating it",
+    "user_message": "Does res://scripts/enemy.gd exist?",
+    "expected_tool_calls": [
+      {
+        "tool": "file_exists",
+        "arguments": { "path": "res://scripts/enemy.gd" }
+      }
+    ],
+    "reasoning": "Simple existence check before file operations."
+  },
+  {
+    "id": "exp_022",
+    "intent": "Set the main scene for the project",
+    "user_message": "Set the main scene to the level I just made",
+    "expected_tool_calls": [
+      {
+        "tool": "set_main_scene",
+        "arguments": { "scene_path": "res://levels/main.tscn" }
+      }
+    ],
+    "reasoning": "Configure project to start with the right scene."
+  },
+  {
+    "id": "exp_023",
+    "intent": "Create a new script and attach it to a node",
+    "user_message": "Write an enemy AI script and attach it to the Enemy node",
+    "expected_tool_calls": [
+      {
+        "tool": "batch_tool_calls",
+        "arguments": {
+          "calls": [
+            { "tool": "create_gdscript_file", "arguments": { "script_path": "res://scripts/enemy_ai.gd", "contents": "extends CharacterBody3D\n\n@export var patrol_speed := 2.0\n@export var chase_speed := 4.0\n\nfunc _physics_process(delta):\n\tpass\n" } }
+          ]
+        }
+      },
+      {
+        "tool": "attach_script",
+        "arguments": { "scene_path": "res://levels/main.tscn", "node_path": "Enemy", "script_path": "res://scripts/enemy_ai.gd" }
+      }
+    ],
+    "reasoning": "GDScript creation must be in its own batch. Attach in a separate call."
+  },
+  {
+    "id": "exp_024",
+    "intent": "Quick diagnosis of project state",
+    "user_message": "What's going on in my project right now?",
+    "expected_tool_calls": [
+      {
+        "tool": "get_debug_snapshot",
+        "arguments": { "max_log_lines": 60 }
+      }
+    ],
+    "reasoning": "Debug snapshot bundles the most important state in one call."
+  },
+  {
+    "id": "exp_025",
+    "intent": "List directory contents",
+    "user_message": "What's in the scripts folder?",
+    "expected_tool_calls": [
+      {
+        "tool": "list_directory",
+        "arguments": { "path": "res://scripts/", "include_extensions": [".gd"] }
+      }
+    ],
+    "reasoning": "Single directory listing with extension filter."
+  },
+  {
+    "id": "exp_026",
+    "intent": "Create a complete 3D room with lighting and floor",
+    "user_message": "Build me a simple 3D room I can walk around in",
+    "expected_tool_calls": [
+      {
+        "tool": "batch_tool_calls",
+        "arguments": {
+          "shared_arguments": { "scene_path": "res://levels/main.tscn" },
+          "calls": [
+            { "tool": "add_node", "arguments": { "parent_path": ".", "node_type": "StaticBody3D", "node_name": "Floor" } },
+            { "tool": "add_primitive_mesh", "arguments": { "parent_path": "Floor", "node_name": "FloorMesh", "mesh_type": "box", "parameters": { "size": { "x": 10, "y": 0.2, "z": 10 } } } },
+            { "tool": "add_collision_shape", "arguments": { "parent_path": "Floor", "node_name": "FloorCollision", "shape_type": "box", "parameters": { "size": { "x": 10, "y": 0.2, "z": 10 } } } },
+            { "tool": "add_node", "arguments": { "parent_path": ".", "node_type": "StaticBody3D", "node_name": "WallNorth" } },
+            { "tool": "add_primitive_mesh", "arguments": { "parent_path": "WallNorth", "node_name": "WallMesh", "mesh_type": "box", "parameters": { "size": { "x": 10, "y": 3, "z": 0.2 } } } },
+            { "tool": "add_collision_shape", "arguments": { "parent_path": "WallNorth", "node_name": "WallCollision", "shape_type": "box", "parameters": { "size": { "x": 10, "y": 3, "z": 0.2 } } } },
+            { "tool": "create_light", "arguments": { "light_type": "directional", "name": "SunLight", "shadows": true, "rotation_degrees": { "x": -45, "y": 30, "z": 0 } } },
+            { "tool": "create_camera_3d", "arguments": { "name": "MainCamera", "position": { "x": 0, "y": 2, "z": 8 } } }
+          ]
+        }
+      }
+    ],
+    "reasoning": "A room needs floor + walls (each as StaticBody3D + mesh + collision), plus lighting and camera. All non-GDScript, so one batch."
+  },
+  {
+    "id": "exp_027",
+    "intent": "Iterate on an existing script",
+    "user_message": "Add a health variable to the player script",
+    "expected_tool_calls": [
+      {
+        "tool": "read_project_file",
+        "arguments": { "path": "res://scripts/player_controller.gd" }
+      },
+      {
+        "tool": "update_gdscript_file",
+        "arguments": { "script_path": "res://scripts/player_controller.gd", "operation": "append", "contents": "\nvar health := 100.0\n\nfunc take_damage(amount: float):\n\thealth -= amount\n\tif health <= 0:\n\t\tqueue_free()\n" }
+      }
+    ],
+    "reasoning": "Read first to understand current state, then append to the script."
+  },
+  {
+    "id": "exp_028",
+    "intent": "Reorganize the scene tree",
+    "user_message": "Move the Crate under the GameplayRoot node and rename it to PhysicsCrate",
+    "expected_tool_calls": [
+      {
+        "tool": "reparent_node",
+        "arguments": { "scene_path": "res://levels/main.tscn", "node_path": "Crate", "new_parent_path": "GameplayRoot" }
+      },
+      {
+        "tool": "rename_node",
+        "arguments": { "scene_path": "res://levels/main.tscn", "node_path": "GameplayRoot/Crate", "new_name": "PhysicsCrate" }
+      }
+    ],
+    "reasoning": "Reparent then rename, since rename path changes after reparent."
+  },
+  {
+    "id": "exp_029",
+    "intent": "Check animation state",
+    "user_message": "What animations does the Player's AnimationPlayer have?",
+    "expected_tool_calls": [
+      {
+        "tool": "get_animation_player_state",
+        "arguments": { "scene_path": "res://levels/main.tscn", "node_path": "Player/AnimationPlayer" }
+      }
+    ],
+    "reasoning": "Directly inspect the AnimationPlayer node."
+  },
+  {
+    "id": "exp_030",
+    "intent": "Delete a file safely",
+    "user_message": "Delete the temp script file",
+    "expected_tool_calls": [
+      {
+        "tool": "delete_project_file",
+        "arguments": { "path": "res://scripts/temp.gd", "confirm": true }
+      }
+    ],
+    "reasoning": "Deletion requires explicit confirmation."
+  }
+]

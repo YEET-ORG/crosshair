@@ -1,0 +1,1990 @@
+[
+  {
+    "pattern_name": "Node scene - GdUnitTestRunner",
+    "source_repo": "beehave",
+    "source_path": "addons/gdUnit4/src/core/runners/GdUnitTestRunner.tscn",
+    "root_node_type": "Node",
+    "root_node_name": "Control",
+    "node_tree": [
+      {
+        "name": "Control",
+        "type": "Node",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node",
+          "node_name": "Control",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 4 nodes from beehave"
+  },
+  {
+    "pattern_name": "Node scene - GdUnitServer",
+    "source_repo": "beehave",
+    "source_path": "addons/gdUnit4/src/network/GdUnitServer.tscn",
+    "root_node_type": "Node",
+    "root_node_name": "Control",
+    "node_tree": [
+      {
+        "name": "Control",
+        "type": "Node",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node",
+          "node_name": "Control",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 2 nodes from beehave"
+  },
+  {
+    "pattern_name": "Control scene - GdUnitConsole",
+    "source_repo": "beehave",
+    "source_path": "addons/gdUnit4/src/ui/GdUnitConsole.tscn",
+    "root_node_type": "Control",
+    "root_node_name": "Control",
+    "node_tree": [
+      {
+        "name": "Control",
+        "type": "Control",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Control",
+          "node_name": "Control",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 6 nodes from beehave"
+  },
+  {
+    "pattern_name": "Panel scene - GdUnitInspector",
+    "source_repo": "beehave",
+    "source_path": "addons/gdUnit4/src/ui/GdUnitInspector.tscn",
+    "root_node_type": "Panel",
+    "root_node_name": "GdUnit",
+    "node_tree": [
+      {
+        "name": "GdUnit",
+        "type": "Panel",
+        "children": []
+      }
+    ],
+    "connections": [
+      {
+        "signal": "select_error_next",
+        "from": "VBoxContainer/Header/StatusBar",
+        "to": [
+          "to=\"VBoxContainer/MainPanel\"",
+          "VBoxContainer/MainPanel"
+        ],
+        "method": [
+          "method=\"_on_select_next_item_by_state\"",
+          "_on_select_next_item_by_state"
+        ]
+      },
+      {
+        "signal": "select_error_prevous",
+        "from": "VBoxContainer/Header/StatusBar",
+        "to": [
+          "to=\"VBoxContainer/MainPanel\"",
+          "VBoxContainer/MainPanel"
+        ],
+        "method": [
+          "method=\"_on_select_previous_item_by_state\"",
+          "_on_select_previous_item_by_state"
+        ]
+      },
+      {
+        "signal": "select_failure_next",
+        "from": "VBoxContainer/Header/StatusBar",
+        "to": [
+          "to=\"VBoxContainer/MainPanel\"",
+          "VBoxContainer/MainPanel"
+        ],
+        "method": [
+          "method=\"_on_select_next_item_by_state\"",
+          "_on_select_next_item_by_state"
+        ]
+      },
+      {
+        "signal": "select_failure_prevous",
+        "from": "VBoxContainer/Header/StatusBar",
+        "to": [
+          "to=\"VBoxContainer/MainPanel\"",
+          "VBoxContainer/MainPanel"
+        ],
+        "method": [
+          "method=\"_on_select_previous_item_by_state\"",
+          "_on_select_previous_item_by_state"
+        ]
+      },
+      {
+        "signal": "select_flaky_next",
+        "from": "VBoxContainer/Header/StatusBar",
+        "to": [
+          "to=\"VBoxContainer/MainPanel\"",
+          "VBoxContainer/MainPanel"
+        ],
+        "method": [
+          "method=\"_on_select_next_item_by_state\"",
+          "_on_select_next_item_by_state"
+        ]
+      },
+      {
+        "signal": "select_flaky_prevous",
+        "from": "VBoxContainer/Header/StatusBar",
+        "to": [
+          "to=\"VBoxContainer/MainPanel\"",
+          "VBoxContainer/MainPanel"
+        ],
+        "method": [
+          "method=\"_on_select_previous_item_by_state\"",
+          "_on_select_previous_item_by_state"
+        ]
+      },
+      {
+        "signal": "select_skipped_next",
+        "from": "VBoxContainer/Header/StatusBar",
+        "to": [
+          "to=\"VBoxContainer/MainPanel\"",
+          "VBoxContainer/MainPanel"
+        ],
+        "method": [
+          "method=\"_on_select_next_item_by_state\"",
+          "_on_select_next_item_by_state"
+        ]
+      },
+      {
+        "signal": "select_skipped_prevous",
+        "from": "VBoxContainer/Header/StatusBar",
+        "to": [
+          "to=\"VBoxContainer/MainPanel\"",
+          "VBoxContainer/MainPanel"
+        ],
+        "method": [
+          "method=\"_on_select_previous_item_by_state\"",
+          "_on_select_previous_item_by_state"
+        ]
+      },
+      {
+        "signal": "tree_view_mode_changed",
+        "from": "VBoxContainer/Header/StatusBar",
+        "to": [
+          "to=\"VBoxContainer/MainPanel\"",
+          "VBoxContainer/MainPanel"
+        ],
+        "method": [
+          "method=\"_on_status_bar_tree_view_mode_changed\"",
+          "_on_status_bar_tree_view_mode_changed"
+        ]
+      },
+      {
+        "signal": "jump_to_orphan_nodes",
+        "from": "VBoxContainer/Monitor",
+        "to": [
+          "to=\"VBoxContainer/MainPanel\"",
+          "VBoxContainer/MainPanel"
+        ],
+        "method": [
+          "method=\"select_first_orphan\"",
+          "select_first_orphan"
+        ]
+      }
+    ],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Panel",
+          "node_name": "GdUnit",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 9 nodes from beehave"
+  },
+  {
+    "pattern_name": "PanelContainer scene - InspectorMonitor",
+    "source_repo": "beehave",
+    "source_path": "addons/gdUnit4/src/ui/parts/InspectorMonitor.tscn",
+    "root_node_type": "PanelContainer",
+    "root_node_name": "Monitor",
+    "node_tree": [
+      {
+        "name": "Monitor",
+        "type": "PanelContainer",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "PanelContainer",
+          "node_name": "Monitor",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 8 nodes from beehave"
+  },
+  {
+    "pattern_name": "ProgressBar scene - InspectorProgressBar",
+    "source_repo": "beehave",
+    "source_path": "addons/gdUnit4/src/ui/parts/InspectorProgressBar.tscn",
+    "root_node_type": "ProgressBar",
+    "root_node_name": "ProgressBar",
+    "node_tree": [
+      {
+        "name": "ProgressBar",
+        "type": "ProgressBar",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "ProgressBar",
+          "node_name": "ProgressBar",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 2 nodes from beehave"
+  },
+  {
+    "pattern_name": "PanelContainer scene - InspectorToolBar",
+    "source_repo": "beehave",
+    "source_path": "addons/gdUnit4/src/ui/parts/InspectorToolBar.tscn",
+    "root_node_type": "PanelContainer",
+    "root_node_name": "ToolBar",
+    "node_tree": [
+      {
+        "name": "ToolBar",
+        "type": "PanelContainer",
+        "children": []
+      }
+    ],
+    "connections": [
+      {
+        "signal": "pressed",
+        "from": "HBoxContainer/tools/help",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_wiki_pressed\"",
+          "_on_wiki_pressed"
+        ]
+      },
+      {
+        "signal": "pressed",
+        "from": "HBoxContainer/tools/tool",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_btn_tool_pressed\"",
+          "_on_btn_tool_pressed"
+        ]
+      },
+      {
+        "signal": "pressed",
+        "from": "HBoxContainer/controls/run_overall",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_button_pressed\"",
+          "_on_button_pressed"
+        ]
+      },
+      {
+        "signal": "pressed",
+        "from": "HBoxContainer/controls/run",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_button_pressed\"",
+          "_on_button_pressed"
+        ]
+      },
+      {
+        "signal": "pressed",
+        "from": "HBoxContainer/controls/debug",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_button_pressed\"",
+          "_on_button_pressed"
+        ]
+      },
+      {
+        "signal": "pressed",
+        "from": "HBoxContainer/controls/stop",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_button_pressed\"",
+          "_on_button_pressed"
+        ]
+      }
+    ],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "PanelContainer",
+          "node_name": "ToolBar",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 14 nodes from beehave"
+  },
+  {
+    "pattern_name": "VSplitContainer scene - InspectorTreePanel",
+    "source_repo": "beehave",
+    "source_path": "addons/gdUnit4/src/ui/parts/InspectorTreePanel.tscn",
+    "root_node_type": "VSplitContainer",
+    "root_node_name": "MainPanel",
+    "node_tree": [
+      {
+        "name": "MainPanel",
+        "type": "VSplitContainer",
+        "children": []
+      }
+    ],
+    "connections": [
+      {
+        "signal": "item_activated",
+        "from": "Panel/Tree",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_Tree_item_activated\"",
+          "_on_Tree_item_activated"
+        ]
+      },
+      {
+        "signal": "item_mouse_selected",
+        "from": "Panel/Tree",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_tree_item_mouse_selected\"",
+          "_on_tree_item_mouse_selected"
+        ]
+      },
+      {
+        "signal": "item_selected",
+        "from": "Panel/Tree",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_Tree_item_selected\"",
+          "_on_Tree_item_selected"
+        ]
+      }
+    ],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "VSplitContainer",
+          "node_name": "MainPanel",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 10 nodes from beehave"
+  },
+  {
+    "pattern_name": "Control scene - GdUnitInputCapture",
+    "source_repo": "beehave",
+    "source_path": "addons/gdUnit4/src/ui/settings/GdUnitInputCapture.tscn",
+    "root_node_type": "Control",
+    "root_node_name": "GdUnitInputMapper",
+    "node_tree": [
+      {
+        "name": "GdUnitInputMapper",
+        "type": "Control",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Control",
+          "node_name": "GdUnitInputMapper",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 2 nodes from beehave"
+  },
+  {
+    "pattern_name": "Window scene - GdUnitSettingsDialog",
+    "source_repo": "beehave",
+    "source_path": "addons/gdUnit4/src/ui/settings/GdUnitSettingsDialog.tscn",
+    "root_node_type": "Window",
+    "root_node_name": "GdUnitSettingsDialog",
+    "node_tree": [
+      {
+        "name": "GdUnitSettingsDialog",
+        "type": "Window",
+        "children": []
+      }
+    ],
+    "connections": [
+      {
+        "signal": "close_requested",
+        "from": ".",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_btn_close_pressed\"",
+          "_on_btn_close_pressed"
+        ]
+      },
+      {
+        "signal": "pressed",
+        "from": "Panel/PanelContainer/v/MarginContainer/GridContainer/PanelContainer/VBoxContainer/btn_report_bug",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_btn_report_bug_pressed\"",
+          "_on_btn_report_bug_pressed"
+        ]
+      },
+      {
+        "signal": "pressed",
+        "from": "Panel/PanelContainer/v/MarginContainer/GridContainer/PanelContainer/VBoxContainer/btn_request_feature",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_btn_request_feature_pressed\"",
+          "_on_btn_request_feature_pressed"
+        ]
+      },
+      {
+        "signal": "pressed",
+        "from": "Panel/PanelContainer/v/MarginContainer/GridContainer/PanelContainer/VBoxContainer/btn_install_examples",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_btn_install_examples_pressed\"",
+          "_on_btn_install_examples_pressed"
+        ]
+      },
+      {
+        "signal": "pressed",
+        "from": "Panel/PanelContainer/v/MarginContainer2/HBoxContainer/btn_close",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_btn_close_pressed\"",
+          "_on_btn_close_pressed"
+        ]
+      }
+    ],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Window",
+          "node_name": "GdUnitSettingsDialog",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 43 nodes from beehave"
+  },
+  {
+    "pattern_name": "ScrollContainer scene - GdUnitSettingsTabHooks",
+    "source_repo": "beehave",
+    "source_path": "addons/gdUnit4/src/ui/settings/GdUnitSettingsTabHooks.tscn",
+    "root_node_type": "ScrollContainer",
+    "root_node_name": "Hooks",
+    "node_tree": [
+      {
+        "name": "Hooks",
+        "type": "ScrollContainer",
+        "children": []
+      }
+    ],
+    "connections": [
+      {
+        "signal": "pressed",
+        "from": "HBoxContainer/hook_actions/btn_move_up",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_btn_move_up_pressed\"",
+          "_on_btn_move_up_pressed"
+        ]
+      },
+      {
+        "signal": "pressed",
+        "from": "HBoxContainer/hook_actions/btn_move_down",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_btn_move_down_pressed\"",
+          "_on_btn_move_down_pressed"
+        ]
+      },
+      {
+        "signal": "pressed",
+        "from": "HBoxContainer/hook_actions/btn_add_hook",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_btn_add_hook_pressed\"",
+          "_on_btn_add_hook_pressed"
+        ]
+      },
+      {
+        "signal": "pressed",
+        "from": "HBoxContainer/hook_actions/btn_delete_hook",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_btn_delete_hook_pressed\"",
+          "_on_btn_delete_hook_pressed"
+        ]
+      },
+      {
+        "signal": "confirmed",
+        "from": "select_hook_dlg",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_select_hook_dlg_confirmed\"",
+          "_on_select_hook_dlg_confirmed"
+        ]
+      },
+      {
+        "signal": "file_selected",
+        "from": "select_hook_dlg",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_select_hook_dlg_file_selected\"",
+          "_on_select_hook_dlg_file_selected"
+        ]
+      }
+    ],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "ScrollContainer",
+          "node_name": "Hooks",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 12 nodes from beehave"
+  },
+  {
+    "pattern_name": "MarginContainer scene - TestSuiteTemplate",
+    "source_repo": "beehave",
+    "source_path": "addons/gdUnit4/src/ui/templates/TestSuiteTemplate.tscn",
+    "root_node_type": "MarginContainer",
+    "root_node_name": "TestSuiteTemplate",
+    "node_tree": [
+      {
+        "name": "TestSuiteTemplate",
+        "type": "MarginContainer",
+        "children": []
+      }
+    ],
+    "connections": [
+      {
+        "signal": "text_changed",
+        "from": "VBoxContainer/EdiorLayout/Editor",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_Editor_text_changed\"",
+          "_on_Editor_text_changed"
+        ]
+      },
+      {
+        "signal": "pressed",
+        "from": "VBoxContainer/EdiorLayout/Editor/MarginContainer/HBoxContainer/Tags",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_Tags_pressed\"",
+          "_on_Tags_pressed"
+        ]
+      },
+      {
+        "signal": "item_selected",
+        "from": "VBoxContainer/EdiorLayout/Editor/MarginContainer/HBoxContainer/SelectType",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_SelectType_item_selected\"",
+          "_on_SelectType_item_selected"
+        ]
+      },
+      {
+        "signal": "pressed",
+        "from": "VBoxContainer/Panel/HBoxContainer/Restore",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_Restore_pressed\"",
+          "_on_Restore_pressed"
+        ]
+      },
+      {
+        "signal": "pressed",
+        "from": "VBoxContainer/Panel/HBoxContainer/Save",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_Save_pressed\"",
+          "_on_Save_pressed"
+        ]
+      }
+    ],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "MarginContainer",
+          "node_name": "TestSuiteTemplate",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 17 nodes from beehave"
+  },
+  {
+    "pattern_name": "MarginContainer scene - GdUnitUpdate",
+    "source_repo": "beehave",
+    "source_path": "addons/gdUnit4/src/update/GdUnitUpdate.tscn",
+    "root_node_type": "MarginContainer",
+    "root_node_name": "GdUnitUpdate",
+    "node_tree": [
+      {
+        "name": "GdUnitUpdate",
+        "type": "MarginContainer",
+        "children": []
+      }
+    ],
+    "connections": [
+      {
+        "signal": "pressed",
+        "from": "VBoxContainer/PanelContainer/HBoxContainer/update",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_update_pressed\"",
+          "_on_update_pressed"
+        ]
+      },
+      {
+        "signal": "pressed",
+        "from": "VBoxContainer/PanelContainer/HBoxContainer/cancel",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_cancel_pressed\"",
+          "_on_cancel_pressed"
+        ]
+      }
+    ],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "MarginContainer",
+          "node_name": "GdUnitUpdate",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 10 nodes from beehave"
+  },
+  {
+    "pattern_name": "MarginContainer scene - GdUnitUpdateNotify",
+    "source_repo": "beehave",
+    "source_path": "addons/gdUnit4/src/update/GdUnitUpdateNotify.tscn",
+    "root_node_type": "MarginContainer",
+    "root_node_name": "Control",
+    "node_tree": [
+      {
+        "name": "Control",
+        "type": "MarginContainer",
+        "children": []
+      }
+    ],
+    "connections": [
+      {
+        "signal": "visibility_changed",
+        "from": ".",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_visibility_changed\"",
+          "_on_visibility_changed"
+        ]
+      },
+      {
+        "signal": "meta_clicked",
+        "from": "Panel/GridContainer/PanelContainer2/ScrollContainer/MarginContainer/content",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_content_meta_clicked\"",
+          "_on_content_meta_clicked"
+        ]
+      },
+      {
+        "signal": "meta_hover_ended",
+        "from": "Panel/GridContainer/PanelContainer2/ScrollContainer/MarginContainer/content",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_content_meta_hover_ended\"",
+          "_on_content_meta_hover_ended"
+        ]
+      },
+      {
+        "signal": "meta_hover_started",
+        "from": "Panel/GridContainer/PanelContainer2/ScrollContainer/MarginContainer/content",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_content_meta_hover_started\"",
+          "_on_content_meta_hover_started"
+        ]
+      },
+      {
+        "signal": "pressed",
+        "from": "Panel/GridContainer/Panel/HBoxContainer/update",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_update_pressed\"",
+          "_on_update_pressed"
+        ]
+      }
+    ],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "MarginContainer",
+          "node_name": "Control",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 14 nodes from beehave"
+  },
+  {
+    "pattern_name": "Node2D scene - beehave_test_scene",
+    "source_repo": "beehave",
+    "source_path": "examples/beehave_test_scene.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "BeehaveTestScene",
+    "node_tree": [
+      {
+        "name": "BeehaveTestScene",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "BeehaveTestScene",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 32 nodes from beehave"
+  },
+  {
+    "pattern_name": "Node2D scene - RandomTreeScene",
+    "source_repo": "beehave",
+    "source_path": "examples/random_tree_example/RandomTreeScene.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "Node2D",
+    "node_tree": [
+      {
+        "name": "Node2D",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "Node2D",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 2 nodes from beehave"
+  },
+  {
+    "pattern_name": "Node2D scene - shared_blackboard_scene",
+    "source_repo": "beehave",
+    "source_path": "test/blackboard/shared_blackboard_scene.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "SharedBlackboardScene",
+    "node_tree": [
+      {
+        "name": "SharedBlackboardScene",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "SharedBlackboardScene",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 7 nodes from beehave"
+  },
+  {
+    "pattern_name": "Node2D scene - debugger_test_scene",
+    "source_repo": "beehave",
+    "source_path": "test/debug/debugger_test_scene.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "debugger_test_scene",
+    "node_tree": [
+      {
+        "name": "debugger_test_scene",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "debugger_test_scene",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 10 nodes from beehave"
+  },
+  {
+    "pattern_name": "Node2D scene - RuntimeChangesTestScene",
+    "source_repo": "beehave",
+    "source_path": "test/randomized_composites/runtime_changes/RuntimeChangesTestScene.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "RuntimeChangesTestScene",
+    "node_tree": [
+      {
+        "name": "RuntimeChangesTestScene",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "RuntimeChangesTestScene",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 7 nodes from beehave"
+  },
+  {
+    "pattern_name": "Node2D scene - SelectorRandomWeights",
+    "source_repo": "beehave",
+    "source_path": "test/randomized_composites/weighted_sampling/selector_random/SelectorRandomWeights.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "SelectorRandomWeights",
+    "node_tree": [
+      {
+        "name": "SelectorRandomWeights",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "SelectorRandomWeights",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 9 nodes from beehave"
+  },
+  {
+    "pattern_name": "Node2D scene - SequenceRandomWeights",
+    "source_repo": "beehave",
+    "source_path": "test/randomized_composites/weighted_sampling/sequence_random_weights/SequenceRandomWeights.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "SequenceRandomWeights",
+    "node_tree": [
+      {
+        "name": "SequenceRandomWeights",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [
+      {
+        "signal": "reset",
+        "from": "BeehaveTree/SequenceRandom",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_sequence_reset\"",
+          "_on_sequence_reset"
+        ]
+      }
+    ],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "SequenceRandomWeights",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 7 nodes from beehave"
+  },
+  {
+    "pattern_name": "Node2D scene - unit_test_scene",
+    "source_repo": "beehave",
+    "source_path": "test/unit_test_scene.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "UnitTestScene",
+    "node_tree": [
+      {
+        "name": "UnitTestScene",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "UnitTestScene",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 36 nodes from beehave"
+  },
+  {
+    "pattern_name": "Area2D scene - EnemyBullet",
+    "source_repo": "godot-2d-action-platformer",
+    "source_path": "godot/Enemies/EnemyBullet.tscn",
+    "root_node_type": "Area2D",
+    "root_node_name": "Area2D",
+    "node_tree": [
+      {
+        "name": "Area2D",
+        "type": "Area2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Area2D",
+          "node_name": "Area2D",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 3 nodes from godot-2d-action-platformer"
+  },
+  {
+    "pattern_name": "KinematicBody2D scene - SimpleEnemy",
+    "source_repo": "godot-2d-action-platformer",
+    "source_path": "godot/Enemies/SimpleEnemy.tscn",
+    "root_node_type": "KinematicBody2D",
+    "root_node_name": "SimpleEnemy",
+    "node_tree": [
+      {
+        "name": "SimpleEnemy",
+        "type": "KinematicBody2D",
+        "children": []
+      }
+    ],
+    "connections": [
+      {
+        "signal": "timeout",
+        "from": "StateMachine/Shoot/ShootTimer",
+        "to": [
+          "to=\"StateMachine/Shoot\"",
+          "StateMachine/Shoot"
+        ],
+        "method": [
+          "method=\"_on_ShootTimer_timeout\"",
+          "_on_ShootTimer_timeout"
+        ]
+      },
+      {
+        "signal": "body_entered",
+        "from": "DetectionArea",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_DetectionArea_body_entered\"",
+          "_on_DetectionArea_body_entered"
+        ]
+      },
+      {
+        "signal": "body_exited",
+        "from": "DetectionArea",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_DetectionArea_body_exited\"",
+          "_on_DetectionArea_body_exited"
+        ]
+      }
+    ],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "KinematicBody2D",
+          "node_name": "SimpleEnemy",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 17 nodes from godot-2d-action-platformer"
+  },
+  {
+    "pattern_name": "Control scene - HealthIndicator",
+    "source_repo": "godot-2d-action-platformer",
+    "source_path": "godot/GUI/HealthIndicator.tscn",
+    "root_node_type": "Control",
+    "root_node_name": "HealthIndicator",
+    "node_tree": [
+      {
+        "name": "HealthIndicator",
+        "type": "Control",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Control",
+          "node_name": "HealthIndicator",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 2 nodes from godot-2d-action-platformer"
+  },
+  {
+    "pattern_name": "Control scene - HUD",
+    "source_repo": "godot-2d-action-platformer",
+    "source_path": "godot/GUI/HUD.tscn",
+    "root_node_type": "Control",
+    "root_node_name": "HUD",
+    "node_tree": [
+      {
+        "name": "HUD",
+        "type": "Control",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Control",
+          "node_name": "HUD",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 3 nodes from godot-2d-action-platformer"
+  },
+  {
+    "pattern_name": "Control scene - UIPoints",
+    "source_repo": "godot-2d-action-platformer",
+    "source_path": "godot/GUI/UIPoints.tscn",
+    "root_node_type": "Control",
+    "root_node_name": "UIPoints",
+    "node_tree": [
+      {
+        "name": "UIPoints",
+        "type": "Control",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Control",
+          "node_name": "UIPoints",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 4 nodes from godot-2d-action-platformer"
+  },
+  {
+    "pattern_name": "TextureRect scene - UIStatButton",
+    "source_repo": "godot-2d-action-platformer",
+    "source_path": "godot/GUI/UIStatButton.tscn",
+    "root_node_type": "TextureRect",
+    "root_node_name": "UIStatButton",
+    "node_tree": [
+      {
+        "name": "UIStatButton",
+        "type": "TextureRect",
+        "children": []
+      }
+    ],
+    "connections": [
+      {
+        "signal": "pressed",
+        "from": "Button",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_Button_pressed\"",
+          "_on_Button_pressed"
+        ]
+      }
+    ],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "TextureRect",
+          "node_name": "UIStatButton",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 3 nodes from godot-2d-action-platformer"
+  },
+  {
+    "pattern_name": "Control scene - UIStatsMenu",
+    "source_repo": "godot-2d-action-platformer",
+    "source_path": "godot/GUI/UIStatsMenu.tscn",
+    "root_node_type": "Control",
+    "root_node_name": "UIStatsMenu",
+    "node_tree": [
+      {
+        "name": "UIStatsMenu",
+        "type": "Control",
+        "children": []
+      }
+    ],
+    "connections": [
+      {
+        "signal": "purchased_stat",
+        "from": "HBoxContainer/DamageButton",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_DamageButton_purchased_stat\"",
+          "_on_DamageButton_purchased_stat"
+        ]
+      },
+      {
+        "signal": "purchased_stat",
+        "from": "HBoxContainer/SpeedButton",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_SpeedButton_purchased_stat\"",
+          "_on_SpeedButton_purchased_stat"
+        ]
+      },
+      {
+        "signal": "purchased_stat",
+        "from": "HBoxContainer/HealthButton",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_HealthButton_purchased_stat\"",
+          "_on_HealthButton_purchased_stat"
+        ]
+      }
+    ],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Control",
+          "node_name": "UIStatsMenu",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 6 nodes from godot-2d-action-platformer"
+  },
+  {
+    "pattern_name": "Node2D scene - Explosion",
+    "source_repo": "godot-2d-action-platformer",
+    "source_path": "godot/Guns/Bullets/Explosion.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "Explosion",
+    "node_tree": [
+      {
+        "name": "Explosion",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "Explosion",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 7 nodes from godot-2d-action-platformer"
+  },
+  {
+    "pattern_name": "RigidBody2D scene - Grenade",
+    "source_repo": "godot-2d-action-platformer",
+    "source_path": "godot/Guns/Bullets/Grenade.tscn",
+    "root_node_type": "RigidBody2D",
+    "root_node_name": "Grenade",
+    "node_tree": [
+      {
+        "name": "Grenade",
+        "type": "RigidBody2D",
+        "children": []
+      }
+    ],
+    "connections": [
+      {
+        "signal": "timeout",
+        "from": "Timer",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_Timer_timeout\"",
+          "_on_Timer_timeout"
+        ]
+      }
+    ],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "RigidBody2D",
+          "node_name": "Grenade",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 4 nodes from godot-2d-action-platformer"
+  },
+  {
+    "pattern_name": "Area2D scene - MachineGuneBullet",
+    "source_repo": "godot-2d-action-platformer",
+    "source_path": "godot/Guns/Bullets/MachineGuneBullet.tscn",
+    "root_node_type": "Area2D",
+    "root_node_name": "MachineGunBullet",
+    "node_tree": [
+      {
+        "name": "MachineGunBullet",
+        "type": "Area2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Area2D",
+          "node_name": "MachineGunBullet",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 3 nodes from godot-2d-action-platformer"
+  },
+  {
+    "pattern_name": "Area2D scene - PistolBullet",
+    "source_repo": "godot-2d-action-platformer",
+    "source_path": "godot/Guns/Bullets/PistolBullet.tscn",
+    "root_node_type": "Area2D",
+    "root_node_name": "PistolBullet",
+    "node_tree": [
+      {
+        "name": "PistolBullet",
+        "type": "Area2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Area2D",
+          "node_name": "PistolBullet",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 3 nodes from godot-2d-action-platformer"
+  },
+  {
+    "pattern_name": "Node2D scene - GrenadeLauncher",
+    "source_repo": "godot-2d-action-platformer",
+    "source_path": "godot/Guns/GrenadeLauncher.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "GrenadeLauncher",
+    "node_tree": [
+      {
+        "name": "GrenadeLauncher",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "GrenadeLauncher",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 4 nodes from godot-2d-action-platformer"
+  },
+  {
+    "pattern_name": "Node2D scene - MachineGun",
+    "source_repo": "godot-2d-action-platformer",
+    "source_path": "godot/Guns/MachineGun.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "MachineGun",
+    "node_tree": [
+      {
+        "name": "MachineGun",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "MachineGun",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 4 nodes from godot-2d-action-platformer"
+  },
+  {
+    "pattern_name": "Node2D scene - Pistol",
+    "source_repo": "godot-2d-action-platformer",
+    "source_path": "godot/Guns/Pistol.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "Pistol",
+    "node_tree": [
+      {
+        "name": "Pistol",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "Pistol",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 4 nodes from godot-2d-action-platformer"
+  },
+  {
+    "pattern_name": "KinematicBody2D scene - Player",
+    "source_repo": "godot-2d-action-platformer",
+    "source_path": "godot/Player/Player.tscn",
+    "root_node_type": "KinematicBody2D",
+    "root_node_name": "Player",
+    "node_tree": [
+      {
+        "name": "Player",
+        "type": "KinematicBody2D",
+        "children": []
+      }
+    ],
+    "connections": [
+      {
+        "signal": "timeout",
+        "from": "StateMachine/OnWall/ReleaseWallTimer",
+        "to": [
+          "to=\"StateMachine/OnWall\"",
+          "StateMachine/OnWall"
+        ],
+        "method": [
+          "method=\"_on_ReleaseWallTimer_timeout\"",
+          "_on_ReleaseWallTimer_timeout"
+        ]
+      },
+      {
+        "signal": "timeout",
+        "from": "StateMachine/Dash/DashTime",
+        "to": [
+          "to=\"StateMachine/Dash\"",
+          "StateMachine/Dash"
+        ],
+        "method": [
+          "method=\"_on_DashTime_timeout\"",
+          "_on_DashTime_timeout"
+        ]
+      }
+    ],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "KinematicBody2D",
+          "node_name": "Player",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 17 nodes from godot-2d-action-platformer"
+  },
+  {
+    "pattern_name": "KinematicBody2D scene - Actor",
+    "source_repo": "godot-2d-action-platformer",
+    "source_path": "godot/Shared/Actor.tscn",
+    "root_node_type": "KinematicBody2D",
+    "root_node_name": "Actor",
+    "node_tree": [
+      {
+        "name": "Actor",
+        "type": "KinematicBody2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "KinematicBody2D",
+          "node_name": "Actor",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 5 nodes from godot-2d-action-platformer"
+  },
+  {
+    "pattern_name": "Area2D scene - TrapFallingThorn",
+    "source_repo": "godot-2d-action-platformer",
+    "source_path": "godot/World/Traps/TrapFallingThorn.tscn",
+    "root_node_type": "Area2D",
+    "root_node_name": "TrapFallingThorn",
+    "node_tree": [
+      {
+        "name": "TrapFallingThorn",
+        "type": "Area2D",
+        "children": []
+      }
+    ],
+    "connections": [
+      {
+        "signal": "body_entered",
+        "from": ".",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_TrapFallingThorn_body_entered\"",
+          "_on_TrapFallingThorn_body_entered"
+        ]
+      }
+    ],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Area2D",
+          "node_name": "TrapFallingThorn",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 4 nodes from godot-2d-action-platformer"
+  },
+  {
+    "pattern_name": "Area2D scene - TrapFloorSpikes",
+    "source_repo": "godot-2d-action-platformer",
+    "source_path": "godot/World/Traps/TrapFloorSpikes.tscn",
+    "root_node_type": "Area2D",
+    "root_node_name": "TrapFloorSpikes",
+    "node_tree": [
+      {
+        "name": "TrapFloorSpikes",
+        "type": "Area2D",
+        "children": []
+      }
+    ],
+    "connections": [
+      {
+        "signal": "body_entered",
+        "from": ".",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_TrapFloorSpikes_body_entered\"",
+          "_on_TrapFloorSpikes_body_entered"
+        ]
+      },
+      {
+        "signal": "body_entered",
+        "from": "HitBox",
+        "to": [
+          "to=\".\"",
+          "."
+        ],
+        "method": [
+          "method=\"_on_HitBox_body_entered\"",
+          "_on_HitBox_body_entered"
+        ]
+      }
+    ],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Area2D",
+          "node_name": "TrapFloorSpikes",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 6 nodes from godot-2d-action-platformer"
+  },
+  {
+    "pattern_name": "Node2D scene - AxeBlueprint",
+    "source_repo": "godot-2d-builder",
+    "source_path": "godot/Entities/Blueprints/AxeBlueprint.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "AxeBlueprint",
+    "node_tree": [
+      {
+        "name": "AxeBlueprint",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "AxeBlueprint",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 2 nodes from godot-2d-builder"
+  },
+  {
+    "pattern_name": "Node2D scene - BatteryBlueprint",
+    "source_repo": "godot-2d-builder",
+    "source_path": "godot/Entities/Blueprints/BatteryBlueprint.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "BatteryBlueprint",
+    "node_tree": [
+      {
+        "name": "BatteryBlueprint",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "BatteryBlueprint",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 3 nodes from godot-2d-builder"
+  },
+  {
+    "pattern_name": "Node2D scene - BranchesBlueprint",
+    "source_repo": "godot-2d-builder",
+    "source_path": "godot/Entities/Blueprints/BranchesBlueprint.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "BranchesBlueprint",
+    "node_tree": [
+      {
+        "name": "BranchesBlueprint",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "BranchesBlueprint",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 2 nodes from godot-2d-builder"
+  },
+  {
+    "pattern_name": "Node2D scene - ChestBlueprint",
+    "source_repo": "godot-2d-builder",
+    "source_path": "godot/Entities/Blueprints/ChestBlueprint.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "ChestBlueprint",
+    "node_tree": [
+      {
+        "name": "ChestBlueprint",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "ChestBlueprint",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 2 nodes from godot-2d-builder"
+  },
+  {
+    "pattern_name": "Node2D scene - CoalBlueprint",
+    "source_repo": "godot-2d-builder",
+    "source_path": "godot/Entities/Blueprints/CoalBlueprint.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "CoalBlueprint",
+    "node_tree": [
+      {
+        "name": "CoalBlueprint",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "CoalBlueprint",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 2 nodes from godot-2d-builder"
+  },
+  {
+    "pattern_name": "Node2D scene - CrudeAxeBlueprint",
+    "source_repo": "godot-2d-builder",
+    "source_path": "godot/Entities/Blueprints/CrudeAxeBlueprint.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "CrudeAxeBlueprint",
+    "node_tree": [
+      {
+        "name": "CrudeAxeBlueprint",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "CrudeAxeBlueprint",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 2 nodes from godot-2d-builder"
+  },
+  {
+    "pattern_name": "Node2D scene - CrudePickaxeBlueprint",
+    "source_repo": "godot-2d-builder",
+    "source_path": "godot/Entities/Blueprints/CrudePickaxeBlueprint.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "CrudePickaxeBlueprint",
+    "node_tree": [
+      {
+        "name": "CrudePickaxeBlueprint",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "CrudePickaxeBlueprint",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 2 nodes from godot-2d-builder"
+  },
+  {
+    "pattern_name": "Node2D scene - ElectricFurnaceBlueprint",
+    "source_repo": "godot-2d-builder",
+    "source_path": "godot/Entities/Blueprints/ElectricFurnaceBlueprint.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "EletricFurnaceBlueprint",
+    "node_tree": [
+      {
+        "name": "EletricFurnaceBlueprint",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "EletricFurnaceBlueprint",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 3 nodes from godot-2d-builder"
+  },
+  {
+    "pattern_name": "Node2D scene - FurnaceBlueprint",
+    "source_repo": "godot-2d-builder",
+    "source_path": "godot/Entities/Blueprints/FurnaceBlueprint.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "FurnaceBlueprint",
+    "node_tree": [
+      {
+        "name": "FurnaceBlueprint",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "FurnaceBlueprint",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 2 nodes from godot-2d-builder"
+  },
+  {
+    "pattern_name": "Node2D scene - IngotBlueprint",
+    "source_repo": "godot-2d-builder",
+    "source_path": "godot/Entities/Blueprints/IngotBlueprint.tscn",
+    "root_node_type": "Node2D",
+    "root_node_name": "MetalIngotBlueprint",
+    "node_tree": [
+      {
+        "name": "MetalIngotBlueprint",
+        "type": "Node2D",
+        "children": []
+      }
+    ],
+    "connections": [],
+    "tool_calls_to_recreate": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "MetalIngotBlueprint",
+          "parent_path": null
+        }
+      }
+    ],
+    "description": "Scene with 2 nodes from godot-2d-builder"
+  }
+]

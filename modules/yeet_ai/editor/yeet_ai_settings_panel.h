@@ -54,6 +54,13 @@ class YeetAISettingsPanel : public VBoxContainer {
 	SpinBox *settings_game_screenshot_timeout_ms = nullptr;
 	SpinBox *settings_temperature = nullptr;
 	CheckBox *settings_vision_enabled = nullptr;
+	CheckBox *settings_allow_project_settings_write = nullptr;
+	CheckBox *settings_allow_editor_settings_write = nullptr;
+	CheckBox *settings_extended_read_extensions = nullptr;
+	CheckBox *settings_allow_reimport = nullptr;
+	CheckBox *settings_allow_resource_save = nullptr;
+	CheckBox *settings_allow_replace_in_files = nullptr;
+	SpinBox *settings_vision_default_max_dimension = nullptr;
 	bool settings_committing = false;
 	int cached_provider_id = 0;
 

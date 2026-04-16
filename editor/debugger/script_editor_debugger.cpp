@@ -445,6 +445,7 @@ void ScriptEditorDebugger::_msg_scene_click_ctrl(uint64_t p_thread_id, const Arr
 void ScriptEditorDebugger::_msg_scene_scene_tree(uint64_t p_thread_id, const Array &p_data) {
 	scene_tree->nodes.clear();
 	scene_tree->deserialize(p_data);
+	remote_scene_tree_serial++;
 	emit_signal(SNAME("remote_tree_updated"));
 	_update_buttons_state();
 }

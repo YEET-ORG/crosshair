@@ -1,0 +1,2058 @@
+[
+  {
+    "pattern_name": "Saving / loading - Node",
+    "source_repo": "godot_experiments",
+    "source_path": "2D/juicy_bouncy_ball/autoload/globals.gd",
+    "extends_class": "Node",
+    "class_name": null,
+    "script_content": "extends Node\n\nvar camera\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/globals.gd",
+          "contents": "extends Node\n\nvar camera\n"
+        }
+      }
+    ],
+    "description": "Node script from godot_experiments: 2D/juicy_bouncy_ball/autoload/globals.gd"
+  },
+  {
+    "pattern_name": "General GDScript - DialogicLayoutLayer",
+    "source_repo": "godot-open-rpg",
+    "source_path": "addons/dialogic/Modules/DefaultLayoutParts/Layer_FullBackground/full_background_layer.gd",
+    "extends_class": "DialogicLayoutLayer",
+    "class_name": null,
+    "script_content": "@tool\nextends DialogicLayoutLayer\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "DialogicLayoutLayer",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/full_background_layer.gd",
+          "contents": "@tool\nextends DialogicLayoutLayer\n"
+        }
+      }
+    ],
+    "description": "DialogicLayoutLayer script from godot-open-rpg: addons/dialogic/Modules/DefaultLayoutParts/Layer_FullBackground/full_background_layer.gd"
+  },
+  {
+    "pattern_name": "Tower defense / weapons - Area2D",
+    "source_repo": "godot-2d-tactical-space-combat",
+    "source_path": "godot/TacticalSpaceCombat/Ship/Weapons/LaserArea.gd",
+    "extends_class": "Area2D",
+    "class_name": null,
+    "script_content": "extends Area2D\r\n\r\nvar params := {}\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Area2D",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "NewNode",
+          "node_name": "Collision",
+          "shape_type": "sphere",
+          "parameters": {
+            "radius": 1
+          }
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/LaserArea.gd",
+          "contents": "extends Area2D\r\n\r\nvar params := {}\r\n"
+        }
+      }
+    ],
+    "description": "Area2D script from godot-2d-tactical-space-combat: godot/TacticalSpaceCombat/Ship/Weapons/LaserArea.gd"
+  },
+  {
+    "pattern_name": "General GDScript - Node2D",
+    "source_repo": "godot_experiments",
+    "source_path": "2D/polygon_tools/scenes/demo_scene/demo_scene.gd",
+    "extends_class": "Node2D",
+    "class_name": null,
+    "script_content": "extends Node2D\n\nfunc _ready():\n\tpass\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/demo_scene.gd",
+          "contents": "extends Node2D\n\nfunc _ready():\n\tpass\n"
+        }
+      }
+    ],
+    "description": "Node2D script from godot_experiments: 2D/polygon_tools/scenes/demo_scene/demo_scene.gd"
+  },
+  {
+    "pattern_name": "General GDScript - SkeletonIK3D",
+    "source_repo": "godot-demo-projects",
+    "source_path": "3d/ik/skeleton_ik_runner.gd",
+    "extends_class": "SkeletonIK3D",
+    "class_name": null,
+    "script_content": "extends SkeletonIK3D\n\nfunc _ready():\n\tstart(false)\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "SkeletonIK3D",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/skeleton_ik_runner.gd",
+          "contents": "extends SkeletonIK3D\n\nfunc _ready():\n\tstart(false)\n"
+        }
+      }
+    ],
+    "description": "SkeletonIK3D script from godot-demo-projects: 3d/ik/skeleton_ik_runner.gd"
+  },
+  {
+    "pattern_name": "Audio / music - AudioStreamPlayer",
+    "source_repo": "godot-make-pro-2d-games",
+    "source_path": "audio/MusicPlayer.gd",
+    "extends_class": "AudioStreamPlayer",
+    "class_name": null,
+    "script_content": "extends AudioStreamPlayer\r\n\r\nfunc _ready():\r\n\tplay()\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "AudioStreamPlayer",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/MusicPlayer.gd",
+          "contents": "extends AudioStreamPlayer\r\n\r\nfunc _ready():\r\n\tplay()\r\n"
+        }
+      }
+    ],
+    "description": "AudioStreamPlayer script from godot-make-pro-2d-games: audio/MusicPlayer.gd"
+  },
+  {
+    "pattern_name": "Procedural generation - Node2D",
+    "source_repo": "godot-procedural-generation",
+    "source_path": "start-project/CellularAutomata/01.FoliageGenerator/FoliageGenerator.gd",
+    "extends_class": "Node2D",
+    "class_name": null,
+    "script_content": "extends Node2D\r\n\r\n\r\nfunc update_grid() -> void:\r\n\tpass\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/FoliageGenerator.gd",
+          "contents": "extends Node2D\r\n\r\n\r\nfunc update_grid() -> void:\r\n\tpass\r\n"
+        }
+      }
+    ],
+    "description": "Node2D script from godot-procedural-generation: start-project/CellularAutomata/01.FoliageGenerator/FoliageGenerator.gd"
+  },
+  {
+    "pattern_name": "UI / HUD - Control",
+    "source_repo": "godot-make-pro-2d-games",
+    "source_path": "interface/TopLevelUi.gd",
+    "extends_class": "Control",
+    "class_name": null,
+    "script_content": "tool\r\nextends Control\r\n\r\nfunc _ready():\r\n\tset_as_toplevel(true)\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Control",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/TopLevelUi.gd",
+          "contents": "tool\r\nextends Control\r\n\r\nfunc _ready():\r\n\tset_as_toplevel(true)\r\n"
+        }
+      }
+    ],
+    "description": "Control script from godot-make-pro-2d-games: interface/TopLevelUi.gd"
+  },
+  {
+    "pattern_name": "UI / HUD - Control",
+    "source_repo": "godot-make-pro-2d-games",
+    "source_path": "utils/debug/TopLevelUI.gd",
+    "extends_class": "Control",
+    "class_name": null,
+    "script_content": "tool\r\nextends Control\r\n\r\nfunc _ready():\r\n\tset_as_toplevel(true)\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Control",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/TopLevelUI.gd",
+          "contents": "tool\r\nextends Control\r\n\r\nfunc _ready():\r\n\tset_as_toplevel(true)\r\n"
+        }
+      }
+    ],
+    "description": "Control script from godot-make-pro-2d-games: utils/debug/TopLevelUI.gd"
+  },
+  {
+    "pattern_name": "Camera system - Anchor2D",
+    "source_repo": "godot-mini-tuts-demos",
+    "source_path": "2d/anchor-camera/Level/Anchor2D.gd",
+    "extends_class": "Area2D",
+    "class_name": "Anchor2D",
+    "script_content": "class_name Anchor2D\r\nextends Area2D\r\n\r\nexport var zoom_level := 1.0\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Area2D",
+          "node_name": "Anchor2D"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "Anchor2D",
+          "node_name": "Collision",
+          "shape_type": "sphere",
+          "parameters": {
+            "radius": 1
+          }
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/Anchor2D.gd",
+          "contents": "class_name Anchor2D\r\nextends Area2D\r\n\r\nexport var zoom_level := 1.0\r\n"
+        }
+      }
+    ],
+    "description": "Area2D script from godot-mini-tuts-demos: 2d/anchor-camera/Level/Anchor2D.gd"
+  },
+  {
+    "pattern_name": "UI / HUD - Panel",
+    "source_repo": "godot-make-pro-2d-games",
+    "source_path": "interface/menus/shop/panels/DescriptionPanel.gd",
+    "extends_class": "Panel",
+    "class_name": null,
+    "script_content": "extends Panel\r\n\r\nfunc display(message):\r\n\t$Description.text = message\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Panel",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/DescriptionPanel.gd",
+          "contents": "extends Panel\r\n\r\nfunc display(message):\r\n\t$Description.text = message\r\n"
+        }
+      }
+    ],
+    "description": "Panel script from godot-make-pro-2d-games: interface/menus/shop/panels/DescriptionPanel.gd"
+  },
+  {
+    "pattern_name": "General GDScript - WireEntity",
+    "source_repo": "godot-2d-builder",
+    "source_path": "start-project-2/Entities/Entities/WireEntity.gd",
+    "extends_class": "Entity",
+    "class_name": "WireEntity",
+    "script_content": "class_name WireEntity\r\nextends Entity\r\n\r\nonready var sprite := $Sprite\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Entity",
+          "node_name": "WireEntity"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/WireEntity.gd",
+          "contents": "class_name WireEntity\r\nextends Entity\r\n\r\nonready var sprite := $Sprite\r\n"
+        }
+      }
+    ],
+    "description": "Entity script from godot-2d-builder: start-project-2/Entities/Entities/WireEntity.gd"
+  },
+  {
+    "pattern_name": "General GDScript - WireEntity",
+    "source_repo": "godot-2d-builder",
+    "source_path": "start-project-3/Entities/Entities/WireEntity.gd",
+    "extends_class": "Entity",
+    "class_name": "WireEntity",
+    "script_content": "class_name WireEntity\r\nextends Entity\r\n\r\nonready var sprite := $Sprite\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Entity",
+          "node_name": "WireEntity"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/WireEntity.gd",
+          "contents": "class_name WireEntity\r\nextends Entity\r\n\r\nonready var sprite := $Sprite\r\n"
+        }
+      }
+    ],
+    "description": "Entity script from godot-2d-builder: start-project-3/Entities/Entities/WireEntity.gd"
+  },
+  {
+    "pattern_name": "General GDScript - Walker",
+    "source_repo": "godot-demo-projects",
+    "source_path": "2d/role_playing_game/grid_movement/pawns/opponent.gd",
+    "extends_class": "Walker",
+    "class_name": null,
+    "script_content": "extends Walker\n\nfunc _ready() -> void:\n\tsuper._ready()\n\tset_process(false)\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Walker",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/opponent.gd",
+          "contents": "extends Walker\n\nfunc _ready() -> void:\n\tsuper._ready()\n\tset_process(false)\n"
+        }
+      }
+    ],
+    "description": "Walker script from godot-demo-projects: 2d/role_playing_game/grid_movement/pawns/opponent.gd"
+  },
+  {
+    "pattern_name": "General GDScript - ColorRect",
+    "source_repo": "godot-make-pro-2d-games",
+    "source_path": "vfx/Fog.gd",
+    "extends_class": "ColorRect",
+    "class_name": null,
+    "script_content": "extends ColorRect\r\n\r\nfunc _on_LevelLoader_loaded(level):\r\n\tvisible = level.fog\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "ColorRect",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/Fog.gd",
+          "contents": "extends ColorRect\r\n\r\nfunc _on_LevelLoader_loaded(level):\r\n\tvisible = level.fog\r\n"
+        }
+      }
+    ],
+    "description": "ColorRect script from godot-make-pro-2d-games: vfx/Fog.gd"
+  },
+  {
+    "pattern_name": "UI / HUD - TextureProgress",
+    "source_repo": "godot-2d-builder",
+    "source_path": "godot/GUI/DeconstructProgressBar.gd",
+    "extends_class": "TextureProgress",
+    "class_name": null,
+    "script_content": "tool\r\nextends TextureProgress\r\n\r\n\r\nfunc _ready() -> void:\r\n\tset_as_toplevel(true)\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "TextureProgress",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/DeconstructProgressBar.gd",
+          "contents": "tool\r\nextends TextureProgress\r\n\r\n\r\nfunc _ready() -> void:\r\n\tset_as_toplevel(true)\r\n"
+        }
+      }
+    ],
+    "description": "TextureProgress script from godot-2d-builder: godot/GUI/DeconstructProgressBar.gd"
+  },
+  {
+    "pattern_name": "General GDScript - Label",
+    "source_repo": "godot-demo-projects",
+    "source_path": "2d/physics_tests/utils/label_pause.gd",
+    "extends_class": "Label",
+    "class_name": null,
+    "script_content": "extends Label\n\n\nfunc _process(_delta: float) -> void:\n\tvisible = get_tree().paused\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Label",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/label_pause.gd",
+          "contents": "extends Label\n\n\nfunc _process(_delta: float) -> void:\n\tvisible = get_tree().paused\n"
+        }
+      }
+    ],
+    "description": "Label script from godot-demo-projects: 2d/physics_tests/utils/label_pause.gd"
+  },
+  {
+    "pattern_name": "General GDScript - Label",
+    "source_repo": "godot-demo-projects",
+    "source_path": "3d/physics_tests/utils/label_pause.gd",
+    "extends_class": "Label",
+    "class_name": null,
+    "script_content": "extends Label\n\n\nfunc _process(_delta: float) -> void:\n\tvisible = get_tree().paused\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Label",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/label_pause.gd",
+          "contents": "extends Label\n\n\nfunc _process(_delta: float) -> void:\n\tvisible = get_tree().paused\n"
+        }
+      }
+    ],
+    "description": "Label script from godot-demo-projects: 3d/physics_tests/utils/label_pause.gd"
+  },
+  {
+    "pattern_name": "General GDScript - \"res://addons/dialogic/Modules/LayeredPortrait/layered_portrait.gd\"",
+    "source_repo": "godot-open-rpg",
+    "source_path": "addons/dialogic/Modules/LayeredPortrait/custom_layered_portrait.gd",
+    "extends_class": "\"res://addons/dialogic/Modules/LayeredPortrait/layered_portrait.gd\"",
+    "class_name": null,
+    "script_content": "@tool\nextends \"res://addons/dialogic/Modules/LayeredPortrait/layered_portrait.gd\"\n\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "\"res://addons/dialogic/Modules/LayeredPortrait/layered_portrait.gd\"",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/custom_layered_portrait.gd",
+          "contents": "@tool\nextends \"res://addons/dialogic/Modules/LayeredPortrait/layered_portrait.gd\"\n\n"
+        }
+      }
+    ],
+    "description": "\"res://addons/dialogic/Modules/LayeredPortrait/layered_portrait.gd\" script from godot-open-rpg: addons/dialogic/Modules/LayeredPortrait/custom_layered_portrait.gd"
+  },
+  {
+    "pattern_name": "General GDScript - GdUnitInit",
+    "source_repo": "beehave",
+    "source_path": "addons/gdUnit4/src/core/event/GdUnitEventInit.gd",
+    "extends_class": "GdUnitEvent",
+    "class_name": "GdUnitInit",
+    "script_content": "class_name GdUnitInit\nextends GdUnitEvent\n\n\nfunc _init() -> void:\n\t_event_type = INIT\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "GdUnitEvent",
+          "node_name": "GdUnitInit"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/GdUnitEventInit.gd",
+          "contents": "class_name GdUnitInit\nextends GdUnitEvent\n\n\nfunc _init() -> void:\n\t_event_type = INIT\n"
+        }
+      }
+    ],
+    "description": "GdUnitEvent script from beehave: addons/gdUnit4/src/core/event/GdUnitEventInit.gd"
+  },
+  {
+    "pattern_name": "General GDScript - GdUnitStop",
+    "source_repo": "beehave",
+    "source_path": "addons/gdUnit4/src/core/event/GdUnitEventStop.gd",
+    "extends_class": "GdUnitEvent",
+    "class_name": "GdUnitStop",
+    "script_content": "class_name GdUnitStop\nextends GdUnitEvent\n\n\nfunc _init() -> void:\n\t_event_type = STOP\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "GdUnitEvent",
+          "node_name": "GdUnitStop"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/GdUnitEventStop.gd",
+          "contents": "class_name GdUnitStop\nextends GdUnitEvent\n\n\nfunc _init() -> void:\n\t_event_type = STOP\n"
+        }
+      }
+    ],
+    "description": "GdUnitEvent script from beehave: addons/gdUnit4/src/core/event/GdUnitEventStop.gd"
+  },
+  {
+    "pattern_name": "General GDScript - DialogicLayoutLayer",
+    "source_repo": "godot-open-rpg",
+    "source_path": "addons/dialogic/Modules/DefaultLayoutParts/Layer_Input/full_advance_input_layer.gd",
+    "extends_class": "DialogicLayoutLayer",
+    "class_name": null,
+    "script_content": "@tool\nextends DialogicLayoutLayer\n\n## A layer that holds a full-screen input catcher.\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "DialogicLayoutLayer",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/full_advance_input_layer.gd",
+          "contents": "@tool\nextends DialogicLayoutLayer\n\n## A layer that holds a full-screen input catcher.\n"
+        }
+      }
+    ],
+    "description": "DialogicLayoutLayer script from godot-open-rpg: addons/dialogic/Modules/DefaultLayoutParts/Layer_Input/full_advance_input_layer.gd"
+  },
+  {
+    "pattern_name": "UI / HUD - VBoxContainer",
+    "source_repo": "godot-2d-builder",
+    "source_path": "godot/GUI/Inventory/QuickbarInventoryPanel.gd",
+    "extends_class": "VBoxContainer",
+    "class_name": null,
+    "script_content": "extends VBoxContainer\r\n\r\n\r\nfunc setup(gui: Control) -> void:\r\n\t$InventoryPanel.setup(gui)\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "VBoxContainer",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/QuickbarInventoryPanel.gd",
+          "contents": "extends VBoxContainer\r\n\r\n\r\nfunc setup(gui: Control) -> void:\r\n\t$InventoryPanel.setup(gui)\r\n"
+        }
+      }
+    ],
+    "description": "VBoxContainer script from godot-2d-builder: godot/GUI/Inventory/QuickbarInventoryPanel.gd"
+  },
+  {
+    "pattern_name": "UI / HUD - VBoxContainer",
+    "source_repo": "godot-2d-builder",
+    "source_path": "start-project-3/GUI/Inventory/QuickbarInventoryPanel.gd",
+    "extends_class": "VBoxContainer",
+    "class_name": null,
+    "script_content": "extends VBoxContainer\r\n\r\n\r\nfunc setup(gui: Control) -> void:\r\n\t$InventoryPanel.setup(gui)\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "VBoxContainer",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/QuickbarInventoryPanel.gd",
+          "contents": "extends VBoxContainer\r\n\r\n\r\nfunc setup(gui: Control) -> void:\r\n\t$InventoryPanel.setup(gui)\r\n"
+        }
+      }
+    ],
+    "description": "VBoxContainer script from godot-2d-builder: start-project-3/GUI/Inventory/QuickbarInventoryPanel.gd"
+  },
+  {
+    "pattern_name": "General GDScript - Light2D",
+    "source_repo": "godot-mini-tuts-demos",
+    "source_path": "2d/lighting-with-normal-maps/Light.gd",
+    "extends_class": "Light2D",
+    "class_name": null,
+    "script_content": "extends Light2D\r\n\r\n\r\nfunc _process(delta):\r\n\tglobal_position = get_global_mouse_position()\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Light2D",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/Light.gd",
+          "contents": "extends Light2D\r\n\r\n\r\nfunc _process(delta):\r\n\tglobal_position = get_global_mouse_position()\r\n"
+        }
+      }
+    ],
+    "description": "Light2D script from godot-mini-tuts-demos: 2d/lighting-with-normal-maps/Light.gd"
+  },
+  {
+    "pattern_name": "General GDScript - EditorPlugin",
+    "source_repo": "godot-visual-effects",
+    "source_path": "godot/addons/node-essential-helpers/plugin.gd",
+    "extends_class": "EditorPlugin",
+    "class_name": null,
+    "script_content": "@tool\r\nextends EditorPlugin\r\n\r\n\r\nfunc _enter_tree():\r\n\tpass\r\n\r\n\r\nfunc _exit_tree():\r\n\tpass\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "EditorPlugin",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/plugin.gd",
+          "contents": "@tool\r\nextends EditorPlugin\r\n\r\n\r\nfunc _enter_tree():\r\n\tpass\r\n\r\n\r\nfunc _exit_tree():\r\n\tpass\r\n"
+        }
+      }
+    ],
+    "description": "EditorPlugin script from godot-visual-effects: godot/addons/node-essential-helpers/plugin.gd"
+  },
+  {
+    "pattern_name": "General GDScript - Label",
+    "source_repo": "godot-demo-projects",
+    "source_path": "3d/squash_the_creeps/ScoreLabel.gd",
+    "extends_class": "Label",
+    "class_name": null,
+    "script_content": "extends Label\n\nvar score = 0\n\nfunc _on_Mob_squashed():\n\tscore += 1\n\ttext = \"Score: %s\" % score\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Label",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/ScoreLabel.gd",
+          "contents": "extends Label\n\nvar score = 0\n\nfunc _on_Mob_squashed():\n\tscore += 1\n\ttext = \"Score: %s\" % score\n"
+        }
+      }
+    ],
+    "description": "Label script from godot-demo-projects: 3d/squash_the_creeps/ScoreLabel.gd"
+  },
+  {
+    "pattern_name": "Saving / loading - Panel",
+    "source_repo": "godot-demo-projects",
+    "source_path": "loading/autoload/scene_a.gd",
+    "extends_class": "Panel",
+    "class_name": null,
+    "script_content": "extends Panel\n\nfunc _on_goto_scene_pressed() -> void:\n\tglobal.goto_scene(\"res://scene_b.tscn\")\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Panel",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/scene_a.gd",
+          "contents": "extends Panel\n\nfunc _on_goto_scene_pressed() -> void:\n\tglobal.goto_scene(\"res://scene_b.tscn\")\n"
+        }
+      }
+    ],
+    "description": "Panel script from godot-demo-projects: loading/autoload/scene_a.gd"
+  },
+  {
+    "pattern_name": "Saving / loading - Panel",
+    "source_repo": "godot-demo-projects",
+    "source_path": "loading/autoload/scene_b.gd",
+    "extends_class": "Panel",
+    "class_name": null,
+    "script_content": "extends Panel\n\nfunc _on_goto_scene_pressed() -> void:\n\tglobal.goto_scene(\"res://scene_a.tscn\")\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Panel",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/scene_b.gd",
+          "contents": "extends Panel\n\nfunc _on_goto_scene_pressed() -> void:\n\tglobal.goto_scene(\"res://scene_a.tscn\")\n"
+        }
+      }
+    ],
+    "description": "Panel script from godot-demo-projects: loading/autoload/scene_b.gd"
+  },
+  {
+    "pattern_name": "UI / HUD - HSlider",
+    "source_repo": "godot-make-pro-2d-games",
+    "source_path": "interface/menus/shop/popups/HSlider.gd",
+    "extends_class": "HSlider",
+    "class_name": null,
+    "script_content": "extends HSlider\r\n\r\nfunc initialize(current, maximum):\r\n\tmax_value = maximum\r\n\tvalue = current\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "HSlider",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/HSlider.gd",
+          "contents": "extends HSlider\r\n\r\nfunc initialize(current, maximum):\r\n\tmax_value = maximum\r\n\tvalue = current\r\n"
+        }
+      }
+    ],
+    "description": "HSlider script from godot-make-pro-2d-games: interface/menus/shop/popups/HSlider.gd"
+  },
+  {
+    "pattern_name": "Tower defense / weapons - Upgrade",
+    "source_repo": "godot-2d-tower-defense",
+    "source_path": "source/Objects/Towers/Upgrades/FireRangeUpgrade.gd",
+    "extends_class": "Upgrade",
+    "class_name": null,
+    "script_content": "extends Upgrade\r\n\r\n\r\nfunc _apply() -> void:\r\n\tweapon.fire_range += value\r\n\tweapon.show_range()\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Upgrade",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/FireRangeUpgrade.gd",
+          "contents": "extends Upgrade\r\n\r\n\r\nfunc _apply() -> void:\r\n\tweapon.fire_range += value\r\n\tweapon.show_range()\r\n"
+        }
+      }
+    ],
+    "description": "Upgrade script from godot-2d-tower-defense: source/Objects/Towers/Upgrades/FireRangeUpgrade.gd"
+  },
+  {
+    "pattern_name": "General GDScript - MarginContainer",
+    "source_repo": "godot-mini-tuts-demos",
+    "source_path": "2d/side-scrolling-movement/Levels/SceneIndicator.gd",
+    "extends_class": "MarginContainer",
+    "class_name": null,
+    "script_content": "extends MarginContainer\r\n\r\n\r\nfunc _ready() -> void:\r\n\t$ColorRect/Label.text = owner.owner.name\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "MarginContainer",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/SceneIndicator.gd",
+          "contents": "extends MarginContainer\r\n\r\n\r\nfunc _ready() -> void:\r\n\t$ColorRect/Label.text = owner.owner.name\r\n"
+        }
+      }
+    ],
+    "description": "MarginContainer script from godot-mini-tuts-demos: 2d/side-scrolling-movement/Levels/SceneIndicator.gd"
+  },
+  {
+    "pattern_name": "General GDScript - PostProcessStep",
+    "source_repo": "godot-shaders",
+    "source_path": "godot/Utils/PostProcessStep.gd",
+    "extends_class": "Resource",
+    "class_name": "PostProcessStep",
+    "script_content": "class_name PostProcessStep\r\nextends Resource\r\n\r\n@export var post_proces_shader: ShaderMaterial\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Resource",
+          "node_name": "PostProcessStep"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/PostProcessStep.gd",
+          "contents": "class_name PostProcessStep\r\nextends Resource\r\n\r\n@export var post_proces_shader: ShaderMaterial\r\n"
+        }
+      }
+    ],
+    "description": "Resource script from godot-shaders: godot/Utils/PostProcessStep.gd"
+  },
+  {
+    "pattern_name": "General GDScript - Label",
+    "source_repo": "godot-make-pro-2d-games",
+    "source_path": "actors/player/states/debug/StateNameDisplayer.gd",
+    "extends_class": "Label",
+    "class_name": null,
+    "script_content": "extends Label\r\n\r\nfunc _on_StateMachine_state_changed(current_state):\r\n\ttext = current_state.name\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Label",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/StateNameDisplayer.gd",
+          "contents": "extends Label\r\n\r\nfunc _on_StateMachine_state_changed(current_state):\r\n\ttext = current_state.name\r\n"
+        }
+      }
+    ],
+    "description": "Label script from godot-make-pro-2d-games: actors/player/states/debug/StateNameDisplayer.gd"
+  },
+  {
+    "pattern_name": "UI pattern - Control",
+    "source_repo": "godot-shaders",
+    "source_path": "godot/Intro/Elements/EnableWireframe.gd",
+    "extends_class": "Control",
+    "class_name": null,
+    "script_content": "extends Control\r\n\r\n\r\nfunc _init() -> void:\r\n\tRenderingServer.set_debug_generate_wireframes(true)\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Control",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/EnableWireframe.gd",
+          "contents": "extends Control\r\n\r\n\r\nfunc _init() -> void:\r\n\tRenderingServer.set_debug_generate_wireframes(true)\r\n"
+        }
+      }
+    ],
+    "description": "Control script from godot-shaders: godot/Intro/Elements/EnableWireframe.gd"
+  },
+  {
+    "pattern_name": "General GDScript - Label",
+    "source_repo": "godot-demo-projects",
+    "source_path": "2d/physics_tests/utils/label_version.gd",
+    "extends_class": "Label",
+    "class_name": null,
+    "script_content": "extends Label\n\nfunc _ready() -> void:\n\ttext = \"Godot Version: %s\" % Engine.get_version_info().string\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Label",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/label_version.gd",
+          "contents": "extends Label\n\nfunc _ready() -> void:\n\ttext = \"Godot Version: %s\" % Engine.get_version_info().string\n"
+        }
+      }
+    ],
+    "description": "Label script from godot-demo-projects: 2d/physics_tests/utils/label_version.gd"
+  },
+  {
+    "pattern_name": "General GDScript - GdUnitSessionClose",
+    "source_repo": "beehave",
+    "source_path": "addons/gdUnit4/src/core/event/GdUnitSessionClose.gd",
+    "extends_class": "GdUnitEvent",
+    "class_name": "GdUnitSessionClose",
+    "script_content": "class_name GdUnitSessionClose\nextends GdUnitEvent\n\n\nfunc _init() -> void:\n\t_event_type = SESSION_CLOSE\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "GdUnitEvent",
+          "node_name": "GdUnitSessionClose"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/GdUnitSessionClose.gd",
+          "contents": "class_name GdUnitSessionClose\nextends GdUnitEvent\n\n\nfunc _init() -> void:\n\t_event_type = SESSION_CLOSE\n"
+        }
+      }
+    ],
+    "description": "GdUnitEvent script from beehave: addons/gdUnit4/src/core/event/GdUnitSessionClose.gd"
+  },
+  {
+    "pattern_name": "General GDScript - GdUnitSessionStart",
+    "source_repo": "beehave",
+    "source_path": "addons/gdUnit4/src/core/event/GdUnitSessionStart.gd",
+    "extends_class": "GdUnitEvent",
+    "class_name": "GdUnitSessionStart",
+    "script_content": "class_name GdUnitSessionStart\nextends GdUnitEvent\n\n\nfunc _init() -> void:\n\t_event_type = SESSION_START\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "GdUnitEvent",
+          "node_name": "GdUnitSessionStart"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/GdUnitSessionStart.gd",
+          "contents": "class_name GdUnitSessionStart\nextends GdUnitEvent\n\n\nfunc _init() -> void:\n\t_event_type = SESSION_START\n"
+        }
+      }
+    ],
+    "description": "GdUnitEvent script from beehave: addons/gdUnit4/src/core/event/GdUnitSessionStart.gd"
+  },
+  {
+    "pattern_name": "UI / HUD - Button",
+    "source_repo": "godot-make-pro-2d-games",
+    "source_path": "interface/menus/shared/Button.gd",
+    "extends_class": "Button",
+    "class_name": null,
+    "script_content": "extends Button\r\n\r\nfunc _gui_input(event):\r\n\tif event.is_action_pressed('ui_accept'):\r\n\t\taccept_event()\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Button",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/Button.gd",
+          "contents": "extends Button\r\n\r\nfunc _gui_input(event):\r\n\tif event.is_action_pressed('ui_accept'):\r\n\t\taccept_event()\r\n"
+        }
+      }
+    ],
+    "description": "Button script from godot-make-pro-2d-games: interface/menus/shared/Button.gd"
+  },
+  {
+    "pattern_name": "General GDScript - DialogicIndexer",
+    "source_repo": "godot-open-rpg",
+    "source_path": "addons/dialogic/Modules/DefaultLayoutParts/index.gd",
+    "extends_class": "DialogicIndexer",
+    "class_name": null,
+    "script_content": "extends DialogicIndexer\n\n\nfunc _get_layout_parts() -> Array[Dictionary]:\n\treturn scan_for_layout_parts()\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "DialogicIndexer",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/index.gd",
+          "contents": "extends DialogicIndexer\n\n\nfunc _get_layout_parts() -> Array[Dictionary]:\n\treturn scan_for_layout_parts()\n"
+        }
+      }
+    ],
+    "description": "DialogicIndexer script from godot-open-rpg: addons/dialogic/Modules/DefaultLayoutParts/index.gd"
+  },
+  {
+    "pattern_name": "General GDScript - Button",
+    "source_repo": "godot-demo-projects",
+    "source_path": "plugins/addons/main_screen/print_hello.gd",
+    "extends_class": "Button",
+    "class_name": null,
+    "script_content": "@tool\nextends Button\n\n\nfunc _on_PrintHello_pressed() -> void:\n\tprint(\"Hello from the main screen plugin!\")\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Button",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/print_hello.gd",
+          "contents": "@tool\nextends Button\n\n\nfunc _on_PrintHello_pressed() -> void:\n\tprint(\"Hello from the main screen plugin!\")\n"
+        }
+      }
+    ],
+    "description": "Button script from godot-demo-projects: plugins/addons/main_screen/print_hello.gd"
+  },
+  {
+    "pattern_name": "General GDScript - ToolEntity",
+    "source_repo": "godot-2d-builder",
+    "source_path": "godot/Entities/Blueprints/ToolEntity.gd",
+    "extends_class": "BlueprintEntity",
+    "class_name": "ToolEntity",
+    "script_content": "class_name ToolEntity\r\nextends BlueprintEntity\r\n\r\nexport var tool_speed := 1.0\r\nexport var tool_name := \"\"\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "BlueprintEntity",
+          "node_name": "ToolEntity"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/ToolEntity.gd",
+          "contents": "class_name ToolEntity\r\nextends BlueprintEntity\r\n\r\nexport var tool_speed := 1.0\r\nexport var tool_name := \"\"\r\n"
+        }
+      }
+    ],
+    "description": "BlueprintEntity script from godot-2d-builder: godot/Entities/Blueprints/ToolEntity.gd"
+  },
+  {
+    "pattern_name": "2D CharacterBody movement - CanvasLayer",
+    "source_repo": "godot-demo-projects",
+    "source_path": "3d/platformer/touch_screen_ui.gd",
+    "extends_class": "CanvasLayer",
+    "class_name": null,
+    "script_content": "extends CanvasLayer\n\n\nfunc _ready() -> void:\n\thide()\n\tif DisplayServer.is_touchscreen_available():\n\t\tshow()\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "CanvasLayer",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/touch_screen_ui.gd",
+          "contents": "extends CanvasLayer\n\n\nfunc _ready() -> void:\n\thide()\n\tif DisplayServer.is_touchscreen_available():\n\t\tshow()\n"
+        }
+      }
+    ],
+    "description": "CanvasLayer script from godot-demo-projects: 3d/platformer/touch_screen_ui.gd"
+  },
+  {
+    "pattern_name": "General GDScript - Node",
+    "source_repo": "godot-demo-projects",
+    "source_path": "2d/kinematic_character/level/princess.gd",
+    "extends_class": "Node",
+    "class_name": null,
+    "script_content": "extends Node\n\nfunc _on_body_entered(body: Node2D) -> void:\n\tif body.name == \"Player\":\n\t\t$\"../WinText\".show()\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/princess.gd",
+          "contents": "extends Node\n\nfunc _on_body_entered(body: Node2D) -> void:\n\tif body.name == \"Player\":\n\t\t$\"../WinText\".show()\n"
+        }
+      }
+    ],
+    "description": "Node script from godot-demo-projects: 2d/kinematic_character/level/princess.gd"
+  },
+  {
+    "pattern_name": "General GDScript - Popup",
+    "source_repo": "godot-demo-projects",
+    "source_path": "misc/multiple_windows/scenes/popup/hide_on_mouse_exit.gd",
+    "extends_class": "Popup",
+    "class_name": null,
+    "script_content": "extends Popup\n\n\nfunc _ready() -> void:\n\tmouse_exited.connect(_on_mouse_exited)\n\n\nfunc _on_mouse_exited():\n\thide()\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Popup",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/hide_on_mouse_exit.gd",
+          "contents": "extends Popup\n\n\nfunc _ready() -> void:\n\tmouse_exited.connect(_on_mouse_exited)\n\n\nfunc _on_mouse_exited():\n\thide()\n"
+        }
+      }
+    ],
+    "description": "Popup script from godot-demo-projects: misc/multiple_windows/scenes/popup/hide_on_mouse_exit.gd"
+  },
+  {
+    "pattern_name": "Audio / music - Node2D",
+    "source_repo": "godot-mini-tuts-demos",
+    "source_path": "audio/background-music-transition/Levels/Level.gd",
+    "extends_class": "Node2D",
+    "class_name": null,
+    "script_content": "extends Node2D\r\n\r\nexport var music: AudioStream\r\n\r\n\r\nfunc _ready() -> void:\r\n\tBackgroundMusic.crossfade_to(music)\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/Level.gd",
+          "contents": "extends Node2D\r\n\r\nexport var music: AudioStream\r\n\r\n\r\nfunc _ready() -> void:\r\n\tBackgroundMusic.crossfade_to(music)\r\n"
+        }
+      }
+    ],
+    "description": "Node2D script from godot-mini-tuts-demos: audio/background-music-transition/Levels/Level.gd"
+  },
+  {
+    "pattern_name": "Procedural generation - Control",
+    "source_repo": "godot-demo-projects",
+    "source_path": "3d/voxel/menu/options/options.gd",
+    "extends_class": "Control",
+    "class_name": null,
+    "script_content": "extends Control\n\nvar prev_menu: Control\n\nfunc _on_Back_pressed() -> void:\n\tprev_menu.visible = true\n\tvisible = false\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Control",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/options.gd",
+          "contents": "extends Control\n\nvar prev_menu: Control\n\nfunc _on_Back_pressed() -> void:\n\tprev_menu.visible = true\n\tvisible = false\n"
+        }
+      }
+    ],
+    "description": "Control script from godot-demo-projects: 3d/voxel/menu/options/options.gd"
+  },
+  {
+    "pattern_name": "Audio / music - Node",
+    "source_repo": "godot-2d-rhythm",
+    "source_path": "godot/RhythmGame/Autoload/Events.gd",
+    "extends_class": "Node",
+    "class_name": null,
+    "script_content": "extends Node\r\n\r\nsignal beat_incremented(msg)\r\nsignal scored(msg)\r\n\r\nsignal track_selected(msg)\r\nsignal track_finished(msg)\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/Events.gd",
+          "contents": "extends Node\r\n\r\nsignal beat_incremented(msg)\r\nsignal scored(msg)\r\n\r\nsignal track_selected(msg)\r\nsignal track_finished(msg)\r\n"
+        }
+      }
+    ],
+    "description": "Node script from godot-2d-rhythm: godot/RhythmGame/Autoload/Events.gd"
+  },
+  {
+    "pattern_name": "General GDScript - ActionLeaf",
+    "source_repo": "beehave",
+    "source_path": "test/blackboard/blackboard_register_action.gd",
+    "extends_class": "ActionLeaf",
+    "class_name": null,
+    "script_content": "extends ActionLeaf\n\nvar blackboard\n\n\nfunc tick(actor, blackboard: Blackboard):\n\tself.blackboard = blackboard\n\treturn SUCCESS\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "ActionLeaf",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/blackboard_register_action.gd",
+          "contents": "extends ActionLeaf\n\nvar blackboard\n\n\nfunc tick(actor, blackboard: Blackboard):\n\tself.blackboard = blackboard\n\treturn SUCCESS\n"
+        }
+      }
+    ],
+    "description": "ActionLeaf script from beehave: test/blackboard/blackboard_register_action.gd"
+  },
+  {
+    "pattern_name": "General GDScript - CheckButton",
+    "source_repo": "godot-demo-projects",
+    "source_path": "2d/physics_tests/utils/physics_interpolation.gd",
+    "extends_class": "CheckButton",
+    "class_name": null,
+    "script_content": "extends CheckButton\n\n\nfunc _on_check_button_toggled(toggled_on: bool) -> void:\n\tget_tree().physics_interpolation = toggled_on\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "CheckButton",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/physics_interpolation.gd",
+          "contents": "extends CheckButton\n\n\nfunc _on_check_button_toggled(toggled_on: bool) -> void:\n\tget_tree().physics_interpolation = toggled_on\n"
+        }
+      }
+    ],
+    "description": "CheckButton script from godot-demo-projects: 2d/physics_tests/utils/physics_interpolation.gd"
+  },
+  {
+    "pattern_name": "Area detection - Area2D",
+    "source_repo": "godot-make-pro-2d-games",
+    "source_path": "actors/DamageSource.gd",
+    "extends_class": "Area2D",
+    "class_name": null,
+    "script_content": "extends Area2D\r\n\r\nexport(int) var damage = 2\r\nvar effect\r\n\r\nfunc set_active(value):\r\n\t$CollisionShape2D.disabled = not value\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Area2D",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "NewNode",
+          "node_name": "Collision",
+          "shape_type": "sphere",
+          "parameters": {
+            "radius": 1
+          }
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/DamageSource.gd",
+          "contents": "extends Area2D\r\n\r\nexport(int) var damage = 2\r\nvar effect\r\n\r\nfunc set_active(value):\r\n\t$CollisionShape2D.disabled = not value\r\n"
+        }
+      }
+    ],
+    "description": "Area2D script from godot-make-pro-2d-games: actors/DamageSource.gd"
+  },
+  {
+    "pattern_name": "Behavior tree - _BASE_",
+    "source_repo": "beehave",
+    "source_path": "script_templates/BeehaveNode/default.gd",
+    "extends_class": "_BASE_",
+    "class_name": null,
+    "script_content": "# meta-name: Default\n# meta-default: true\nextends _BASE_\n\n\nfunc tick(actor: Node, blackboard: Blackboard) -> int:\n\treturn SUCCESS\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "_BASE_",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/default.gd",
+          "contents": "# meta-name: Default\n# meta-default: true\nextends _BASE_\n\n\nfunc tick(actor: Node, blackboard: Blackboard) -> int:\n\treturn SUCCESS\n"
+        }
+      }
+    ],
+    "description": "_BASE_ script from beehave: script_templates/BeehaveNode/default.gd"
+  },
+  {
+    "pattern_name": "Multiplayer - LinkButton",
+    "source_repo": "godot-demo-projects",
+    "source_path": "networking/webrtc_minimal/link_button.gd",
+    "extends_class": "LinkButton",
+    "class_name": null,
+    "script_content": "extends LinkButton\n\nfunc _on_LinkButton_pressed() -> void:\n\tOS.shell_open(\"https://github.com/godotengine/webrtc-native/releases\")\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "LinkButton",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/link_button.gd",
+          "contents": "extends LinkButton\n\nfunc _on_LinkButton_pressed() -> void:\n\tOS.shell_open(\"https://github.com/godotengine/webrtc-native/releases\")\n"
+        }
+      }
+    ],
+    "description": "LinkButton script from godot-demo-projects: networking/webrtc_minimal/link_button.gd"
+  },
+  {
+    "pattern_name": "General GDScript - Sprite3D",
+    "source_repo": "godot-demo-projects",
+    "source_path": "3d/sprites/scripts/sprite_rotate.gd",
+    "extends_class": "Sprite3D",
+    "class_name": null,
+    "script_content": "extends Sprite3D\n\n@export var speed_deg: float = 90.0\n\n\nfunc _process(delta: float) -> void:\n\trotate_y(deg_to_rad(speed_deg * delta))\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Sprite3D",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/sprite_rotate.gd",
+          "contents": "extends Sprite3D\n\n@export var speed_deg: float = 90.0\n\n\nfunc _process(delta: float) -> void:\n\trotate_y(deg_to_rad(speed_deg * delta))\n"
+        }
+      }
+    ],
+    "description": "Sprite3D script from godot-demo-projects: 3d/sprites/scripts/sprite_rotate.gd"
+  },
+  {
+    "pattern_name": "UI / HUD - '../Item.gd'",
+    "source_repo": "godot-make-pro-2d-games",
+    "source_path": "core/inventory/items/equipment/Equipment.gd",
+    "extends_class": "'../Item.gd'",
+    "class_name": null,
+    "script_content": "extends '../Item.gd'\r\n\r\nexport(int) var STRENGTH = 0\r\nexport(int) var MAGIC = 0\r\nexport(int) var ARMOR = 0\r\nexport(int) var SPEED = 0\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "'../Item.gd'",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/Equipment.gd",
+          "contents": "extends '../Item.gd'\r\n\r\nexport(int) var STRENGTH = 0\r\nexport(int) var MAGIC = 0\r\nexport(int) var ARMOR = 0\r\nexport(int) var SPEED = 0\r\n"
+        }
+      }
+    ],
+    "description": "'../Item.gd' script from godot-make-pro-2d-games: core/inventory/items/equipment/Equipment.gd"
+  },
+  {
+    "pattern_name": "UI / HUD - BaseMachineGUI",
+    "source_repo": "godot-2d-builder",
+    "source_path": "godot/Entities/Entities/Chest/ChestGUI.gd",
+    "extends_class": "BaseMachineGUI",
+    "class_name": null,
+    "script_content": "extends BaseMachineGUI\r\n\r\n\r\nfunc setup(_gui: Control) -> void:\r\n\tfor inventory in $VBoxContainer.get_children():\r\n\t\tinventory.setup(_gui)\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "BaseMachineGUI",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/ChestGUI.gd",
+          "contents": "extends BaseMachineGUI\r\n\r\n\r\nfunc setup(_gui: Control) -> void:\r\n\tfor inventory in $VBoxContainer.get_children():\r\n\t\tinventory.setup(_gui)\r\n"
+        }
+      }
+    ],
+    "description": "BaseMachineGUI script from godot-2d-builder: godot/Entities/Entities/Chest/ChestGUI.gd"
+  },
+  {
+    "pattern_name": "General GDScript - RefCounted",
+    "source_repo": "beehave",
+    "source_path": "addons/gdUnit4/src/doubler/GdFunctionDoubler.gd",
+    "extends_class": "RefCounted",
+    "class_name": null,
+    "script_content": "@abstract class_name GdFunctionDoubler\nextends RefCounted\n\n@abstract func double(func_descriptor: GdFunctionDescriptor) -> PackedStringArray\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "RefCounted",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/GdFunctionDoubler.gd",
+          "contents": "@abstract class_name GdFunctionDoubler\nextends RefCounted\n\n@abstract func double(func_descriptor: GdFunctionDescriptor) -> PackedStringArray\n"
+        }
+      }
+    ],
+    "description": "RefCounted script from beehave: addons/gdUnit4/src/doubler/GdFunctionDoubler.gd"
+  },
+  {
+    "pattern_name": "Procedural generation - Area2D",
+    "source_repo": "godot-procedural-generation",
+    "source_path": "godot4/CellularAutomata/03.DungeonGenerator/Props/Exit.gd",
+    "extends_class": "Area2D",
+    "class_name": null,
+    "script_content": "extends Area2D\r\n\r\nsignal miner_entered\r\n\r\n\r\nfunc _on_body_shape_entered(_body_id, _body, _body_shape, _local_shape):\r\n\tminer_entered.emit()\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Area2D",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "NewNode",
+          "node_name": "Collision",
+          "shape_type": "sphere",
+          "parameters": {
+            "radius": 1
+          }
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/Exit.gd",
+          "contents": "extends Area2D\r\n\r\nsignal miner_entered\r\n\r\n\r\nfunc _on_body_shape_entered(_body_id, _body, _body_shape, _local_shape):\r\n\tminer_entered.emit()\r\n"
+        }
+      }
+    ],
+    "description": "Area2D script from godot-procedural-generation: godot4/CellularAutomata/03.DungeonGenerator/Props/Exit.gd"
+  },
+  {
+    "pattern_name": "General GDScript - AnimationPlayer",
+    "source_repo": "godot-shaders",
+    "source_path": "godot/Demos/TextureMix/TextureMixDemo.gd",
+    "extends_class": "AnimationPlayer",
+    "class_name": null,
+    "script_content": "extends AnimationPlayer\r\n\r\nfunc _unhandled_input(event: InputEvent) -> void:\r\n\tif event.is_action_pressed(\"ui_accept\"):\r\n\t\tplay(\"show-mix\")\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "AnimationPlayer",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/TextureMixDemo.gd",
+          "contents": "extends AnimationPlayer\r\n\r\nfunc _unhandled_input(event: InputEvent) -> void:\r\n\tif event.is_action_pressed(\"ui_accept\"):\r\n\t\tplay(\"show-mix\")\r\n"
+        }
+      }
+    ],
+    "description": "AnimationPlayer script from godot-shaders: godot/Demos/TextureMix/TextureMixDemo.gd"
+  },
+  {
+    "pattern_name": "Audio / music - Button",
+    "source_repo": "godot-mini-tuts-demos",
+    "source_path": "audio/background-music/Interface/SceneChangeButton.gd",
+    "extends_class": "Button",
+    "class_name": null,
+    "script_content": "extends Button\r\n\r\nexport (String, FILE, \"*.tscn\") var next_scene: String\r\n\r\n\r\nfunc _pressed() -> void:\r\n\tget_tree().change_scene(next_scene)\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Button",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/SceneChangeButton.gd",
+          "contents": "extends Button\r\n\r\nexport (String, FILE, \"*.tscn\") var next_scene: String\r\n\r\n\r\nfunc _pressed() -> void:\r\n\tget_tree().change_scene(next_scene)\r\n"
+        }
+      }
+    ],
+    "description": "Button script from godot-mini-tuts-demos: audio/background-music/Interface/SceneChangeButton.gd"
+  },
+  {
+    "pattern_name": "General GDScript - Particles2D",
+    "source_repo": "godot-make-pro-2d-games",
+    "source_path": "vfx/particles/SelfDestructingParticles.gd",
+    "extends_class": "Particles2D",
+    "class_name": null,
+    "script_content": "extends Particles2D\r\n\r\nfunc start():\r\n\temitting = true\r\n\tyield(get_tree().create_timer(lifetime * speed_scale * 1.2), \"timeout\")\r\n\tqueue_free()\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Particles2D",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/SelfDestructingParticles.gd",
+          "contents": "extends Particles2D\r\n\r\nfunc start():\r\n\temitting = true\r\n\tyield(get_tree().create_timer(lifetime * speed_scale * 1.2), \"timeout\")\r\n\tqueue_free()\r\n"
+        }
+      }
+    ],
+    "description": "Particles2D script from godot-make-pro-2d-games: vfx/particles/SelfDestructingParticles.gd"
+  },
+  {
+    "pattern_name": "General GDScript - \"res://actors/DamageSource.gd\"",
+    "source_repo": "godot-make-pro-2d-games",
+    "source_path": "monsters/bosses/wild_boar/states/stomp/GroundExplosion.gd",
+    "extends_class": "\"res://actors/DamageSource.gd\"",
+    "class_name": null,
+    "script_content": "extends \"res://actors/DamageSource.gd\"\r\n\r\nfunc _ready():\r\n\t$AnimationPlayer.play('explode')\r\n\r\nfunc _physics_process(delta):\r\n\tposition = position\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "\"res://actors/DamageSource.gd\"",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/GroundExplosion.gd",
+          "contents": "extends \"res://actors/DamageSource.gd\"\r\n\r\nfunc _ready():\r\n\t$AnimationPlayer.play('explode')\r\n\r\nfunc _physics_process(delta):\r\n\tposition = position\r\n"
+        }
+      }
+    ],
+    "description": "\"res://actors/DamageSource.gd\" script from godot-make-pro-2d-games: monsters/bosses/wild_boar/states/stomp/GroundExplosion.gd"
+  },
+  {
+    "pattern_name": "Camera system - Node2D",
+    "source_repo": "godot-mini-tuts-demos",
+    "source_path": "2d/side-scrolling-movement/Actors/PlayerCameraSpace.gd",
+    "extends_class": "Node2D",
+    "class_name": null,
+    "script_content": "extends Node2D\r\n\r\nexport var minimum_speed := Vector2(400, 0)\r\n\r\n\r\nfunc _physics_process(delta: float) -> void:\r\n\tposition += minimum_speed * delta\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Node2D",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/PlayerCameraSpace.gd",
+          "contents": "extends Node2D\r\n\r\nexport var minimum_speed := Vector2(400, 0)\r\n\r\n\r\nfunc _physics_process(delta: float) -> void:\r\n\tposition += minimum_speed * delta\r\n"
+        }
+      }
+    ],
+    "description": "Node2D script from godot-mini-tuts-demos: 2d/side-scrolling-movement/Actors/PlayerCameraSpace.gd"
+  },
+  {
+    "pattern_name": "2D CharacterBody movement - CharacterBody2D",
+    "source_repo": "godot-demo-projects",
+    "source_path": "networking/multiplayer_bomber/rock.gd",
+    "extends_class": "CharacterBody2D",
+    "class_name": null,
+    "script_content": "extends CharacterBody2D\n\n@rpc(\"call_local\")\nfunc exploded(by_who: int) -> void:\n\t$\"../../Score\".increase_score(by_who)\n\t$\"AnimationPlayer\".play(&\"explode\")\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "CharacterBody2D",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "add_collision_shape",
+        "arguments": {
+          "parent_path": "NewNode",
+          "node_name": "Collision",
+          "shape_type": "capsule",
+          "parameters": {
+            "radius": 14,
+            "height": 32
+          }
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/rock.gd",
+          "contents": "extends CharacterBody2D\n\n@rpc(\"call_local\")\nfunc exploded(by_who: int) -> void:\n\t$\"../../Score\".increase_score(by_who)\n\t$\"AnimationPlayer\".play(&\"explode\")\n"
+        }
+      }
+    ],
+    "description": "CharacterBody2D script from godot-demo-projects: networking/multiplayer_bomber/rock.gd"
+  },
+  {
+    "pattern_name": "Audio / music - Control",
+    "source_repo": "godot-2d-rhythm",
+    "source_path": "godot/RhythmGame/UI/TrackPlaying/UITrackPlaying.gd",
+    "extends_class": "Control",
+    "class_name": null,
+    "script_content": "extends Control\r\n\r\n\r\nfunc _ready() -> void:\r\n\tEvents.connect(\"track_selected\", self, \"_fade_in\")\r\n\r\n\r\nfunc _fade_in(_msg: Dictionary) -> void:\r\n\tvisible = true\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Control",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/UITrackPlaying.gd",
+          "contents": "extends Control\r\n\r\n\r\nfunc _ready() -> void:\r\n\tEvents.connect(\"track_selected\", self, \"_fade_in\")\r\n\r\n\r\nfunc _fade_in(_msg: Dictionary) -> void:\r\n\tvisible = true\r\n"
+        }
+      }
+    ],
+    "description": "Control script from godot-2d-rhythm: godot/RhythmGame/UI/TrackPlaying/UITrackPlaying.gd"
+  },
+  {
+    "pattern_name": "General GDScript - HSlider",
+    "source_repo": "godot-demo-projects",
+    "source_path": "2d/physics_tests/utils/slider.gd",
+    "extends_class": "HSlider",
+    "class_name": null,
+    "script_content": "extends HSlider\n\n\n@export var snap_step := 1.0\n\n\nfunc _process(_delta: float) -> void:\n\tif Input.is_key_pressed(KEY_SHIFT):\n\t\tstep = 0.1\n\telse:\n\t\tstep = snap_step\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "HSlider",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/slider.gd",
+          "contents": "extends HSlider\n\n\n@export var snap_step := 1.0\n\n\nfunc _process(_delta: float) -> void:\n\tif Input.is_key_pressed(KEY_SHIFT):\n\t\tstep = 0.1\n\telse:\n\t\tstep = snap_step\n"
+        }
+      }
+    ],
+    "description": "HSlider script from godot-demo-projects: 2d/physics_tests/utils/slider.gd"
+  },
+  {
+    "pattern_name": "Tower defense / weapons - Position2D",
+    "source_repo": "godot-make-pro-2d-games",
+    "source_path": "actors/weapons/sword/WeaponPivot.gd",
+    "extends_class": "Position2D",
+    "class_name": null,
+    "script_content": "extends Position2D\r\n\r\nfunc _on_Player_direction_changed(new_direction):\r\n\trotation = new_direction.angle()\r\n\tshow_behind_parent = new_direction == Vector2(0, -1)\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Position2D",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/WeaponPivot.gd",
+          "contents": "extends Position2D\r\n\r\nfunc _on_Player_direction_changed(new_direction):\r\n\trotation = new_direction.angle()\r\n\tshow_behind_parent = new_direction == Vector2(0, -1)\r\n"
+        }
+      }
+    ],
+    "description": "Position2D script from godot-make-pro-2d-games: actors/weapons/sword/WeaponPivot.gd"
+  },
+  {
+    "pattern_name": "General GDScript - HBoxContainer",
+    "source_repo": "godot-demo-projects",
+    "source_path": "2d/physics_tests/utils/max_steps_per_frame.gd",
+    "extends_class": "HBoxContainer",
+    "class_name": null,
+    "script_content": "extends HBoxContainer\n\n\nfunc _on_h_slider_value_changed(value: float) -> void:\n\t$Value.text = str(roundi(value))\n\tEngine.max_physics_steps_per_frame = roundi(value)\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "HBoxContainer",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/max_steps_per_frame.gd",
+          "contents": "extends HBoxContainer\n\n\nfunc _on_h_slider_value_changed(value: float) -> void:\n\t$Value.text = str(roundi(value))\n\tEngine.max_physics_steps_per_frame = roundi(value)\n"
+        }
+      }
+    ],
+    "description": "HBoxContainer script from godot-demo-projects: 2d/physics_tests/utils/max_steps_per_frame.gd"
+  },
+  {
+    "pattern_name": "General GDScript - DirectionalLight3D",
+    "source_repo": "godot-demo-projects",
+    "source_path": "3d/lights_and_shadows/day_night_cycle.gd",
+    "extends_class": "DirectionalLight3D",
+    "class_name": null,
+    "script_content": "extends DirectionalLight3D\n\n\nfunc _process(delta: float) -> void:\n\trotate_object_local(Vector3.RIGHT, 0.025 * delta)\n\t#rotate_object_local(Vector3.FORWARD, randf())\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "DirectionalLight3D",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/day_night_cycle.gd",
+          "contents": "extends DirectionalLight3D\n\n\nfunc _process(delta: float) -> void:\n\trotate_object_local(Vector3.RIGHT, 0.025 * delta)\n\t#rotate_object_local(Vector3.FORWARD, randf())\n"
+        }
+      }
+    ],
+    "description": "DirectionalLight3D script from godot-demo-projects: 3d/lights_and_shadows/day_night_cycle.gd"
+  },
+  {
+    "pattern_name": "Camera system - Camera2D",
+    "source_repo": "godot-shaders",
+    "source_path": "godot/Shared/Camera/MouseCamera2D.gd",
+    "extends_class": "Camera2D",
+    "class_name": null,
+    "script_content": "# Camera offset by the mouse cursor\r\nextends Camera2D\r\n\r\nvar factor := 0.4\r\n\r\n\r\nfunc _process(_delta: float) -> void:\r\n\toffset = get_local_mouse_position() * factor\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Camera2D",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/MouseCamera2D.gd",
+          "contents": "# Camera offset by the mouse cursor\r\nextends Camera2D\r\n\r\nvar factor := 0.4\r\n\r\n\r\nfunc _process(_delta: float) -> void:\r\n\toffset = get_local_mouse_position() * factor\r\n"
+        }
+      }
+    ],
+    "description": "Camera2D script from godot-shaders: godot/Shared/Camera/MouseCamera2D.gd"
+  },
+  {
+    "pattern_name": "General GDScript - Line2D",
+    "source_repo": "godot-design-patterns",
+    "source_path": "godot/components/player/scripts/limb_line.gd",
+    "extends_class": "Line2D",
+    "class_name": null,
+    "script_content": "@tool\r\nextends Line2D\r\n\r\n@export var nodes : Array[Node2D]\r\n\r\nfunc _process(_delta):\r\n\tvar p = []\r\n\tfor node in nodes:\r\n\t\tp.append(node.global_position)\r\n\tpoints = p\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Line2D",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/limb_line.gd",
+          "contents": "@tool\r\nextends Line2D\r\n\r\n@export var nodes : Array[Node2D]\r\n\r\nfunc _process(_delta):\r\n\tvar p = []\r\n\tfor node in nodes:\r\n\t\tp.append(node.global_position)\r\n\tpoints = p\r\n"
+        }
+      }
+    ],
+    "description": "Line2D script from godot-design-patterns: godot/components/player/scripts/limb_line.gd"
+  },
+  {
+    "pattern_name": "UI / HUD - Label",
+    "source_repo": "godot-2d-builder",
+    "source_path": "godot/GUI/Crafting/RecipeName.gd",
+    "extends_class": "Label",
+    "class_name": null,
+    "script_content": "extends Label\r\n\r\nvar recipe_name := \"\" setget _set_recipe_name\r\n\r\n\r\nfunc _set_recipe_name(value: String) -> void:\r\n\trecipe_name = value\r\n\ttext = recipe_name.capitalize()\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Label",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/RecipeName.gd",
+          "contents": "extends Label\r\n\r\nvar recipe_name := \"\" setget _set_recipe_name\r\n\r\n\r\nfunc _set_recipe_name(value: String) -> void:\r\n\trecipe_name = value\r\n\ttext = recipe_name.capitalize()\r\n"
+        }
+      }
+    ],
+    "description": "Label script from godot-2d-builder: godot/GUI/Crafting/RecipeName.gd"
+  },
+  {
+    "pattern_name": "General GDScript - Sprite",
+    "source_repo": "godot-mini-tuts-demos",
+    "source_path": "2d/spawning/Actors/Player/Player.gd",
+    "extends_class": "Sprite",
+    "class_name": null,
+    "script_content": "extends Sprite\r\n\r\nonready var spawner := $BulletSpawner2D\r\n\r\n\r\nfunc _unhandled_input(event: InputEvent) -> void:\r\n\tif event.is_action_pressed(\"fire\"):\r\n\t\tspawner.spawn()\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Sprite",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/Player.gd",
+          "contents": "extends Sprite\r\n\r\nonready var spawner := $BulletSpawner2D\r\n\r\n\r\nfunc _unhandled_input(event: InputEvent) -> void:\r\n\tif event.is_action_pressed(\"fire\"):\r\n\t\tspawner.spawn()\r\n"
+        }
+      }
+    ],
+    "description": "Sprite script from godot-mini-tuts-demos: 2d/spawning/Actors/Player/Player.gd"
+  },
+  {
+    "pattern_name": "General GDScript - \"res://utils/state/State.gd\"",
+    "source_repo": "godot-make-pro-2d-games",
+    "source_path": "monsters/bosses/wild_boar/states/Follow.gd",
+    "extends_class": "\"res://utils/state/State.gd\"",
+    "class_name": null,
+    "script_content": "extends \"res://utils/state/State.gd\"\r\n\r\nfunc enter():\r\n\towner.get_node('AnimationPlayer').play('stomp')\r\n\r\nfunc _on_animation_finished(anim_name):\r\n\temit_signal('finished')",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "\"res://utils/state/State.gd\"",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/Follow.gd",
+          "contents": "extends \"res://utils/state/State.gd\"\r\n\r\nfunc enter():\r\n\towner.get_node('AnimationPlayer').play('stomp')\r\n\r\nfunc _on_animation_finished(anim_name):\r\n\temit_signal('finished')"
+        }
+      }
+    ],
+    "description": "\"res://utils/state/State.gd\" script from godot-make-pro-2d-games: monsters/bosses/wild_boar/states/Follow.gd"
+  },
+  {
+    "pattern_name": "General GDScript - MeshInstance3D",
+    "source_repo": "godot-shaders",
+    "source_path": "godot/Demos/ImpossibleCube/Rotate.gd",
+    "extends_class": "MeshInstance3D",
+    "class_name": null,
+    "script_content": "extends MeshInstance3D\r\n\r\n\r\nfunc _process(delta: float) -> void:\r\n\trotate_y(deg_to_rad(45) * delta)\r\n\trotate_z(deg_to_rad(-10) * delta)\r\n\trotate_x(deg_to_rad(10) * delta)\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "MeshInstance3D",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/Rotate.gd",
+          "contents": "extends MeshInstance3D\r\n\r\n\r\nfunc _process(delta: float) -> void:\r\n\trotate_y(deg_to_rad(45) * delta)\r\n\trotate_z(deg_to_rad(-10) * delta)\r\n\trotate_x(deg_to_rad(10) * delta)\r\n"
+        }
+      }
+    ],
+    "description": "MeshInstance3D script from godot-shaders: godot/Demos/ImpossibleCube/Rotate.gd"
+  },
+  {
+    "pattern_name": "General GDScript - \"res://core/inventory/items/Item.gd\"",
+    "source_repo": "godot-make-pro-2d-games",
+    "source_path": "core/inventory/items/usable/scroll_fireball/FireballScroll.gd",
+    "extends_class": "\"res://core/inventory/items/Item.gd\"",
+    "class_name": null,
+    "script_content": "extends \"res://core/inventory/items/Item.gd\"\r\n\r\nexport(PackedScene) var Fireball\r\n\r\nfunc _apply_effect(user):\r\n\tvar fireball = Fireball.instance()\r\n\tuser.add_child(fireball)\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "\"res://core/inventory/items/Item.gd\"",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/FireballScroll.gd",
+          "contents": "extends \"res://core/inventory/items/Item.gd\"\r\n\r\nexport(PackedScene) var Fireball\r\n\r\nfunc _apply_effect(user):\r\n\tvar fireball = Fireball.instance()\r\n\tuser.add_child(fireball)\r\n"
+        }
+      }
+    ],
+    "description": "\"res://core/inventory/items/Item.gd\" script from godot-make-pro-2d-games: core/inventory/items/usable/scroll_fireball/FireballScroll.gd"
+  },
+  {
+    "pattern_name": "Dialogue system - DialogicNode_StyleLayer",
+    "source_repo": "godot-open-rpg",
+    "source_path": "src/field/ui/dialogue_window.gd",
+    "extends_class": "DialogicNode_StyleLayer",
+    "class_name": null,
+    "script_content": "extends DialogicNode_StyleLayer\n\n\nfunc _ready():\n\tsuper._ready()\n\t\n\tDialogic.timeline_started.connect(func(): show())\n\tDialogic.timeline_ended.connect(func(): hide())\n\thide()\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "DialogicNode_StyleLayer",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/dialogue_window.gd",
+          "contents": "extends DialogicNode_StyleLayer\n\n\nfunc _ready():\n\tsuper._ready()\n\t\n\tDialogic.timeline_started.connect(func(): show())\n\tDialogic.timeline_ended.connect(func(): hide())\n\thide()\n"
+        }
+      }
+    ],
+    "description": "DialogicNode_StyleLayer script from godot-open-rpg: src/field/ui/dialogue_window.gd"
+  },
+  {
+    "pattern_name": "UI / HUD - ProgressBar",
+    "source_repo": "godot-2d-tower-defense",
+    "source_path": "start-project/UI/UIHealthBar/UITimedHealthBar.gd",
+    "extends_class": "ProgressBar",
+    "class_name": null,
+    "script_content": "extends ProgressBar\r\n\r\nonready var _timer := $Timer\r\n\r\n\r\nfunc _on_value_changed(value: float) -> void:\r\n\tshow()\r\n\t_timer.start()\r\n\r\n\r\nfunc _on_Timer_timeout() -> void:\r\n\thide()\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "ProgressBar",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/UITimedHealthBar.gd",
+          "contents": "extends ProgressBar\r\n\r\nonready var _timer := $Timer\r\n\r\n\r\nfunc _on_value_changed(value: float) -> void:\r\n\tshow()\r\n\t_timer.start()\r\n\r\n\r\nfunc _on_Timer_timeout() -> void:\r\n\thide()\r\n"
+        }
+      }
+    ],
+    "description": "ProgressBar script from godot-2d-tower-defense: start-project/UI/UIHealthBar/UITimedHealthBar.gd"
+  },
+  {
+    "pattern_name": "Saving / loading - Menu",
+    "source_repo": "godot-make-pro-2d-games",
+    "source_path": "interface/menus/save_and_load/SaveMenu.gd",
+    "extends_class": "Menu",
+    "class_name": null,
+    "script_content": "extends Menu\r\n\r\nonready var save_button = $Panel/Column/SaveButton\r\nonready var load_button = $Panel/Column/LoadButton\r\n\r\nfunc open(args={}):\r\n\t.open()\r\n\tsave_button.grab_focus()\r\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "Menu",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/SaveMenu.gd",
+          "contents": "extends Menu\r\n\r\nonready var save_button = $Panel/Column/SaveButton\r\nonready var load_button = $Panel/Column/LoadButton\r\n\r\nfunc open(args={}):\r\n\t.open()\r\n\tsave_button.grab_focus()\r\n"
+        }
+      }
+    ],
+    "description": "Menu script from godot-make-pro-2d-games: interface/menus/save_and_load/SaveMenu.gd"
+  },
+  {
+    "pattern_name": "UI / HUD - GPUParticles2D",
+    "source_repo": "godot_experiments",
+    "source_path": "2D/juicy_bouncy_ball/bounce_particles.gd",
+    "extends_class": "GPUParticles2D",
+    "class_name": null,
+    "script_content": "extends GPUParticles2D\n\nfunc _ready():\n\temitting = true\n\t$BounceParticles2.emitting = true\n\tawait get_tree().create_timer($BounceParticles2.lifetime + 1.0).timeout\n\tqueue_free()\n\t\n",
+    "tool_calls_needed": [
+      {
+        "tool": "add_node",
+        "arguments": {
+          "node_type": "GPUParticles2D",
+          "node_name": "NewNode"
+        }
+      },
+      {
+        "tool": "create_gdscript_file",
+        "arguments": {
+          "script_path": "res://scripts/bounce_particles.gd",
+          "contents": "extends GPUParticles2D\n\nfunc _ready():\n\temitting = true\n\t$BounceParticles2.emitting = true\n\tawait get_tree().create_timer($BounceParticles2.lifetime + 1.0).timeout\n\tqueue_free()\n\t\n"
+        }
+      }
+    ],
+    "description": "GPUParticles2D script from godot_experiments: 2D/juicy_bouncy_ball/bounce_particles.gd"
+  }
+]

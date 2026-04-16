@@ -9,14 +9,19 @@
 
 #include "core/math/rect2i.h"
 #include "core/object/property_info.h"
+#include "core/variant/array.h"
+#include "core/variant/dictionary.h"
+#include "core/variant/variant.h"
 #include "core/os/mutex.h"
 #include "core/os/thread.h"
 #include "core/templates/hash_set.h"
 #include "core/templates/vector.h"
 #include "scene/gui/box_container.h"
+#include "scene/resources/material.h"
 
 class Button;
 class ColorRect;
+class HSeparator;
 class HTTPRequest;
 class InputEvent;
 class ItemList;
@@ -24,6 +29,7 @@ class Label;
 class LineEdit;
 class MarginContainer;
 class Node;
+class OptionButton;
 class PanelContainer;
 class PopupPanel;
 class ProgressBar;
@@ -31,6 +37,13 @@ class Resource;
 class RichTextLabel;
 class ScrollContainer;
 class TextEdit;
+
+class Image;
+class EditorInterface;
+
+Array coerce_json_array_from_variant(const Variant &p_v);
+Dictionary coerce_json_dictionary_from_variant(const Variant &p_v);
+bool contains_string(const Vector<String> &p_values, const String &p_value);
 
 class YeetAIDock : public VBoxContainer {
 	GDCLASS(YeetAIDock, VBoxContainer);
@@ -45,6 +58,16 @@ class YeetAIDock : public VBoxContainer {
 	struct MessageRecord {
 		String role;
 		String text;
+	};
+
+	struct ChatSession {
+		String id;
+		String title;
+		Array messages;
+		Vector<MessageRecord> records;
+		String agent_preset;
+		int64_t created_at = 0;
+		int64_t updated_at = 0;
 	};
 
 	// ── Core UI ──────────────────────────────────────────────────────────────
@@ -86,6 +109,7 @@ class YeetAIDock : public VBoxContainer {
 	LineEdit *_model_search_edit = nullptr;
 	ItemList *_model_item_list = nullptr;
 	HTTPRequest *_model_tags_request = nullptr;
+	Vector<String> _fetched_model_tags;
 
 	void _on_model_selector_pressed();
 	void _populate_model_list(const String &p_filter = String());
@@ -93,6 +117,35 @@ class YeetAIDock : public VBoxContainer {
 	void _on_model_item_activated(int p_index);
 	void _on_model_tags_request_completed(int p_result, int p_response_code, const PackedStringArray &p_headers, const PackedByteArray &p_body);
 	void _update_model_button_label();
+
+	// ── Agent selector ────────────────────────────────────────────────────────
+	OptionButton *_agent_selector = nullptr;
+	struct AgentPreset {
+		String id;
+		String name;
+		String system_suffix;
+	};
+	Vector<AgentPreset> _agent_presets;
+	void _build_agent_presets();
+	void _on_agent_selected(int p_index);
+	String _get_current_agent_id() const;
+
+	// ── Chat management ──────────────────────────────────────────────────────
+	OptionButton *_chat_selector = nullptr;
+	Button *_new_chat_button = nullptr;
+	Button *_delete_chat_button = nullptr;
+	Vector<ChatSession> _chat_sessions;
+	int _active_chat_index = -1;
+	void _on_chat_selected(int p_index);
+	void _on_new_chat_pressed();
+	void _on_delete_chat_pressed();
+	void _create_new_chat();
+	void _switch_to_chat(int p_index);
+	void _update_chat_selector();
+	void _update_chat_title();
+	void _save_all_chats() const;
+	void _load_chats();
+	String _get_chats_dir() const;
 
 	// ── Conversation state ────────────────────────────────────────────────────
 	Array conversation_messages;
@@ -142,10 +195,10 @@ class YeetAIDock : public VBoxContainer {
 	void _scroll_to_bottom();
 
 	// ── Async game screenshot ──────────────────────────────────────────────────
-	bool game_screenshot_done = false;
-	int64_t game_screenshot_w = 0;
-	int64_t game_screenshot_h = 0;
-	String game_screenshot_path;
+	mutable bool game_screenshot_done = false;
+	mutable int64_t game_screenshot_w = 0;
+	mutable int64_t game_screenshot_h = 0;
+	mutable String game_screenshot_path;
 
 	void _on_game_screenshot_cb(int64_t p_w, int64_t p_h, const String &p_path, Rect2i p_rect);
 
@@ -160,6 +213,7 @@ class YeetAIDock : public VBoxContainer {
 	void _append_message(const String &p_role, const String &p_text);
 	void _rebuild_chat_log();
 	void _append_tool_result(const String &p_tool_name, const Dictionary &p_args, const ToolExecutionResult &p_result);
+	void _append_tool_running(const String &p_tool_name, const Dictionary &p_args);
 	void _append_status_row(const String &p_text);
 	String _humanize_tool_name(const String &p_tool) const;
 	String _icon_for_tool(const String &p_tool_name) const;
@@ -175,26 +229,32 @@ class YeetAIDock : public VBoxContainer {
 	void _set_waiting(bool p_waiting, const String &p_status);
 	void _request_model_response();
 	void _handle_model_response(const String &p_content);
-	ToolExecutionResult _execute_tool(const String &p_tool_name, const Dictionary &p_args); // not const — tracks modified files
+
+protected:
+	// Tool methods are protected so yeet_ai_tools.cpp can take their
+	// addresses for the dispatch table.
+	ToolExecutionResult _execute_tool(const String &p_tool_name, const Dictionary &p_args) const;
 	String _build_runtime_context_prompt() const;
 	String _build_task_hints_for_user_prompt(const String &p_user_prompt) const;
 	Node *_resolve_scene_root(const String &p_scene_path, String &r_error) const;
 	Node *_resolve_node_target(Node *p_scene_root, const String &p_node_path, String &r_error) const;
 	void _set_owner_recursive(Node *p_node, Node *p_owner) const;
+	void _mark_unsaved() const;
+	void _add_to_scene(Node *p_parent, Node *p_child, Node *p_owner) const;
 	Dictionary _tool_get_project_tree(const Dictionary &p_args) const;
 	Dictionary _tool_read_project_file(const Dictionary &p_args) const;
-	Dictionary _tool_get_open_scenes() const;
-	Dictionary _tool_get_current_scene() const;
-	Dictionary _tool_get_selected_nodes() const;
+	Dictionary _tool_get_open_scenes(const Dictionary &p_args) const;
+	Dictionary _tool_get_current_scene(const Dictionary &p_args) const;
+	Dictionary _tool_get_selected_nodes(const Dictionary &p_args) const;
 	Dictionary _tool_get_project_settings(const Dictionary &p_args) const;
 	Dictionary _tool_get_input_actions(const Dictionary &p_args) const;
 	Dictionary _tool_find_project_files(const Dictionary &p_args) const;
 	Dictionary _tool_get_scene_tree(const Dictionary &p_args) const;
 	Dictionary _tool_get_node_details(const Dictionary &p_args) const;
 	Dictionary _tool_get_node_api(const Dictionary &p_args) const;
-	Dictionary _tool_batch_tool_calls(const Dictionary &p_args);
+	Dictionary _tool_batch_tool_calls(const Dictionary &p_args) const;
 	Dictionary _tool_open_scene(const Dictionary &p_args) const;
-	Dictionary _tool_save_current_scene() const;
+	Dictionary _tool_save_current_scene(const Dictionary &p_args) const;
 	Dictionary _tool_create_scene_file(const Dictionary &p_args) const;
 	Dictionary _tool_create_gdscript_file(const Dictionary &p_args) const;
 	Dictionary _tool_update_gdscript_file(const Dictionary &p_args) const;
@@ -208,17 +268,17 @@ class YeetAIDock : public VBoxContainer {
 	Dictionary _tool_connect_signal(const Dictionary &p_args) const;
 	Dictionary _tool_create_input_action(const Dictionary &p_args) const;
 	Dictionary _tool_set_main_scene(const Dictionary &p_args) const;
-	Dictionary _tool_play_current_scene() const;
-	Dictionary _tool_play_main_scene() const;
-	Dictionary _tool_stop_playing_scene() const;
+	Dictionary _tool_play_current_scene(const Dictionary &p_args) const;
+	Dictionary _tool_play_main_scene(const Dictionary &p_args) const;
+	Dictionary _tool_stop_playing_scene(const Dictionary &p_args) const;
 	Dictionary _tool_remove_node(const Dictionary &p_args) const;
 	Dictionary _tool_set_node_property(const Dictionary &p_args) const;
 	Dictionary _tool_write_project_file(const Dictionary &p_args) const;
-	Dictionary _tool_save_all_scenes() const;
+	Dictionary _tool_save_all_scenes(const Dictionary &p_args) const;
 	Dictionary _tool_reload_scene(const Dictionary &p_args) const;
 	Dictionary _tool_set_editor_main_screen(const Dictionary &p_args) const;
 	Dictionary _tool_select_file(const Dictionary &p_args) const;
-	Dictionary _tool_get_unsaved_scenes() const;
+	Dictionary _tool_get_unsaved_scenes(const Dictionary &p_args) const;
 	Dictionary _tool_reparent_node(const Dictionary &p_args) const;
 	Dictionary _tool_rename_node(const Dictionary &p_args) const;
 	Dictionary _tool_file_exists(const Dictionary &p_args) const;
@@ -232,23 +292,246 @@ class YeetAIDock : public VBoxContainer {
 	Dictionary _tool_capture_editor_viewport(const Dictionary &p_args) const;
 	Dictionary _tool_get_debug_snapshot(const Dictionary &p_args) const;
 	Dictionary _tool_grep_project_files(const Dictionary &p_args) const;
-	Dictionary _tool_get_autoloads() const;
+	Dictionary _tool_get_autoloads(const Dictionary &p_args) const;
 	Dictionary _tool_get_node_groups(const Dictionary &p_args) const;
 	Dictionary _tool_get_node_collision_layers(const Dictionary &p_args) const;
 	Dictionary _tool_move_project_file(const Dictionary &p_args) const;
+	Dictionary _tool_copy_project_file(const Dictionary &p_args) const;
+	Dictionary _tool_get_resource_dependencies(const Dictionary &p_args) const;
+	Dictionary _tool_get_signal_connections(const Dictionary &p_args) const;
 	Dictionary _tool_get_animation_player_state(const Dictionary &p_args) const;
 	Dictionary _tool_get_tilemap_info(const Dictionary &p_args) const;
 	Dictionary _tool_get_navigation_region_info(const Dictionary &p_args) const;
 	Dictionary _tool_capture_game_viewport(const Dictionary &p_args) const;
-	Dictionary _tool_get_runtime_debugger_state() const;
+	Dictionary _tool_capture_dual_view(const Dictionary &p_args) const;
+	Dictionary _tool_capture_texture_resource(const Dictionary &p_args) const;
+	Dictionary _tool_capture_subviewport(const Dictionary &p_args) const;
+	Dictionary _tool_get_runtime_debugger_state(const Dictionary &p_args) const;
+	Dictionary _tool_get_remote_scene_tree(const Dictionary &p_args) const;
 	Dictionary _tool_editor_undo(const Dictionary &p_args) const;
+	Dictionary _tool_get_editor_settings(const Dictionary &p_args) const;
+	Dictionary _tool_patch_project_settings(const Dictionary &p_args) const;
+	Dictionary _tool_patch_editor_settings(const Dictionary &p_args) const;
+	Dictionary _tool_get_global_classes(const Dictionary &p_args) const;
+	Dictionary _tool_disconnect_signal(const Dictionary &p_args) const;
+	Dictionary _tool_validate_scene(const Dictionary &p_args) const;
+	Dictionary _tool_get_gdscript_errors(const Dictionary &p_args) const;
+	Dictionary _tool_get_scene_dependency_closure(const Dictionary &p_args) const;
+	Dictionary _tool_focus_scene_tree_node(const Dictionary &p_args) const;
+	Dictionary _tool_get_editor_3d_camera_transform(const Dictionary &p_args) const;
+	Dictionary _tool_search_project_settings_keys(const Dictionary &p_args) const;
+	Dictionary _tool_get_export_presets(const Dictionary &p_args) const;
+	Dictionary _tool_resolve_resource_uid(const Dictionary &p_args) const;
+	Dictionary _tool_get_translation_overview(const Dictionary &p_args) const;
+	Dictionary _tool_manage_autoloads(const Dictionary &p_args) const;
+	Dictionary _tool_rename_resource_references(const Dictionary &p_args) const;
+	Dictionary _tool_get_binary_file_metadata(const Dictionary &p_args) const;
+	Dictionary _tool_get_editor_inspector_subject(const Dictionary &p_args) const;
+	Dictionary _tool_reimport_project_files(const Dictionary &p_args) const;
+	Dictionary _tool_scan_project_filesystem(const Dictionary &p_args) const;
+	Dictionary _tool_save_resource(const Dictionary &p_args) const;
+	Dictionary _tool_replace_in_project_files(const Dictionary &p_args) const;
+	// New tools
+	Dictionary _tool_run_gdscript_expression(const Dictionary &p_args) const;
+	Dictionary _tool_get_shader_code(const Dictionary &p_args) const;
+	Dictionary _tool_update_shader_code(const Dictionary &p_args) const;
+	// New tools v2
+	Dictionary _tool_set_editor_3d_camera(const Dictionary &p_args) const;
+	Dictionary _tool_get_world_environment(const Dictionary &p_args) const;
+	Dictionary _tool_set_world_environment(const Dictionary &p_args) const;
+	Dictionary _tool_play_animation(const Dictionary &p_args) const;
+	Dictionary _tool_batch_set_node_property(const Dictionary &p_args) const;
+	Dictionary _tool_set_node_collision_layers(const Dictionary &p_args) const;
+	Dictionary _tool_query_physics(const Dictionary &p_args) const;
+	Dictionary _tool_create_particle_emitter(const Dictionary &p_args) const;
+	Dictionary _tool_create_ui_element(const Dictionary &p_args) const;
+
+	// ── A. 3D Scene Construction ──────────────────────────────────────────────
+	Dictionary _tool_create_light(const Dictionary &p_args) const;
+	Dictionary _tool_create_camera_3d(const Dictionary &p_args) const;
+	Dictionary _tool_add_2d_collision_shape(const Dictionary &p_args) const;
+	Dictionary _tool_create_rigid_body_3d(const Dictionary &p_args) const;
+	Dictionary _tool_create_static_body_3d(const Dictionary &p_args) const;
+	Dictionary _tool_create_character_body_3d(const Dictionary &p_args) const;
+	Dictionary _tool_create_area_3d(const Dictionary &p_args) const;
+	Dictionary _tool_create_ray_cast_3d(const Dictionary &p_args) const;
+	Dictionary _tool_create_shape_cast_3d(const Dictionary &p_args) const;
+	Dictionary _tool_add_csg_primitive(const Dictionary &p_args) const;
+	Dictionary _tool_create_path_3d(const Dictionary &p_args) const;
+	Dictionary _tool_create_vehicle_body_3d(const Dictionary &p_args) const;
+
+	// ── B. 2D Scene Construction ──────────────────────────────────────────────
+	Dictionary _tool_create_sprite_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_animated_sprite_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_rigid_body_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_character_body_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_area_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_ray_cast_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_line_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_path_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_polygon_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_light_2d(const Dictionary &p_args) const;
+
+	// ── C. Animation ──────────────────────────────────────────────────────────
+	Dictionary _tool_create_animation(const Dictionary &p_args) const;
+	Dictionary _tool_add_animation_track(const Dictionary &p_args) const;
+	Dictionary _tool_remove_animation_track(const Dictionary &p_args) const;
+	Dictionary _tool_set_animation_track_key(const Dictionary &p_args) const;
+	Dictionary _tool_create_blend_tree(const Dictionary &p_args) const;
+	Dictionary _tool_add_animation_transition(const Dictionary &p_args) const;
+	Dictionary _tool_set_animation_blend_amount(const Dictionary &p_args) const;
+
+	// ── D. TileMap / 2D Level Design ──────────────────────────────────────────
+	Dictionary _tool_set_tilemap_cells(const Dictionary &p_args) const;
+	Dictionary _tool_clear_tilemap_cells(const Dictionary &p_args) const;
+	Dictionary _tool_get_tileset_sources(const Dictionary &p_args) const;
+	Dictionary _tool_create_tileset(const Dictionary &p_args) const;
+	Dictionary _tool_add_tileset_atlas_source(const Dictionary &p_args) const;
+	Dictionary _tool_set_tile_collision_polygon(const Dictionary &p_args) const;
+	Dictionary _tool_paint_terrain(const Dictionary &p_args) const;
+
+	// ── E. Physics ────────────────────────────────────────────────────────────
+	Dictionary _tool_set_collision_layer_mask(const Dictionary &p_args) const;
+	Dictionary _tool_add_collision_exception(const Dictionary &p_args) const;
+	Dictionary _tool_remove_collision_exception(const Dictionary &p_args) const;
+	Dictionary _tool_get_collision_exceptions(const Dictionary &p_args) const;
+	Dictionary _tool_set_physics_material(const Dictionary &p_args) const;
+	Dictionary _tool_raycast_query(const Dictionary &p_args) const;
+	Dictionary _tool_shape_cast_query(const Dictionary &p_args) const;
+
+	// ── F. Scripting & Code Intelligence ──────────────────────────────────────
+	Dictionary _tool_get_gdscript_symbols(const Dictionary &p_args) const;
+	Dictionary _tool_get_gdscript_docs(const Dictionary &p_args) const;
+	Dictionary _tool_set_input_action_bindings(const Dictionary &p_args) const;
+	Dictionary _tool_remove_input_action(const Dictionary &p_args) const;
+	Dictionary _tool_run_gdscript_test(const Dictionary &p_args) const;
+	Dictionary _tool_get_class_reference(const Dictionary &p_args) const;
+	Dictionary _tool_search_class_db(const Dictionary &p_args) const;
+	Dictionary _tool_get_method_signature(const Dictionary &p_args) const;
+	Dictionary _tool_get_enum_values(const Dictionary &p_args) const;
+	Dictionary _tool_lint_gdscript(const Dictionary &p_args) const;
+
+	// ── G. Shader Authoring ──────────────────────────────────────────────────
+	Dictionary _tool_create_shader_material(const Dictionary &p_args) const;
+	Dictionary _tool_set_shader_uniform(const Dictionary &p_args) const;
+	Dictionary _tool_get_shader_uniforms(const Dictionary &p_args) const;
+
+	// ── H. Audio ──────────────────────────────────────────────────────────────
+	Dictionary _tool_create_audio_player(const Dictionary &p_args) const;
+	Dictionary _tool_play_audio(const Dictionary &p_args) const;
+	Dictionary _tool_stop_audio(const Dictionary &p_args) const;
+	Dictionary _tool_get_audio_buses(const Dictionary &p_args) const;
+	Dictionary _tool_add_audio_bus_effect(const Dictionary &p_args) const;
+
+	// ── I. UI / HUD Construction ─────────────────────────────────────────────
+	Dictionary _tool_create_control_node(const Dictionary &p_args) const;
+	Dictionary _tool_set_control_layout(const Dictionary &p_args) const;
+	Dictionary _tool_set_control_theme_override(const Dictionary &p_args) const;
+	Dictionary _tool_create_container_layout(const Dictionary &p_args) const;
+	Dictionary _tool_create_scroll_container(const Dictionary &p_args) const;
+	Dictionary _tool_create_progress_bar(const Dictionary &p_args) const;
+	Dictionary _tool_create_slider(const Dictionary &p_args) const;
+	Dictionary _tool_create_item_list(const Dictionary &p_args) const;
+	Dictionary _tool_create_option_button(const Dictionary &p_args) const;
+	Dictionary _tool_create_tab_container(const Dictionary &p_args) const;
+	Dictionary _tool_create_graph_node(const Dictionary &p_args) const;
+	Dictionary _tool_create_tree_widget(const Dictionary &p_args) const;
+
+	// ── J. Resources & Assets ─────────────────────────────────────────────────
+	Dictionary _tool_create_gradient(const Dictionary &p_args) const;
+	Dictionary _tool_create_curve(const Dictionary &p_args) const;
+	Dictionary _tool_create_stylebox(const Dictionary &p_args) const;
+	Dictionary _tool_create_theme(const Dictionary &p_args) const;
+	Dictionary _tool_create_font(const Dictionary &p_args) const;
+	Dictionary _tool_create_texture_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_noise_texture(const Dictionary &p_args) const;
+	Dictionary _tool_create_atlas_texture(const Dictionary &p_args) const;
+	Dictionary _tool_import_asset(const Dictionary &p_args) const;
+	Dictionary _tool_set_import_setting(const Dictionary &p_args) const;
+
+	// ── K. Navigation & AI ────────────────────────────────────────────────────
+	Dictionary _tool_bake_navigation_mesh(const Dictionary &p_args) const;
+	Dictionary _tool_create_navigation_link(const Dictionary &p_args) const;
+	Dictionary _tool_create_navigation_obstacle(const Dictionary &p_args) const;
+	Dictionary _tool_get_navigation_path(const Dictionary &p_args) const;
+	Dictionary _tool_set_navigation_agent_params(const Dictionary &p_args) const;
+
+	// ── L. Multiplayer & Networking ───────────────────────────────────────────
+	Dictionary _tool_create_multiplayer_spawner(const Dictionary &p_args) const;
+	Dictionary _tool_create_multiplayer_synchronizer(const Dictionary &p_args) const;
+	Dictionary _tool_get_network_state(const Dictionary &p_args) const;
+
+	// ── M. Debugging & Runtime Inspection ─────────────────────────────────────
+	Dictionary _tool_inspect_runtime_variable(const Dictionary &p_args) const;
+	Dictionary _tool_set_breakpoint(const Dictionary &p_args) const;
+	Dictionary _tool_debugger_continue(const Dictionary &p_args) const;
+	Dictionary _tool_get_console_output(const Dictionary &p_args) const;
+	Dictionary _tool_profile_frame(const Dictionary &p_args) const;
+	Dictionary _tool_monitor_runtime_performance(const Dictionary &p_args) const;
+	Dictionary _tool_inspect_runtime_node(const Dictionary &p_args) const;
+
+	// ── N. Editor Workflow ────────────────────────────────────────────────────
+	Dictionary _tool_manage_editor_plugins(const Dictionary &p_args) const;
+	Dictionary _tool_run_scene_script(const Dictionary &p_args) const;
+	Dictionary _tool_get_editor_version(const Dictionary &p_args) const;
+
+	// ── O. Project Configuration ─────────────────────────────────────────────
+	Dictionary _tool_manage_export_presets(const Dictionary &p_args) const;
+	Dictionary _tool_export_project(const Dictionary &p_args) const;
+	Dictionary _tool_add_custom_class(const Dictionary &p_args) const;
+	Dictionary _tool_set_default_import_presets(const Dictionary &p_args) const;
+
+	// ── P. Version Control ────────────────────────────────────────────────────
+	Dictionary _tool_git_status(const Dictionary &p_args) const;
+	Dictionary _tool_git_diff_file(const Dictionary &p_args) const;
+	Dictionary _tool_git_log(const Dictionary &p_args) const;
+	Dictionary _tool_git_branch(const Dictionary &p_args) const;
+
+	// ── Q. Scene Refactoring ──────────────────────────────────────────────────
+	Dictionary _tool_merge_scenes(const Dictionary &p_args) const;
+	Dictionary _tool_extract_sub_scene(const Dictionary &p_args) const;
+	Dictionary _tool_replace_node_with_scene(const Dictionary &p_args) const;
+	Dictionary _tool_batch_reparent_nodes(const Dictionary &p_args) const;
+	Dictionary _tool_set_node_meta(const Dictionary &p_args) const;
+
+	// ── R. Environment & Rendering ────────────────────────────────────────────
+	Dictionary _tool_create_sky(const Dictionary &p_args) const;
+	Dictionary _tool_set_environment_fog(const Dictionary &p_args) const;
+	Dictionary _tool_set_environment_tonemap(const Dictionary &p_args) const;
+	Dictionary _tool_set_environment_ss_effects(const Dictionary &p_args) const;
+	Dictionary _tool_create_fog_volume(const Dictionary &p_args) const;
+	Dictionary _tool_create_reflection_probe(const Dictionary &p_args) const;
+	Dictionary _tool_create_gi_probe(const Dictionary &p_args) const;
+
+	// ── Tool helpers — reduce per-tool boilerplate ──────────────────────────
+	static Dictionary _make_error(const String &p_message);
+	static Dictionary _make_ok();
+	static Dictionary _make_ok(const Dictionary &p_extra);
+
+	// Typed argument accessors — return defaults on missing/wrong-type.
+	static String _arg_string(const Dictionary &p_args, const String &p_key, const String &p_default = "");
+	static int _arg_int(const Dictionary &p_args, const String &p_key, int p_default = 0);
+	static double _arg_float(const Dictionary &p_args, const String &p_key, double p_default = 0.0);
+	static bool _arg_bool(const Dictionary &p_args, const String &p_key, bool p_default = false);
+	static Array _arg_array(const Dictionary &p_args, const String &p_key);
+	static Dictionary _arg_dict(const Dictionary &p_args, const String &p_key);
+	static Vector3 _arg_vector3(const Dictionary &p_args, const String &p_key, const Vector3 &p_default = Vector3());
+	static Color _arg_color(const Dictionary &p_args, const String &p_key, const Color &p_default = Color());
+
+	// Common resolution patterns — return error Dictionary on failure, empty on success.
+	// Use: String err; if (!_resolve_scene(args, &root, err)) return _make_error(err);
+	bool _resolve_scene(const Dictionary &p_args, Node **r_root, String &r_error) const;
+	bool _resolve_scene_and_node(const Dictionary &p_args, const String &p_node_key, Node **r_scene_root, Node **r_node, String &r_error) const;
+	bool _require_editor(EditorInterface **r_editor, String &r_error) const;
+
+	void _encode_viewport_image_for_vision(const Ref<Image> &p_img, const Dictionary &p_args, Dictionary &r_result) const;
 	void _grep_project_files_recursive(const String &p_dir, const String &p_query, bool p_case_sensitive, const Vector<String> &p_extensions, int p_max_bytes, int p_max_matches, int &r_match_count, Array &r_matches) const;
 	void _collect_project_entries(const String &p_dir_path, int p_depth, int p_max_depth, const Vector<String> &p_include_extensions, Array &r_entries, int &r_entry_count) const;
 	void _find_project_entries(const String &p_dir_path, const String &p_query, int p_depth, int p_max_depth, const Vector<String> &p_include_extensions, Array &r_entries, int &r_entry_count, int p_max_results) const;
 	Dictionary _serialize_node(Node *p_node, int p_depth, int p_max_depth, const Vector<String> &p_include_properties, int &r_node_count) const;
 	Dictionary _serialize_node_properties(Node *p_node, const Vector<String> &p_include_properties) const;
 	bool _node_has_property(Node *p_node, const StringName &p_property) const;
-	bool _get_node_property_info(Node *p_node, const StringName &p_property, PropertyInfo &r_info) const;
+	bool _get_node_property_info(Object *p_object, const StringName &p_property, PropertyInfo &r_info) const;
 	Ref<Resource> _load_resource_for_property(const String &p_resource_path, const String &p_expected_type, String &r_error) const;
 	Variant _json_safe_variant(const Variant &p_value, int p_depth = 0) const;
 	Variant _variant_from_json(const Variant &p_input, Variant::Type p_hint_type = Variant::NIL) const;
@@ -278,4 +561,7 @@ protected:
 public:
 	YeetAIDock();
 	~YeetAIDock();
+
+	// Used by yeet_ai_tools_*.cpp translation units.
+	static BaseMaterial3D::Transparency parse_transparency_mode(const String &p_value, bool &r_ok);
 };

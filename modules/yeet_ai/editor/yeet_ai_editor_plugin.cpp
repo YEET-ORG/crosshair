@@ -43,6 +43,16 @@ void YeetAIEditorPlugin::_register_crosshair_editor_setting_hints() {
 	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/max_base64_chars", PROPERTY_HINT_RANGE, "10000,10000000,1000", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/game_screenshot_timeout_ms", PROPERTY_HINT_RANGE, "1000,120000,100", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::FLOAT, "yeet_ai/chat/temperature", PROPERTY_HINT_RANGE, "-1,2,0.01,or_less,or_greater", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/vision_default_max_dimension", PROPERTY_HINT_RANGE, "64,4096,1", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/tools/allow_project_settings_write", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/tools/allow_editor_settings_write", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/tools/extended_read_extensions", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/tools/allow_binary_metadata_read", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/tools/allow_resource_inspector_write", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/tools/inspector_max_properties", PROPERTY_HINT_RANGE, "8,2000,1", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/tools/allow_reimport", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/tools/allow_resource_save", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/tools/allow_replace_in_files", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
 }
 
 void YeetAIEditorPlugin::_bind_methods() {
@@ -151,6 +161,46 @@ void YeetAIEditorPlugin::_ensure_editor_settings() {
 		// Lower than 1.0 helps instruction models (e.g. Qwen) stick to JSON tool output.
 		settings->set_initial_value("yeet_ai/chat/temperature", 0.25, true);
 		settings->set_setting("yeet_ai/chat/temperature", 0.25);
+	}
+	if (!settings->has_setting("yeet_ai/chat/vision_default_max_dimension")) {
+		settings->set_initial_value("yeet_ai/chat/vision_default_max_dimension", 1280, true);
+		settings->set_setting("yeet_ai/chat/vision_default_max_dimension", 1280);
+	}
+	if (!settings->has_setting("yeet_ai/tools/allow_project_settings_write")) {
+		settings->set_initial_value("yeet_ai/tools/allow_project_settings_write", true, true);
+		settings->set_setting("yeet_ai/tools/allow_project_settings_write", true);
+	}
+	if (!settings->has_setting("yeet_ai/tools/allow_editor_settings_write")) {
+		settings->set_initial_value("yeet_ai/tools/allow_editor_settings_write", false, true);
+		settings->set_setting("yeet_ai/tools/allow_editor_settings_write", false);
+	}
+	if (!settings->has_setting("yeet_ai/tools/extended_read_extensions")) {
+		settings->set_initial_value("yeet_ai/tools/extended_read_extensions", false, true);
+		settings->set_setting("yeet_ai/tools/extended_read_extensions", false);
+	}
+	if (!settings->has_setting("yeet_ai/tools/allow_binary_metadata_read")) {
+		settings->set_initial_value("yeet_ai/tools/allow_binary_metadata_read", false, true);
+		settings->set_setting("yeet_ai/tools/allow_binary_metadata_read", false);
+	}
+	if (!settings->has_setting("yeet_ai/tools/allow_resource_inspector_write")) {
+		settings->set_initial_value("yeet_ai/tools/allow_resource_inspector_write", true, true);
+		settings->set_setting("yeet_ai/tools/allow_resource_inspector_write", true);
+	}
+	if (!settings->has_setting("yeet_ai/tools/inspector_max_properties")) {
+		settings->set_initial_value("yeet_ai/tools/inspector_max_properties", 120, true);
+		settings->set_setting("yeet_ai/tools/inspector_max_properties", 120);
+	}
+	if (!settings->has_setting("yeet_ai/tools/allow_reimport")) {
+		settings->set_initial_value("yeet_ai/tools/allow_reimport", true, true);
+		settings->set_setting("yeet_ai/tools/allow_reimport", true);
+	}
+	if (!settings->has_setting("yeet_ai/tools/allow_resource_save")) {
+		settings->set_initial_value("yeet_ai/tools/allow_resource_save", true, true);
+		settings->set_setting("yeet_ai/tools/allow_resource_save", true);
+	}
+	if (!settings->has_setting("yeet_ai/tools/allow_replace_in_files")) {
+		settings->set_initial_value("yeet_ai/tools/allow_replace_in_files", false, true);
+		settings->set_setting("yeet_ai/tools/allow_replace_in_files", false);
 	}
 }
 

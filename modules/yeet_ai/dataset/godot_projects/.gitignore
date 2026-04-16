@@ -1,0 +1,25 @@
+# Reference Godot projects are cloned locally as separate git repos; not vendored.
+beehave/
+godot-2d-action-platformer/
+godot-2d-builder/
+godot-2d-jrpg-combat/
+godot-2d-rhythm/
+godot-2d-space-game/
+godot-2d-tactical-rpg-movement/
+godot-2d-tactical-space-combat/
+godot-2d-tower-defense/
+godot-2d-visual-novel/
+godot-demo-projects/
+godot-design-patterns/
+godot-make-pro-2d-games/
+godot-mini-tuts-demos/
+godot-open-rpg/
+godot-procedural-generation/
+godot-shaders/
+godot-steering-ai-framework/
+godot-visual-effects/
+godot_dialogue_manager/
+godot_experiments/
+phantom-camera/
+scatter/
+tps-demo/

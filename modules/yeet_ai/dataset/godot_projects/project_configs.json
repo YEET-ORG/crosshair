@@ -1,0 +1,202 @@
+[
+  {
+    "source_repo": "godotengine/godot-demo-projects",
+    "project_name": "Dodge the Creeps",
+    "settings": {
+      "application/config/name": "Dodge the Creeps",
+      "application/run/main_scene": "res://main.tscn",
+      "display/window/size/viewport_width": 480,
+      "display/window/size/viewport_height": 720,
+      "display/window/stretch/mode": "canvas_items",
+      "rendering/renderer/rendering_method": "gl_compatibility"
+    }
+  },
+  {
+    "source_repo": "godotengine/godot-demo-projects",
+    "project_name": "Platformer 3D",
+    "settings": {
+      "application/config/name": "Platformer 3D",
+      "application/run/main_scene": "res://game.tscn",
+      "display/window/stretch/mode": "canvas_items",
+      "display/window/stretch/aspect": "expand",
+      "physics/common/physics_ticks_per_second": 120,
+      "physics/3d/physics_engine": "Jolt Physics",
+      "physics/3d/default_gravity": 22,
+      "physics/common/physics_interpolation": true,
+      "rendering/textures/vram_compression/import_s3tc_bptc": true,
+      "rendering/anti_aliasing/quality/msaa_3d": 2
+    }
+  },
+  {
+    "source_repo": "godotengine/godot-demo-projects",
+    "project_name": "Squash the Creeps 3D",
+    "settings": {
+      "application/config/name": "Squash the Creeps (3D)",
+      "application/run/main_scene": "res://Main.tscn",
+      "application/config/features": "PackedStringArray(\"4.6\")",
+      "autoload/MusicPlayer": "*res://MusicPlayer.tscn",
+      "display/window/stretch/mode": "canvas_items",
+      "display/window/stretch/aspect": "expand",
+      "filesystem/import/blender/enabled": false,
+      "layer_names/3d_physics/layer_1": "player",
+      "layer_names/3d_physics/layer_2": "enemies",
+      "layer_names/3d_physics/layer_3": "world",
+      "physics/common/physics_ticks_per_second": 120,
+      "physics/3d/physics_engine": "Jolt Physics",
+      "physics/common/physics_interpolation": true
+    }
+  },
+  {
+    "source_repo": "godotengine/godot-demo-projects",
+    "project_name": "Hierarchical Finite State Machine",
+    "settings": {
+      "application/config/name": "Hierarchical Finite State Machine",
+      "application/run/main_scene": "res://Demo.tscn",
+      "display/window/size/viewport_width": 1280,
+      "display/window/size/viewport_height": 720,
+      "display/window/stretch/mode": "canvas_items",
+      "display/window/stretch/aspect": "expand",
+      "physics/common/physics_ticks_per_second": 120,
+      "physics/common/physics_interpolation": true,
+      "rendering/renderer/rendering_method": "gl_compatibility"
+    }
+  },
+  {
+    "source_repo": "godotengine/godot-demo-projects",
+    "project_name": "Multiplayer Bomber",
+    "settings": {
+      "application/config/name": "Multiplayer Bomber",
+      "application/run/main_scene": "res://lobby.tscn",
+      "autoload/gamestate": "*res://gamestate.gd",
+      "display/window/stretch/mode": "canvas_items",
+      "display/window/stretch/aspect": "expand",
+      "rendering/renderer/rendering_method": "gl_compatibility",
+      "rendering/2d/snap/snap_2d_transforms_to_pixel": true,
+      "rendering/2d/snap/snap_2d_vertices_to_pixel": true
+    }
+  },
+  {
+    "source_repo": "godotengine/godot-demo-projects",
+    "project_name": "Custom Drawing",
+    "settings": {
+      "application/config/name": "Custom Drawing",
+      "application/run/main_scene": "res://custom_drawing.tscn",
+      "application/config/features": "PackedStringArray(\"4.6\")"
+    }
+  },
+  {
+    "source_repo": "godotengine/godot-demo-projects",
+    "project_name": "Bullet Shower",
+    "settings": {
+      "application/config/name": "Bullet Shower",
+      "application/run/main_scene": "res://shower.tscn",
+      "application/config/features": "PackedStringArray(\"4.6\")"
+    }
+  },
+  {
+    "source_repo": "godotengine/godot-demo-projects",
+    "project_name": "Dynamic TileMap Layers",
+    "settings": {
+      "application/config/name": "Dynamic TileMap Layers",
+      "application/run/main_scene": "res://world.tscn",
+      "application/config/features": "PackedStringArray(\"4.6\")"
+    }
+  },
+  {
+    "source_repo": "godotengine/godot-demo-projects",
+    "project_name": "2D Navigation",
+    "settings": {
+      "application/config/name": "2D Navigation",
+      "application/run/main_scene": "res://navigation.tscn"
+    }
+  },
+  {
+    "source_repo": "godotengine/godot-demo-projects",
+    "project_name": "2D Physics Platformer",
+    "settings": {
+      "application/config/name": "2D Physics Platformer",
+      "application/run/main_scene": "res://stage.tscn"
+    }
+  },
+  {
+    "source_repo": "godotengine/godot-demo-projects",
+    "project_name": "2D Kinematic Character",
+    "settings": {
+      "application/config/name": "2D Kinematic Character",
+      "application/run/main_scene": "res://level.tscn"
+    }
+  },
+  {
+    "source_repo": "godotengine/godot-demo-projects",
+    "project_name": "3D Kinematic Character",
+    "settings": {
+      "application/config/name": "3D Kinematic Character",
+      "application/run/main_scene": "res://level.tscn"
+    }
+  },
+  {
+    "source_repo": "godotengine/godot-demo-projects",
+    "project_name": "3D RigidBody Character",
+    "settings": {
+      "application/config/name": "3D RigidBody Character",
+      "application/run/main_scene": "res://level.tscn"
+    }
+  },
+  {
+    "source_repo": "godotengine/godot-demo-projects",
+    "project_name": "3D Navigation",
+    "settings": {
+      "application/config/name": "3D Navigation",
+      "application/run/main_scene": "res://NavigationRegion.tscn"
+    }
+  },
+  {
+    "source_repo": "godotengine/godot-demo-projects",
+    "project_name": "Truck Town",
+    "settings": {
+      "application/config/name": "Truck Town",
+      "application/run/main_scene": "res://car_select/car_select.tscn"
+    }
+  },
+  {
+    "source_repo": "godotengine/godot-demo-projects",
+    "project_name": "Audio Effects",
+    "settings": {
+      "application/config/name": "Audio Effects",
+      "application/run/main_scene": "res://audio_effects.tscn"
+    }
+  },
+  {
+    "source_repo": "godotengine/godot-demo-projects",
+    "project_name": "Runtime Save Load",
+    "settings": {
+      "application/config/name": "Runtime Save/Load",
+      "application/run/main_scene": "res://runtime_save_load.tscn"
+    }
+  },
+  {
+    "source_repo": "godotengine/godot-demo-projects",
+    "project_name": "Drag and Drop",
+    "settings": {
+      "application/config/name": "Drag and Drop",
+      "application/run/main_scene": "res://drag_drop_script.tscn"
+    }
+  },
+  {
+    "source_repo": "godotengine/godot-demo-projects",
+    "project_name": "Voxel Game",
+    "settings": {
+      "application/config/name": "Voxel Game",
+      "application/run/main_scene": "res://menu/main/main_menu.tscn",
+      "display/window/size/mode": 2
+    }
+  },
+  {
+    "source_repo": "godotengine/godot-demo-projects",
+    "project_name": "Dynamic Split Screen",
+    "settings": {
+      "application/config/name": "Dynamic Split Screen",
+      "application/run/main_scene": "res://split_screen.tscn"
+    }
+  }
+]

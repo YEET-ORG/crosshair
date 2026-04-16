@@ -416,6 +416,36 @@ void YeetAISettingsPanel::_build_ui() {
 	settings_vision_enabled->set_text(TTR("Include viewport/screenshot images in requests (vision models)"));
 	vb->add_child(settings_vision_enabled);
 
+	settings_vision_default_max_dimension = memnew(SpinBox);
+	settings_vision_default_max_dimension->set_min(64);
+	settings_vision_default_max_dimension->set_max(4096);
+	settings_vision_default_max_dimension->set_step(1);
+	_add_settings_labeled_row(vb, TTR("Vision default max px"), settings_vision_default_max_dimension, TTR("Default max width/height for captures when the model omits max_width/max_height."));
+
+	settings_allow_project_settings_write = memnew(CheckBox);
+	settings_allow_project_settings_write->set_text(TTR("Allow AI to patch project settings (patch_project_settings)"));
+	vb->add_child(settings_allow_project_settings_write);
+
+	settings_allow_editor_settings_write = memnew(CheckBox);
+	settings_allow_editor_settings_write->set_text(TTR("Allow AI to patch editor user settings (patch_editor_settings; off by default)"));
+	vb->add_child(settings_allow_editor_settings_write);
+
+	settings_extended_read_extensions = memnew(CheckBox);
+	settings_extended_read_extensions->set_text(TTR("Extended read allowlist (more text extensions for read_project_file)"));
+	vb->add_child(settings_extended_read_extensions);
+
+	settings_allow_reimport = memnew(CheckBox);
+	settings_allow_reimport->set_text(TTR("Allow AI reimport + full filesystem scan (reimport_project_files, scan_project_filesystem)"));
+	vb->add_child(settings_allow_reimport);
+
+	settings_allow_resource_save = memnew(CheckBox);
+	settings_allow_resource_save->set_text(TTR("Allow AI save_resource (serialize loaded resources to disk)"));
+	vb->add_child(settings_allow_resource_save);
+
+	settings_allow_replace_in_files = memnew(CheckBox);
+	settings_allow_replace_in_files->set_text(TTR("Allow AI replace_in_project_files (bulk text replace; off by default)"));
+	vb->add_child(settings_allow_replace_in_files);
+
 	settings_max_base64_chars = memnew(SpinBox);
 	settings_max_base64_chars->set_min(10000);
 	settings_max_base64_chars->set_max(10000000);
@@ -464,6 +494,13 @@ void YeetAISettingsPanel::_build_ui() {
 	settings_temperature->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
 	settings_max_tool_round_trips->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
 	settings_vision_enabled->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_vision_default_max_dimension->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_allow_project_settings_write->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_allow_editor_settings_write->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_extended_read_extensions->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_allow_reimport->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_allow_resource_save->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_allow_replace_in_files->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
 	settings_max_base64_chars->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
 	settings_game_screenshot_timeout_ms->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
 }
@@ -1168,6 +1205,13 @@ void YeetAISettingsPanel::_load_from_settings() {
 	settings_temperature->set_value_no_signal((double)_get_setting_float("yeet_ai/chat/temperature", 0.25f));
 	settings_max_tool_round_trips->set_value_no_signal(_get_setting_int("yeet_ai/chat/max_tool_round_trips", 100));
 	settings_vision_enabled->set_pressed_no_signal(_get_setting_bool("yeet_ai/chat/vision_enabled", false));
+	settings_vision_default_max_dimension->set_value_no_signal(_get_setting_int("yeet_ai/chat/vision_default_max_dimension", 1280));
+	settings_allow_project_settings_write->set_pressed_no_signal(_get_setting_bool("yeet_ai/tools/allow_project_settings_write", true));
+	settings_allow_editor_settings_write->set_pressed_no_signal(_get_setting_bool("yeet_ai/tools/allow_editor_settings_write", false));
+	settings_extended_read_extensions->set_pressed_no_signal(_get_setting_bool("yeet_ai/tools/extended_read_extensions", false));
+	settings_allow_reimport->set_pressed_no_signal(_get_setting_bool("yeet_ai/tools/allow_reimport", true));
+	settings_allow_resource_save->set_pressed_no_signal(_get_setting_bool("yeet_ai/tools/allow_resource_save", true));
+	settings_allow_replace_in_files->set_pressed_no_signal(_get_setting_bool("yeet_ai/tools/allow_replace_in_files", false));
 	settings_max_base64_chars->set_value_no_signal(_get_setting_int("yeet_ai/chat/max_base64_chars", 2000000));
 	settings_game_screenshot_timeout_ms->set_value_no_signal(_get_setting_int("yeet_ai/chat/game_screenshot_timeout_ms", 8000));
 
@@ -1199,6 +1243,13 @@ void YeetAISettingsPanel::_commit_to_settings() {
 	s->set_setting("yeet_ai/chat/temperature", float(settings_temperature->get_value()));
 	s->set_setting("yeet_ai/chat/max_tool_round_trips", int(settings_max_tool_round_trips->get_value()));
 	s->set_setting("yeet_ai/chat/vision_enabled", settings_vision_enabled->is_pressed());
+	s->set_setting("yeet_ai/chat/vision_default_max_dimension", int(settings_vision_default_max_dimension->get_value()));
+	s->set_setting("yeet_ai/tools/allow_project_settings_write", settings_allow_project_settings_write->is_pressed());
+	s->set_setting("yeet_ai/tools/allow_editor_settings_write", settings_allow_editor_settings_write->is_pressed());
+	s->set_setting("yeet_ai/tools/extended_read_extensions", settings_extended_read_extensions->is_pressed());
+	s->set_setting("yeet_ai/tools/allow_reimport", settings_allow_reimport->is_pressed());
+	s->set_setting("yeet_ai/tools/allow_resource_save", settings_allow_resource_save->is_pressed());
+	s->set_setting("yeet_ai/tools/allow_replace_in_files", settings_allow_replace_in_files->is_pressed());
 	s->set_setting("yeet_ai/chat/max_base64_chars", int(settings_max_base64_chars->get_value()));
 	s->set_setting("yeet_ai/chat/game_screenshot_timeout_ms", int(settings_game_screenshot_timeout_ms->get_value()));
 	EditorSettings::save();

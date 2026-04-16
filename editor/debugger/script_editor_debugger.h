@@ -152,6 +152,8 @@ private:
 	OptionButton *threads = nullptr;
 	EditorDebuggerInspector *inspector = nullptr;
 	SceneDebuggerTree *scene_tree = nullptr;
+	/// Incremented whenever a remote `scene:scene_tree` payload is deserialized (for consumers that need a fresh snapshot).
+	uint64_t remote_scene_tree_serial = 0;
 
 	Ref<RemoteDebuggerPeer> peer;
 
@@ -322,6 +324,7 @@ public:
 
 	void request_remote_tree();
 	const SceneDebuggerTree *get_remote_tree();
+	uint64_t get_remote_scene_tree_serial() const { return remote_scene_tree_serial; }
 
 	void request_remote_evaluate(const String &p_expression, int p_stack_frame);
 

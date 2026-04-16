@@ -1,0 +1,1495 @@
+{
+  "engine": "crosshair",
+  "version": "1.0.0",
+  "description": "Crosshair AI tool definitions for fine-tuning. Each tool has name, description, category, status (implemented/stub), arguments schema, and return schema.",
+  "tools": [
+    {
+      "name": "get_project_tree",
+      "category": "context",
+      "status": "implemented",
+      "description": "Lists project files and directories under a given res:// root path up to a configurable depth.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "root": { "type": "string", "default": "res://", "description": "Root directory to list from." },
+          "max_depth": { "type": "integer", "default": 3, "minimum": 0, "maximum": 8, "description": "Maximum directory traversal depth." },
+          "include_extensions": { "type": "array", "items": { "type": "string" }, "default": [], "description": "Optional file extension filter (e.g. ['.gd', '.tscn'])." }
+        }
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "root": { "type": "string" },
+          "entry_count": { "type": "integer" },
+          "entries": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" }, "path": { "type": "string" }, "kind": { "type": "string", "enum": ["file", "dir"] } } } }
+        }
+      }
+    },
+    {
+      "name": "find_project_files",
+      "category": "context",
+      "status": "implemented",
+      "description": "Searches project paths by substring query under a root directory.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string", "description": "Substring to search for in file/directory names." },
+          "root": { "type": "string", "default": "res://" },
+          "max_depth": { "type": "integer", "default": 6, "minimum": 0, "maximum": 12 },
+          "max_results": { "type": "integer", "default": 40, "minimum": 1, "maximum": 200 },
+          "include_extensions": { "type": "array", "items": { "type": "string" }, "default": [] }
+        },
+        "required": ["query"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "root": { "type": "string" },
+          "query": { "type": "string" },
+          "count": { "type": "integer" },
+          "entries": { "type": "array" }
+        }
+      }
+    },
+    {
+      "name": "read_project_file",
+      "category": "context",
+      "status": "implemented",
+      "description": "Reads the contents of a safe text file under res:// (project.godot, .gd, .tscn, .tres, .cfg, .gdshader, .md, .txt, .json, etc.).",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "File path starting with res://." }
+        },
+        "required": ["path"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "content": { "type": "string" },
+          "size": { "type": "integer" }
+        }
+      }
+    },
+    {
+      "name": "get_project_settings",
+      "category": "context",
+      "status": "implemented",
+      "description": "Reads key project settings such as main scene, project name, window size, and rendering method.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "keys": { "type": "array", "items": { "type": "string" }, "default": ["application/config/name", "application/run/main_scene", "display/window/size/viewport_width", "display/window/size/viewport_height", "rendering/renderer/rendering_method"], "description": "Project setting keys to retrieve." }
+        }
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "values": { "type": "object" },
+          "project_data_dir": { "type": "string" },
+          "resource_path": { "type": "string" }
+        }
+      }
+    },
+    {
+      "name": "get_input_actions",
+      "category": "context",
+      "status": "implemented",
+      "description": "Lists current input actions and their event bindings from the InputMap.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "include_events": { "type": "boolean", "default": true, "description": "Whether to include the bound input events." },
+          "max_actions": { "type": "integer", "default": 64, "minimum": 1, "maximum": 256 },
+          "query": { "type": "string", "default": "", "description": "Optional filter substring for action names." }
+        }
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "actions": { "type": "array" },
+          "count": { "type": "integer" }
+        }
+      }
+    },
+    {
+      "name": "get_open_scenes",
+      "category": "context",
+      "status": "implemented",
+      "description": "Lists currently open scene paths and unsaved scene paths in the editor.",
+      "arguments": { "type": "object", "properties": {} },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "open_scenes": { "type": "array", "items": { "type": "string" } },
+          "unsaved_scenes": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    {
+      "name": "get_current_scene",
+      "category": "context",
+      "status": "implemented",
+      "description": "Returns the currently active edited scene's path, root name, root type, and child count.",
+      "arguments": { "type": "object", "properties": {} },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string" },
+          "root_name": { "type": "string" },
+          "root_type": { "type": "string" },
+          "root_node_path": { "type": "string" },
+          "child_count": { "type": "integer" }
+        }
+      }
+    },
+    {
+      "name": "get_selected_nodes",
+      "category": "context",
+      "status": "implemented",
+      "description": "Returns the nodes currently selected in the editor's scene tree.",
+      "arguments": { "type": "object", "properties": {} },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "selected_nodes": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" }, "type": { "type": "string" }, "node_path": { "type": "string" }, "owner_scene_path": { "type": "string" } } } },
+          "count": { "type": "integer" }
+        }
+      }
+    },
+    {
+      "name": "get_scene_tree",
+      "category": "context",
+      "status": "implemented",
+      "description": "Returns a serialized tree of nodes in a scene, optionally including specific properties.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "", "description": "Scene path. Empty = current scene." },
+          "max_depth": { "type": "integer", "default": 4, "minimum": 0, "maximum": 8 },
+          "include_properties": { "type": "array", "items": { "type": "string" }, "default": [], "description": "Property names to include per node (e.g. ['script','position'])." }
+        }
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string" },
+          "tree": { "type": "object" },
+          "node_count": { "type": "integer" },
+          "truncated": { "type": "boolean" }
+        }
+      }
+    },
+    {
+      "name": "get_node_details",
+      "category": "context",
+      "status": "implemented",
+      "description": "Returns detailed information about a specific node in a scene, including type, properties, and children.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "node_path": { "type": "string", "description": "Node path relative to scene root." },
+          "include_properties": { "type": "array", "items": { "type": "string" }, "default": [] }
+        },
+        "required": ["node_path"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string" },
+          "node_path": { "type": "string" },
+          "type": { "type": "string" },
+          "properties": { "type": "object" },
+          "children": { "type": "array" }
+        }
+      }
+    },
+    {
+      "name": "get_node_api",
+      "category": "context",
+      "status": "implemented",
+      "description": "Returns available methods, signals, and properties for a specific node in a scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "node_path": { "type": "string" },
+          "max_methods": { "type": "integer", "default": 80 },
+          "max_signals": { "type": "integer", "default": 40 },
+          "max_properties": { "type": "integer", "default": 60 }
+        },
+        "required": ["node_path"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "methods": { "type": "array" },
+          "signals": { "type": "array" },
+          "properties": { "type": "array" }
+        }
+      }
+    },
+    {
+      "name": "batch_tool_calls",
+      "category": "workflow",
+      "status": "implemented",
+      "description": "Executes multiple tool calls in a single batch. Supports shared_arguments that apply to all calls. GDScript tools (create_gdscript_file, update_gdscript_file) MUST NOT be mixed with other tools in the same batch.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "dry_run": { "type": "boolean", "default": false, "description": "If true, list resolved calls without executing." },
+          "shared_arguments": { "type": "object", "default": {}, "description": "Arguments merged into every call (e.g. scene_path)." },
+          "calls": { "type": "array", "items": { "type": "object", "properties": { "tool": { "type": "string" }, "arguments": { "type": "object", "default": {} } } }, "description": "List of tool calls to execute." }
+        },
+        "required": ["calls"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "results": { "type": "array" },
+          "total_calls": { "type": "integer" },
+          "successful": { "type": "integer" },
+          "failed": { "type": "integer" }
+        }
+      }
+    },
+    {
+      "name": "open_scene",
+      "category": "scene",
+      "status": "implemented",
+      "description": "Opens a scene in the editor by its resource path.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "description": "Scene resource path starting with res://." }
+        },
+        "required": ["scene_path"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string" },
+          "root_name": { "type": "string" },
+          "root_type": { "type": "string" }
+        }
+      }
+    },
+    {
+      "name": "save_current_scene",
+      "category": "scene",
+      "status": "implemented",
+      "description": "Saves the currently edited scene to disk.",
+      "arguments": { "type": "object", "properties": {} },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string" },
+          "error_code": { "type": "integer" }
+        }
+      }
+    },
+    {
+      "name": "save_all_scenes",
+      "category": "scene",
+      "status": "implemented",
+      "description": "Saves all currently open scenes with unsaved changes.",
+      "arguments": { "type": "object", "properties": {} },
+      "returns": { "type": "object", "properties": { "ok": { "type": "boolean" } } }
+    },
+    {
+      "name": "reload_scene",
+      "category": "scene",
+      "status": "implemented",
+      "description": "Reloads a scene from disk, discarding unsaved changes.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "description": "Scene path to reload." }
+        },
+        "required": ["scene_path"]
+      },
+      "returns": { "type": "object", "properties": { "scene_path": { "type": "string" }, "reloaded": { "type": "boolean" } } }
+    },
+    {
+      "name": "create_scene_file",
+      "category": "scene",
+      "status": "implemented",
+      "description": "Creates a new .tscn scene file with a specified root node type and name. Optionally opens it.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "description": "Target .tscn path starting with res://." },
+          "root_type": { "type": "string", "default": "Node3D", "description": "Instantiable Node class for the root." },
+          "root_name": { "type": "string", "default": "", "description": "Name for the root node. Defaults to filename base." },
+          "open": { "type": "boolean", "default": true, "description": "Whether to open the scene after creation." },
+          "overwrite": { "type": "boolean", "default": false, "description": "Whether to overwrite an existing scene." }
+        },
+        "required": ["scene_path"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string" },
+          "root_type": { "type": "string" },
+          "root_name": { "type": "string" }
+        }
+      }
+    },
+    {
+      "name": "create_gdscript_file",
+      "category": "scripting",
+      "status": "implemented",
+      "description": "Creates a new GDScript file with the given contents. MUST be in its own batch_tool_calls (cannot mix with non-GDScript tools).",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "script_path": { "type": "string", "description": "Target .gd path starting with res://." },
+          "contents": { "type": "string", "description": "Full script contents." },
+          "overwrite": { "type": "boolean", "default": false }
+        },
+        "required": ["script_path", "contents"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "script_path": { "type": "string" },
+          "bytes_written": { "type": "integer" }
+        }
+      }
+    },
+    {
+      "name": "update_gdscript_file",
+      "category": "scripting",
+      "status": "implemented",
+      "description": "Updates an existing GDScript file by replacing, appending, or prepending content. MUST be in its own batch_tool_calls (cannot mix with non-GDScript tools).",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "script_path": { "type": "string", "description": "Target .gd path starting with res://." },
+          "operation": { "type": "string", "enum": ["replace", "append", "prepend"], "default": "replace", "description": "How to apply the contents." },
+          "contents": { "type": "string", "description": "Content to apply." },
+          "create_if_missing": { "type": "boolean", "default": false }
+        },
+        "required": ["script_path", "contents"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "script_path": { "type": "string" },
+          "operation": { "type": "string" },
+          "created": { "type": "boolean" },
+          "bytes_written": { "type": "integer" }
+        }
+      }
+    },
+    {
+      "name": "attach_script",
+      "category": "scripting",
+      "status": "implemented",
+      "description": "Attaches a GDScript file to a node in a scene (sets the 'script' property).",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "node_path": { "type": "string", "description": "Node path relative to scene root." },
+          "script_path": { "type": "string", "description": "GDScript resource path starting with res://." }
+        },
+        "required": ["node_path", "script_path"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string" },
+          "node_path": { "type": "string" },
+          "property": { "type": "string" },
+          "resource_path": { "type": "string" }
+        }
+      }
+    },
+    {
+      "name": "add_node",
+      "category": "scene",
+      "status": "implemented",
+      "description": "Adds a new node of the given type as a child of the specified parent in a scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": ".", "description": "Parent node path. '.' = scene root." },
+          "node_type": { "type": "string", "description": "Instantiable Godot class name (e.g. Node3D, CharacterBody3D)." },
+          "node_name": { "type": "string", "description": "Name for the new node." }
+        },
+        "required": ["node_type", "node_name"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string" },
+          "node_path": { "type": "string" },
+          "node_name": { "type": "string" },
+          "node_type": { "type": "string" }
+        }
+      }
+    },
+    {
+      "name": "instantiate_scene",
+      "category": "scene",
+      "status": "implemented",
+      "description": "Instantiates a PackedScene as a child node in the current scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "." },
+          "packed_scene_path": { "type": "string", "description": "Path to the .tscn to instantiate." },
+          "node_name": { "type": "string", "default": "", "description": "Optional custom name for the instance." }
+        },
+        "required": ["packed_scene_path"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string" },
+          "packed_scene_path": { "type": "string" },
+          "node_path": { "type": "string" }
+        }
+      }
+    },
+    {
+      "name": "add_primitive_mesh",
+      "category": "scene",
+      "status": "implemented",
+      "description": "Adds a MeshInstance3D with a primitive mesh (box, sphere, capsule, cylinder, plane) as a child node.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "." },
+          "node_name": { "type": "string", "description": "Name for the mesh node." },
+          "mesh_type": { "type": "string", "enum": ["box", "sphere", "capsule", "cylinder", "plane"], "default": "box", "description": "Primitive mesh type." },
+          "parameters": { "type": "object", "default": {}, "description": "Mesh-specific parameters: box→{size:{x,y,z}}, sphere→{radius,height}, capsule→{radius,height}, cylinder→{top_radius,bottom_radius,height}, plane→{size:{x,z}}." }
+        },
+        "required": ["node_name"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string" },
+          "node_path": { "type": "string" },
+          "mesh_type": { "type": "string" }
+        }
+      }
+    },
+    {
+      "name": "add_collision_shape",
+      "category": "physics",
+      "status": "implemented",
+      "description": "Adds a CollisionShape3D child to a 3D physics body with a specified shape type.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "description": "Physics body node path." },
+          "node_name": { "type": "string", "description": "Name for the CollisionShape3D node." },
+          "shape_type": { "type": "string", "enum": ["box", "sphere", "capsule", "cylinder", "convex", "concave", "world_boundary"], "default": "box" },
+          "parameters": { "type": "object", "default": {}, "description": "Shape parameters: box→{size:{x,y,z}}, sphere→{radius}, capsule→{radius,height}, cylinder→{radius,height}." }
+        },
+        "required": ["parent_path", "node_name"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string" },
+          "node_path": { "type": "string" },
+          "shape_type": { "type": "string" }
+        }
+      }
+    },
+    {
+      "name": "add_2d_collision_shape",
+      "category": "physics",
+      "status": "implemented",
+      "description": "Adds a CollisionShape2D child to a 2D physics body with a specified shape type.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "node_path": { "type": "string", "description": "CollisionObject2D node path." },
+          "shape_type": { "type": "string", "enum": ["circle", "rectangle", "capsule", "convex", "world_boundary"], "default": "rectangle" },
+          "name": { "type": "string", "default": "", "description": "Name for the CollisionShape2D." },
+          "radius": { "type": "number", "default": 10.0 },
+          "height": { "type": "number", "default": 30.0 },
+          "size": { "type": "object", "default": {}, "description": "{x, y} for rectangle." }
+        },
+        "required": ["node_path"]
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" }, "shape_type": { "type": "string" } } }
+    },
+    {
+      "name": "create_standard_material",
+      "category": "resources",
+      "status": "implemented",
+      "description": "Creates a StandardMaterial3D resource and optionally assigns it to a node's material property.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "material_path": { "type": "string", "description": "Target .tres path for the material." },
+          "albedo": { "type": "object", "default": {}, "description": "Albedo color {r, g, b, a} (0.0-1.0)." },
+          "roughness": { "type": "number", "default": 1.0 },
+          "metallic": { "type": "number", "default": 0.0 },
+          "emission": { "type": "object", "default": {} },
+          "scene_path": { "type": "string", "default": "" },
+          "node_path": { "type": "string", "default": "", "description": "Optional: node to assign material to." },
+          "property": { "type": "string", "default": "material_override", "description": "Property name on the target node." }
+        },
+        "required": ["material_path"]
+      },
+      "returns": { "type": "object", "properties": { "material_path": { "type": "string" } } }
+    },
+    {
+      "name": "assign_resource_to_property",
+      "category": "scene",
+      "status": "implemented",
+      "description": "Assigns a resource (by path) to a property on a scene node.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "node_path": { "type": "string" },
+          "property": { "type": "string", "description": "Property name on the node." },
+          "resource_path": { "type": "string", "description": "Resource path starting with res://." }
+        },
+        "required": ["node_path", "property", "resource_path"]
+      },
+      "returns": { "type": "object", "properties": { "scene_path": { "type": "string" }, "node_path": { "type": "string" }, "property": { "type": "string" }, "resource_path": { "type": "string" } } }
+    },
+    {
+      "name": "connect_signal",
+      "category": "scene",
+      "status": "implemented",
+      "description": "Connects a signal from a source node to a method on a target node in a scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "source_node_path": { "type": "string" },
+          "signal_name": { "type": "string" },
+          "target_node_path": { "type": "string" },
+          "method_name": { "type": "string" }
+        },
+        "required": ["source_node_path", "signal_name", "target_node_path", "method_name"]
+      },
+      "returns": { "type": "object", "properties": { "connected": { "type": "boolean" } } }
+    },
+    {
+      "name": "create_input_action",
+      "category": "project",
+      "status": "implemented",
+      "description": "Creates a new input action with the specified events and deadzone.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "action_name": { "type": "string" },
+          "events": { "type": "array", "items": { "type": "object", "properties": { "type": { "type": "string", "enum": ["key", "joy_button", "joy_axis", "mouse"] }, "key": { "type": "string" } } } },
+          "deadzone": { "type": "number", "default": 0.5 }
+        },
+        "required": ["action_name", "events"]
+      },
+      "returns": { "type": "object", "properties": { "action_name": { "type": "string" }, "created": { "type": "boolean" } } }
+    },
+    {
+      "name": "set_main_scene",
+      "category": "project",
+      "status": "implemented",
+      "description": "Sets the project's main scene in project.godot.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "description": "Scene path to set as main." }
+        },
+        "required": ["scene_path"]
+      },
+      "returns": { "type": "object", "properties": { "scene_path": { "type": "string" }, "set": { "type": "boolean" } } }
+    },
+    {
+      "name": "play_current_scene",
+      "category": "editor",
+      "status": "implemented",
+      "description": "Starts playing the currently edited scene in the editor.",
+      "arguments": { "type": "object", "properties": {} },
+      "returns": { "type": "object", "properties": { "playing": { "type": "boolean" } } }
+    },
+    {
+      "name": "play_main_scene",
+      "category": "editor",
+      "status": "implemented",
+      "description": "Starts playing the project's main scene.",
+      "arguments": { "type": "object", "properties": {} },
+      "returns": { "type": "object", "properties": { "playing": { "type": "boolean" } } }
+    },
+    {
+      "name": "stop_playing_scene",
+      "category": "editor",
+      "status": "implemented",
+      "description": "Stops the currently running game in the editor.",
+      "arguments": { "type": "object", "properties": {} },
+      "returns": { "type": "object", "properties": { "stopped": { "type": "boolean" } } }
+    },
+    {
+      "name": "remove_node",
+      "category": "scene",
+      "status": "implemented",
+      "description": "Removes a node from the current scene. Cannot remove the scene root.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "node_path": { "type": "string", "description": "Node path to remove." }
+        },
+        "required": ["node_path"]
+      },
+      "returns": { "type": "object", "properties": { "scene_path": { "type": "string" }, "removed_node_path": { "type": "string" } } }
+    },
+    {
+      "name": "set_node_property",
+      "category": "scene",
+      "status": "implemented",
+      "description": "Sets a property value on a scene node. For Vector3 position use {\"property\":\"position\",\"value\":{\"x\":0,\"y\":1,\"z\":0}}.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "node_path": { "type": "string" },
+          "property": { "type": "string", "description": "Property name." },
+          "value": { "description": "Value to set (type depends on property)." }
+        },
+        "required": ["node_path", "property", "value"]
+      },
+      "returns": { "type": "object", "properties": { "scene_path": { "type": "string" }, "node_path": { "type": "string" }, "property": { "type": "string" }, "value": {} } }
+    },
+    {
+      "name": "write_project_file",
+      "category": "file_ops",
+      "status": "implemented",
+      "description": "Writes content to a safe text file under res://.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "Target file path starting with res://." },
+          "contents": { "type": "string", "description": "File contents." },
+          "overwrite": { "type": "boolean", "default": false }
+        },
+        "required": ["path", "contents"]
+      },
+      "returns": { "type": "object", "properties": { "path": { "type": "string" }, "bytes_written": { "type": "integer" } } }
+    },
+    {
+      "name": "create_project_folder",
+      "category": "file_ops",
+      "status": "implemented",
+      "description": "Creates a directory under res:// (including intermediate directories).",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "Directory path starting with res://." }
+        },
+        "required": ["path"]
+      },
+      "returns": { "type": "object", "properties": { "path": { "type": "string" }, "created": { "type": "boolean" } } }
+    },
+    {
+      "name": "delete_project_file",
+      "category": "file_ops",
+      "status": "implemented",
+      "description": "Deletes a file under res://. Requires confirm:true for safety.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "confirm": { "type": "boolean", "description": "Must be true to confirm deletion." }
+        },
+        "required": ["path", "confirm"]
+      },
+      "returns": { "type": "object", "properties": { "path": { "type": "string" }, "deleted": { "type": "boolean" } } }
+    },
+    {
+      "name": "move_project_file",
+      "category": "file_ops",
+      "status": "implemented",
+      "description": "Moves or renames a file under res://. Destination must not exist.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "from_path": { "type": "string" },
+          "to_path": { "type": "string" }
+        },
+        "required": ["from_path", "to_path"]
+      },
+      "returns": { "type": "object", "properties": { "from_path": { "type": "string" }, "to_path": { "type": "string" }, "moved": { "type": "boolean" } } }
+    },
+    {
+      "name": "file_exists",
+      "category": "context",
+      "status": "implemented",
+      "description": "Checks whether a res:// path exists as a file or directory. Returns size and type for files.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" }
+        },
+        "required": ["path"]
+      },
+      "returns": { "type": "object", "properties": { "path": { "type": "string" }, "exists": { "type": "boolean" }, "exists_as_file": { "type": "boolean" }, "exists_as_directory": { "type": "boolean" }, "size_bytes": { "type": "integer" }, "resource_type": { "type": "string" } } }
+    },
+    {
+      "name": "list_directory",
+      "category": "context",
+      "status": "implemented",
+      "description": "Lists one directory level under a res:// path.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "default": "res://" },
+          "max_entries": { "type": "integer", "default": 200, "minimum": 1, "maximum": 2000 },
+          "include_extensions": { "type": "array", "items": { "type": "string" }, "default": [] }
+        }
+      },
+      "returns": { "type": "object", "properties": { "path": { "type": "string" }, "entries": { "type": "array" }, "count": { "type": "integer" } } }
+    },
+    {
+      "name": "grep_project_files",
+      "category": "context",
+      "status": "implemented",
+      "description": "Searches file contents under res:// by substring. Defaults to .gd, .tscn, .godot, .tres, .cfg, .gdshader, .md, .txt, .json.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string" },
+          "path": { "type": "string", "default": "res://" },
+          "max_results": { "type": "integer", "default": 40 },
+          "case_sensitive": { "type": "boolean", "default": false },
+          "include_extensions": { "type": "array", "items": { "type": "string" }, "default": [] }
+        },
+        "required": ["query"]
+      },
+      "returns": { "type": "object", "properties": { "matches": { "type": "array" }, "match_count": { "type": "integer" }, "root": { "type": "string" } } }
+    },
+    {
+      "name": "get_unsaved_scenes",
+      "category": "context",
+      "status": "implemented",
+      "description": "Lists scenes with unsaved edits.",
+      "arguments": { "type": "object", "properties": {} },
+      "returns": { "type": "object", "properties": { "unsaved_scenes": { "type": "array" } } }
+    },
+    {
+      "name": "reparent_node",
+      "category": "scene",
+      "status": "implemented",
+      "description": "Moves a node to a new parent in the same scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "node_path": { "type": "string" },
+          "new_parent_path": { "type": "string" },
+          "keep_global_transform": { "type": "boolean", "default": true }
+        },
+        "required": ["node_path", "new_parent_path"]
+      },
+      "returns": { "type": "object", "properties": { "scene_path": { "type": "string" }, "node_path": { "type": "string" }, "new_parent_path": { "type": "string" } } }
+    },
+    {
+      "name": "rename_node",
+      "category": "scene",
+      "status": "implemented",
+      "description": "Renames a node in the scene tree.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "node_path": { "type": "string" },
+          "new_name": { "type": "string" }
+        },
+        "required": ["node_path", "new_name"]
+      },
+      "returns": { "type": "object", "properties": { "scene_path": { "type": "string" }, "node_path": { "type": "string" }, "new_name": { "type": "string" } } }
+    },
+    {
+      "name": "duplicate_node",
+      "category": "scene",
+      "status": "implemented",
+      "description": "Duplicates a node and adds it under a specified parent.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "node_path": { "type": "string" },
+          "parent_path": { "type": "string", "default": "." },
+          "new_name": { "type": "string", "default": "" }
+        },
+        "required": ["node_path"]
+      },
+      "returns": { "type": "object", "properties": { "scene_path": { "type": "string" }, "node_path": { "type": "string" }, "new_name": { "type": "string" } } }
+    },
+    {
+      "name": "move_child",
+      "category": "scene",
+      "status": "implemented",
+      "description": "Changes the order of a node among its siblings.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "node_path": { "type": "string" },
+          "new_index": { "type": "integer" }
+        },
+        "required": ["node_path", "new_index"]
+      },
+      "returns": { "type": "object", "properties": { "scene_path": { "type": "string" }, "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "edit_script",
+      "category": "editor",
+      "status": "implemented",
+      "description": "Opens a script in the script editor at an optional line and column.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "script_path": { "type": "string" },
+          "line": { "type": "integer", "default": 0 },
+          "column": { "type": "integer", "default": 0 }
+        },
+        "required": ["script_path"]
+      },
+      "returns": { "type": "object", "properties": { "script_path": { "type": "string" } } }
+    },
+    {
+      "name": "select_file",
+      "category": "editor",
+      "status": "implemented",
+      "description": "Focuses a file in the FileSystem dock.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" }
+        },
+        "required": ["path"]
+      },
+      "returns": { "type": "object", "properties": { "path": { "type": "string" } } }
+    },
+    {
+      "name": "set_editor_main_screen",
+      "category": "editor",
+      "status": "implemented",
+      "description": "Switches the main editor tab (2D, 3D, Script, Game, AssetLib).",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "screen": { "type": "string", "enum": ["2D", "3D", "Script", "Game", "AssetLib"] }
+        },
+        "required": ["screen"]
+      },
+      "returns": { "type": "object", "properties": { "screen": { "type": "string" } } }
+    },
+    {
+      "name": "get_editor_log",
+      "category": "context",
+      "status": "implemented",
+      "description": "Returns recent editor Output/error/warning lines (newest first).",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "max_lines": { "type": "integer", "default": 120 }
+        }
+      },
+      "returns": { "type": "object", "properties": { "lines": { "type": "array" }, "count": { "type": "integer" } } }
+    },
+    {
+      "name": "capture_editor_viewport",
+      "category": "vision",
+      "status": "implemented",
+      "description": "Captures the 2D or 3D editor viewport as PNG (base64).",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "target": { "type": "string", "enum": ["editor_2d", "editor_3d"], "default": "editor_3d" },
+          "max_width": { "type": "integer", "default": 640 }
+        }
+      },
+      "returns": { "type": "object", "properties": { "image_base64": { "type": "string" }, "width": { "type": "integer" }, "height": { "type": "integer" } } }
+    },
+    {
+      "name": "capture_game_viewport",
+      "category": "vision",
+      "status": "implemented",
+      "description": "Captures the running game viewport as PNG (base64). Only works when a scene is playing.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "max_width": { "type": "integer", "default": 640 }
+        }
+      },
+      "returns": { "type": "object", "properties": { "image_base64": { "type": "string" }, "width": { "type": "integer" }, "height": { "type": "integer" } } }
+    },
+    {
+      "name": "get_debug_snapshot",
+      "category": "debug",
+      "status": "implemented",
+      "description": "Bundles log tail, current scene, selection, unsaved scenes, and play state for quick diagnosis.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "max_log_lines": { "type": "integer", "default": 60 }
+        }
+      },
+      "returns": { "type": "object", "properties": { "log": { "type": "array" }, "scene": { "type": "object" }, "selection": { "type": "array" }, "unsaved": { "type": "array" }, "playing": { "type": "boolean" } } }
+    },
+    {
+      "name": "get_autoloads",
+      "category": "context",
+      "status": "implemented",
+      "description": "Lists project autoload singletons and their script paths.",
+      "arguments": { "type": "object", "properties": {} },
+      "returns": { "type": "object", "properties": { "autoloads": { "type": "array" } } }
+    },
+    {
+      "name": "get_node_groups",
+      "category": "context",
+      "status": "implemented",
+      "description": "Lists the groups a node belongs to.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "node_path": { "type": "string" }
+        },
+        "required": ["node_path"]
+      },
+      "returns": { "type": "object", "properties": { "scene_path": { "type": "string" }, "node_path": { "type": "string" }, "groups": { "type": "array" } } }
+    },
+    {
+      "name": "get_node_collision_layers",
+      "category": "physics",
+      "status": "implemented",
+      "description": "Reads collision_layer and collision_mask for a CollisionObject2D/3D.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "node_path": { "type": "string" }
+        },
+        "required": ["node_path"]
+      },
+      "returns": { "type": "object", "properties": { "dimension": { "type": "string" }, "collision_layer": { "type": "integer" }, "collision_mask": { "type": "integer" } } }
+    },
+    {
+      "name": "get_animation_player_state",
+      "category": "animation",
+      "status": "implemented",
+      "description": "Summarizes an AnimationPlayer node: animations list, current animation, position, length, active state.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "node_path": { "type": "string" }
+        },
+        "required": ["node_path"]
+      },
+      "returns": { "type": "object", "properties": { "animations": { "type": "array" }, "current_animation": { "type": "string" }, "active": { "type": "boolean" }, "current_position": { "type": "number" }, "current_length": { "type": "number" } } }
+    },
+    {
+      "name": "get_tilemap_info",
+      "category": "tilemap",
+      "status": "implemented",
+      "description": "Summarizes a TileMap node: layers, tileset, used rect.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "node_path": { "type": "string" }
+        },
+        "required": ["node_path"]
+      },
+      "returns": { "type": "object", "properties": { "layers_count": { "type": "integer" }, "tileset_resource_path": { "type": "string" }, "used_rect": { "type": "object" }, "layer_names": { "type": "array" } } }
+    },
+    {
+      "name": "get_navigation_region_info",
+      "category": "navigation",
+      "status": "implemented",
+      "description": "Summarizes a NavigationRegion2D/3D node: enabled, layers, bounds, baking state.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "node_path": { "type": "string" }
+        },
+        "required": ["node_path"]
+      },
+      "returns": { "type": "object", "properties": { "dimension": { "type": "string" }, "enabled": { "type": "boolean" }, "navigation_layers": { "type": "integer" }, "bounds": { "type": "object" }, "is_baking": { "type": "boolean" } } }
+    },
+    {
+      "name": "editor_undo",
+      "category": "editor",
+      "status": "implemented",
+      "description": "Runs the editor undo stack (default 1 step, max 50).",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "steps": { "type": "integer", "default": 1, "minimum": 1, "maximum": 50 }
+        }
+      },
+      "returns": { "type": "object", "properties": { "steps": { "type": "integer" } } }
+    },
+    {
+      "name": "get_runtime_debugger_state",
+      "category": "debug",
+      "status": "implemented",
+      "description": "Reads the script debugger state (errors, warnings, stack file/line when broken).",
+      "arguments": { "type": "object", "properties": {} },
+      "returns": { "type": "object", "properties": { "errors": { "type": "array" }, "warnings": { "type": "array" }, "stack": { "type": "array" }, "broken": { "type": "boolean" } } }
+    },
+    {
+      "name": "create_light",
+      "category": "3d_scene",
+      "status": "implemented",
+      "description": "Creates a 3D light node (directional, omni, or spot) and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "light_type": { "type": "string", "enum": ["directional", "omni", "spot"], "default": "directional" },
+          "name": { "type": "string", "default": "" },
+          "color": { "type": "object", "default": { "r": 1, "g": 1, "b": 1 } },
+          "energy": { "type": "number", "default": 1.0 },
+          "shadows": { "type": "boolean", "default": false },
+          "range": { "type": "number", "default": 10.0 },
+          "position": { "type": "object", "default": {} },
+          "rotation_degrees": { "type": "object", "default": {} }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" }, "light_type": { "type": "string" } } }
+    },
+    {
+      "name": "create_camera_3d",
+      "category": "3d_scene",
+      "status": "implemented",
+      "description": "Creates a Camera3D node and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "name": { "type": "string", "default": "Camera3D" },
+          "current": { "type": "boolean", "default": true },
+          "fov": { "type": "number", "default": 75.0 },
+          "near": { "type": "number", "default": 0.05 },
+          "far": { "type": "number", "default": 4000.0 },
+          "projection": { "type": "string", "enum": ["perspective", "orthogonal", "frustum"], "default": "perspective" },
+          "position": { "type": "object", "default": { "x": 0, "y": 1, "z": 3 } }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "create_rigid_body_3d",
+      "category": "3d_scene",
+      "status": "implemented",
+      "description": "Creates a RigidBody3D node and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "name": { "type": "string", "default": "RigidBody3D" },
+          "mass": { "type": "number", "default": 1.0 },
+          "gravity_scale": { "type": "number", "default": 1.0 },
+          "position": { "type": "object", "default": {} }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "create_static_body_3d",
+      "category": "3d_scene",
+      "status": "implemented",
+      "description": "Creates a StaticBody3D node and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "name": { "type": "string", "default": "StaticBody3D" },
+          "position": { "type": "object", "default": {} }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "create_character_body_3d",
+      "category": "3d_scene",
+      "status": "implemented",
+      "description": "Creates a CharacterBody3D node and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "name": { "type": "string", "default": "CharacterBody3D" },
+          "motion_mode": { "type": "string", "enum": ["grounded", "floating"], "default": "grounded" },
+          "position": { "type": "object", "default": {} }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "create_area_3d",
+      "category": "3d_scene",
+      "status": "implemented",
+      "description": "Creates an Area3D node and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "name": { "type": "string", "default": "Area3D" },
+          "monitoring": { "type": "boolean", "default": true },
+          "position": { "type": "object", "default": {} }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "create_ray_cast_3d",
+      "category": "3d_scene",
+      "status": "implemented",
+      "description": "Creates a RayCast3D node and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "name": { "type": "string", "default": "RayCast3D" },
+          "target_position": { "type": "object", "default": {} },
+          "enabled": { "type": "boolean", "default": true }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "add_csg_primitive",
+      "category": "3d_scene",
+      "status": "implemented",
+      "description": "Creates a CSG primitive (box, cylinder, sphere, torus) and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "name": { "type": "string" },
+          "csg_type": { "type": "string", "enum": ["box", "cylinder", "sphere", "torus"] },
+          "operation": { "type": "string", "enum": ["union", "intersection", "subtraction"], "default": "union" },
+          "position": { "type": "object", "default": {} }
+        },
+        "required": ["csg_type"]
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "create_path_3d",
+      "category": "3d_scene",
+      "status": "implemented",
+      "description": "Creates a Path3D node and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "name": { "type": "string", "default": "Path3D" },
+          "curve_data": { "type": "array", "default": [] }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "create_vehicle_body_3d",
+      "category": "3d_scene",
+      "status": "implemented",
+      "description": "Creates a VehicleBody3D node and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "name": { "type": "string", "default": "VehicleBody3D" },
+          "mass": { "type": "number", "default": 40.0 },
+          "position": { "type": "object", "default": {} }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "create_sprite_2d",
+      "category": "2d_scene",
+      "status": "implemented",
+      "description": "Creates a Sprite2D node and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "name": { "type": "string", "default": "Sprite2D" },
+          "texture_path": { "type": "string", "default": "" },
+          "centered": { "type": "boolean", "default": true },
+          "flip_h": { "type": "boolean", "default": false },
+          "flip_v": { "type": "boolean", "default": false },
+          "x": { "type": "number", "default": 0 },
+          "y": { "type": "number", "default": 0 }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "create_animated_sprite_2d",
+      "category": "2d_scene",
+      "status": "implemented",
+      "description": "Creates an AnimatedSprite2D node and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "name": { "type": "string", "default": "AnimatedSprite2D" },
+          "sprite_frames_path": { "type": "string", "default": "" },
+          "x": { "type": "number", "default": 0 },
+          "y": { "type": "number", "default": 0 }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "create_rigid_body_2d",
+      "category": "2d_scene",
+      "status": "implemented",
+      "description": "Creates a RigidBody2D node and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "name": { "type": "string", "default": "RigidBody2D" },
+          "mass": { "type": "number", "default": 1.0 },
+          "gravity_scale": { "type": "number", "default": 1.0 },
+          "mode": { "type": "string", "enum": ["rigid", "static", "kinematic", "character"], "default": "rigid" },
+          "x": { "type": "number", "default": 0 },
+          "y": { "type": "number", "default": 0 }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "create_character_body_2d",
+      "category": "2d_scene",
+      "status": "implemented",
+      "description": "Creates a CharacterBody2D node and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "name": { "type": "string", "default": "CharacterBody2D" },
+          "motion_mode": { "type": "string", "enum": ["grounded", "floating"], "default": "grounded" },
+          "x": { "type": "number", "default": 0 },
+          "y": { "type": "number", "default": 0 }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "create_area_2d",
+      "category": "2d_scene",
+      "status": "implemented",
+      "description": "Creates an Area2D node and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "name": { "type": "string", "default": "Area2D" },
+          "monitoring": { "type": "boolean", "default": true },
+          "collision_layer": { "type": "integer", "default": 1 },
+          "collision_mask": { "type": "integer", "default": 1 }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "create_ray_cast_2d",
+      "category": "2d_scene",
+      "status": "implemented",
+      "description": "Creates a RayCast2D node and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "name": { "type": "string", "default": "RayCast2D" },
+          "target_position": { "type": "object", "default": {} },
+          "enabled": { "type": "boolean", "default": true }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "create_line_2d",
+      "category": "2d_scene",
+      "status": "implemented",
+      "description": "Creates a Line2D node and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "name": { "type": "string", "default": "Line2D" },
+          "points": { "type": "array", "default": [] },
+          "width": { "type": "number", "default": 2.0 },
+          "default_color": { "type": "object", "default": {} }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "create_path_2d",
+      "category": "2d_scene",
+      "status": "implemented",
+      "description": "Creates a Path2D node and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "name": { "type": "string", "default": "Path2D" },
+          "curve_data": { "type": "array", "default": [] }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "create_polygon_2d",
+      "category": "2d_scene",
+      "status": "implemented",
+      "description": "Creates a Polygon2D node and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "name": { "type": "string", "default": "Polygon2D" },
+          "polygon": { "type": "array", "default": [] },
+          "color": { "type": "object", "default": {} }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "create_light_2d",
+      "category": "2d_scene",
+      "status": "implemented",
+      "description": "Creates a Light2D node and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "name": { "type": "string", "default": "Light2D" },
+          "color": { "type": "object", "default": {} },
+          "energy": { "type": "number", "default": 1.0 }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "create_shape_cast_3d",
+      "category": "3d_scene",
+      "status": "implemented",
+      "description": "Creates a ShapeCast3D node and adds it to the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "default": "" },
+          "name": { "type": "string", "default": "ShapeCast3D" },
+          "target_position": { "type": "object", "default": {} },
+          "enabled": { "type": "boolean", "default": true }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" } } }
+    },
+    {
+      "name": "get_global_classes",
+      "category": "context",
+      "status": "implemented",
+      "description": "Lists instantiable Godot classes with their parent class. Optionally filter by query.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string", "default": "" },
+          "max_results": { "type": "integer", "default": 128, "minimum": 1, "maximum": 1024 }
+        }
+      },
+      "returns": { "type": "object", "properties": { "query": { "type": "string" }, "count": { "type": "integer" }, "classes": { "type": "array" } } }
+    },
+    {
+      "name": "search_project_settings_keys",
+      "category": "context",
+      "status": "implemented",
+      "description": "Searches project setting keys by pattern substring.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "pattern": { "type": "string", "default": "" },
+          "max_results": { "type": "integer", "default": 128, "minimum": 1, "maximum": 1024 }
+        }
+      },
+      "returns": { "type": "object", "properties": { "pattern": { "type": "string" }, "count": { "type": "integer" }, "keys": { "type": "array" } } }
+    },
+    {
+      "name": "get_editor_settings",
+      "category": "context",
+      "status": "implemented",
+      "description": "Reads editor settings, optionally filtered by prefix.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "prefix": { "type": "string", "default": "" }
+        }
+      },
+      "returns": { "type": "object", "properties": { "prefix": { "type": "string" }, "count": { "type": "integer" }, "settings": { "type": "object" } } }
+    },
+    {
+      "name": "get_binary_file_metadata",
+      "category": "context",
+      "status": "implemented",
+      "description": "Returns metadata (size, modified time) for a binary file under res://.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" }
+        },
+        "required": ["path"]
+      },
+      "returns": { "type": "object", "properties": { "path": { "type": "string" }, "global_path": { "type": "string" }, "size": { "type": "integer" }, "modified_time": {} } }
+    },
+    {
+      "name": "get_editor_version",
+      "category": "editor",
+      "status": "implemented",
+      "description": "Returns the current editor version string.",
+      "arguments": { "type": "object", "properties": {} },
+      "returns": { "type": "object", "properties": { "version": { "type": "string" } } }
+    }
+  ]
+}
