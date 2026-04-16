@@ -584,11 +584,6 @@ YeetAIDock::YeetAIDock() {
 	status_label->set_text(TTR("Ready"));
 	header_row->add_child(status_label);
 
-	// Build agent presets and populate selectors
-	_build_agent_presets();
-	_create_new_chat();
-	_update_chat_selector();
-
 	chat_panel = memnew(PanelContainer);
 	chat_panel->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	chat_panel->set_v_size_flags(Control::SIZE_EXPAND_FILL);
@@ -720,6 +715,11 @@ YeetAIDock::YeetAIDock() {
 	_model_tags_request->set_timeout(15.0);
 	_model_tags_request->connect("request_completed", callable_mp(this, &YeetAIDock::_on_model_tags_request_completed));
 	add_child(_model_tags_request);
+
+	// Must run after chat_log / stream_label exist — _create_new_chat → _switch_to_chat touches them.
+	_build_agent_presets();
+	_create_new_chat();
+	_update_chat_selector();
 }
 
 YeetAIDock::~YeetAIDock() {
@@ -746,7 +746,9 @@ void YeetAIDock::_notification(int p_what) {
 		_apply_dock_theme();
 		if (p_what == NOTIFICATION_ENTER_TREE) {
 			_load_chats();
-			if (!_chat_sessions.is_empty()) {
+			if (_chat_sessions.is_empty()) {
+				_create_new_chat();
+			} else {
 				_switch_to_chat(_chat_sessions.size() - 1);
 			}
 		}
@@ -2439,10 +2441,14 @@ void YeetAIDock::_switch_to_chat(int p_index) {
 	turn_context_prompt = String();
 	_session_modified_files.clear();
 
-	// Rebuild the chat log
-	chat_log->clear();
-	stream_label->set_visible(false);
-	stream_label->clear();
+	// Rebuild the chat log (constructor may call before nodes exist; guarded for safety)
+	if (chat_log) {
+		chat_log->clear();
+	}
+	if (stream_label) {
+		stream_label->set_visible(false);
+		stream_label->clear();
+	}
 	_stream_accumulated = "";
 
 	// Set agent selector to match chat's agent
