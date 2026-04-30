@@ -12,6 +12,7 @@
 #include "scene/2d/audio_stream_player_2d.h"
 #include "scene/3d/audio_stream_player_3d.h"
 #include "scene/3d/mesh_instance_3d.h"
+#include "scene/3d/visual_instance_3d.h"
 #include "scene/audio/audio_stream_player.h"
 #include "scene/gui/box_container.h"
 #include "scene/gui/button.h"
@@ -66,10 +67,10 @@ Dictionary YeetAIDock::_tool_create_shader_material(const Dictionary &p_args) co
 
 	String shader_source = "shader_type spatial;\n";
 	if (!vertex_code.is_empty()) {
-		shader_source += "\nvertex();\n" + vertex_code + "\n";
+		shader_source += "\nvoid vertex() {\n" + vertex_code + "\n}\n";
 	}
 	if (!fragment_code.is_empty()) {
-		shader_source += "\nfragment();\n" + fragment_code + "\n";
+		shader_source += "\nvoid fragment() {\n" + fragment_code + "\n}\n";
 	}
 
 	Ref<Shader> shader;
@@ -82,12 +83,18 @@ Dictionary YeetAIDock::_tool_create_shader_material(const Dictionary &p_args) co
 
 	MeshInstance3D *mesh_instance = Object::cast_to<MeshInstance3D>(node);
 	if (mesh_instance != nullptr) {
-		mesh_instance->set_material_override(mat);
+		mesh_instance->set_surface_override_material(0, mat);
 	} else {
-		return _make_error("Shader material assignment requires a MeshInstance3D target.");
+		GeometryInstance3D *geom_instance = Object::cast_to<GeometryInstance3D>(node);
+		if (geom_instance != nullptr) {
+			geom_instance->set_material_override(mat);
+		} else {
+			return _make_error("Shader material assignment requires a MeshInstance3D or GeometryInstance3D target.");
+		}
 	}
 
 	Dictionary result;
+	result["ok"] = true;
 	result["shader_name"] = shader_name;
 	result["shader_code"] = shader_source;
 	result["node_path"] = String(node->get_path());
@@ -160,6 +167,7 @@ Dictionary YeetAIDock::_tool_set_shader_uniform(const Dictionary &p_args) const 
 	mat->set_shader_parameter(uniform_name, converted);
 
 	Dictionary result;
+	result["ok"] = true;
 	result["uniform_name"] = uniform_name;
 	result["type_hint"] = type_hint;
 	result["node_path"] = String(node->get_path());
@@ -549,33 +557,57 @@ Dictionary YeetAIDock::_tool_set_control_layout(const Dictionary &p_args) const 
 			return _make_error("Unknown anchor_preset. Use: full_rect, top_left, top_right, bottom_left, bottom_right, center, left_wide, top_wide, right_wide, bottom_wide, vcenter_wide, hcenter_wide");
 		}
 	} else {
-		ctrl->set_anchor(SIDE_LEFT, _arg_float(p_args, "anchor_left", 0.0));
-		ctrl->set_anchor(SIDE_RIGHT, _arg_float(p_args, "anchor_right", 0.0));
-		ctrl->set_anchor(SIDE_TOP, _arg_float(p_args, "anchor_top", 0.0));
-		ctrl->set_anchor(SIDE_BOTTOM, _arg_float(p_args, "anchor_bottom", 0.0));
+		// Only set anchors that were explicitly provided by the caller.
+		// When no anchor_preset is specified, individual anchor/offset values
+		// are applied only if they were provided by the caller.
+		if (p_args.has("anchor_left")) {
+			ctrl->set_anchor(SIDE_LEFT, _arg_float(p_args, "anchor_left", 0.0));
+		}
+		if (p_args.has("anchor_right")) {
+			ctrl->set_anchor(SIDE_RIGHT, _arg_float(p_args, "anchor_right", 0.0));
+		}
+		if (p_args.has("anchor_top")) {
+			ctrl->set_anchor(SIDE_TOP, _arg_float(p_args, "anchor_top", 0.0));
+		}
+		if (p_args.has("anchor_bottom")) {
+			ctrl->set_anchor(SIDE_BOTTOM, _arg_float(p_args, "anchor_bottom", 0.0));
+		}
+
+		if (p_args.has("offset_left")) {
+			ctrl->set_offset(SIDE_LEFT, _arg_float(p_args, "offset_left", 0.0));
+		}
+		if (p_args.has("offset_right")) {
+			ctrl->set_offset(SIDE_RIGHT, _arg_float(p_args, "offset_right", 0.0));
+		}
+		if (p_args.has("offset_top")) {
+			ctrl->set_offset(SIDE_TOP, _arg_float(p_args, "offset_top", 0.0));
+		}
+		if (p_args.has("offset_bottom")) {
+			ctrl->set_offset(SIDE_BOTTOM, _arg_float(p_args, "offset_bottom", 0.0));
+		}
 	}
 
-	ctrl->set_offset(SIDE_LEFT, _arg_float(p_args, "offset_left", 0.0));
-	ctrl->set_offset(SIDE_RIGHT, _arg_float(p_args, "offset_right", 0.0));
-	ctrl->set_offset(SIDE_TOP, _arg_float(p_args, "offset_top", 0.0));
-	ctrl->set_offset(SIDE_BOTTOM, _arg_float(p_args, "offset_bottom", 0.0));
-
-	const String grow_h = _arg_string(p_args, "grow_horizontal", "").to_lower();
-	if (grow_h == "begin") {
-		ctrl->set_h_grow_direction(Control::GROW_DIRECTION_BEGIN);
-	} else if (grow_h == "end") {
-		ctrl->set_h_grow_direction(Control::GROW_DIRECTION_END);
-	} else if (grow_h == "both") {
-		ctrl->set_h_grow_direction(Control::GROW_DIRECTION_BOTH);
+	// Grow direction and size flags — only set if explicitly provided.
+	const String grow_h = _arg_string(p_args, "grow_horizontal", "");
+	if (!grow_h.is_empty()) {
+		if (grow_h == "begin") {
+			ctrl->set_h_grow_direction(Control::GROW_DIRECTION_BEGIN);
+		} else if (grow_h == "end") {
+			ctrl->set_h_grow_direction(Control::GROW_DIRECTION_END);
+		} else if (grow_h == "both") {
+			ctrl->set_h_grow_direction(Control::GROW_DIRECTION_BOTH);
+		}
 	}
 
 	const String grow_v = _arg_string(p_args, "grow_vertical", "").to_lower();
-	if (grow_v == "begin") {
-		ctrl->set_v_grow_direction(Control::GROW_DIRECTION_BEGIN);
-	} else if (grow_v == "end") {
-		ctrl->set_v_grow_direction(Control::GROW_DIRECTION_END);
-	} else if (grow_v == "both") {
-		ctrl->set_v_grow_direction(Control::GROW_DIRECTION_BOTH);
+	if (!grow_v.is_empty()) {
+		if (grow_v == "begin") {
+			ctrl->set_v_grow_direction(Control::GROW_DIRECTION_BEGIN);
+		} else if (grow_v == "end") {
+			ctrl->set_v_grow_direction(Control::GROW_DIRECTION_END);
+		} else if (grow_v == "both") {
+			ctrl->set_v_grow_direction(Control::GROW_DIRECTION_BOTH);
+		}
 	}
 
 	const int size_flags_h = _arg_int(p_args, "size_flags_horizontal", -1);
@@ -952,7 +984,29 @@ Dictionary YeetAIDock::_tool_create_tab_container(const Dictionary &p_args) cons
 }
 
 Dictionary YeetAIDock::_tool_create_graph_node(const Dictionary &p_args) const {
-	return _make_error("GraphNode must be added as a child of a GraphEdit. Use add_node with type=GraphEdit first, then add GraphNode children.");
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+
+	const String node_name = _arg_string(p_args, "name", "GraphNode");
+
+	GraphNode *gn = memnew(GraphNode);
+	gn->set_name(node_name);
+	gn->set_title(_arg_string(p_args, "title", node_name));
+
+	Node *parent = _resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err);
+	if (parent == nullptr) {
+		parent = scene_root;
+	}
+	_add_to_scene(parent, gn, scene_root);
+
+	Dictionary result;
+	result["ok"] = true;
+	result["node_path"] = String(gn->get_path());
+	_mark_unsaved();
+	return result;
 }
 
 Dictionary YeetAIDock::_tool_create_tree_widget(const Dictionary &p_args) const {

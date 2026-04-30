@@ -398,6 +398,7 @@ Dictionary YeetAIDock::_tool_create_standard_material(const Dictionary &p_args) 
 	}
 
 	result["material_path"] = material_path;
+	_mark_unsaved();
 	if (p_args.has("scene_path") && p_args.has("node_path")) {
 		Dictionary assign_args;
 		assign_args["scene_path"] = p_args.get("scene_path", "");

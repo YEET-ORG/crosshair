@@ -13,6 +13,7 @@
 /**************************************************************************/
 
 #include "yeet_ai_dock.h"
+#include "yeet_ai_tool_schema.h"
 
 #include "core/io/json.h"
 #include "core/string/translation.h"
@@ -41,10 +42,10 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 		{ "add_animation_track",                 &YeetAIDock::_tool_add_animation_track },
 		{ "add_animation_transition",             &YeetAIDock::_tool_add_animation_transition },
 		{ "add_audio_bus_effect",                &YeetAIDock::_tool_add_audio_bus_effect },
-		{ "add_custom_class",                    &YeetAIDock::_tool_add_custom_class },
-		{ "add_csg_primitive",                   &YeetAIDock::_tool_add_csg_primitive },
 		{ "add_collision_exception",             &YeetAIDock::_tool_add_collision_exception },
 		{ "add_collision_shape",                 &YeetAIDock::_tool_add_collision_shape },
+		{ "add_csg_primitive",                   &YeetAIDock::_tool_add_csg_primitive },
+		{ "add_custom_class",                    &YeetAIDock::_tool_add_custom_class },
 		{ "add_node",                            &YeetAIDock::_tool_add_node },
 		{ "add_primitive_mesh",                  &YeetAIDock::_tool_add_primitive_mesh },
 		{ "add_tileset_atlas_source",            &YeetAIDock::_tool_add_tileset_atlas_source },
@@ -92,9 +93,9 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 		{ "create_navigation_obstacle",          &YeetAIDock::_tool_create_navigation_obstacle },
 		{ "create_noise_texture",                &YeetAIDock::_tool_create_noise_texture },
 		{ "create_option_button",                &YeetAIDock::_tool_create_option_button },
+		{ "create_particle_emitter",             &YeetAIDock::_tool_create_particle_emitter },
 		{ "create_path_2d",                      &YeetAIDock::_tool_create_path_2d },
 		{ "create_path_3d",                      &YeetAIDock::_tool_create_path_3d },
-		{ "create_particle_emitter",             &YeetAIDock::_tool_create_particle_emitter },
 		{ "create_polygon_2d",                   &YeetAIDock::_tool_create_polygon_2d },
 		{ "create_progress_bar",                 &YeetAIDock::_tool_create_progress_bar },
 		{ "create_project_folder",               &YeetAIDock::_tool_create_project_folder },
@@ -105,13 +106,13 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 		{ "create_rigid_body_3d",                &YeetAIDock::_tool_create_rigid_body_3d },
 		{ "create_scene_file",                   &YeetAIDock::_tool_create_scene_file },
 		{ "create_scroll_container",             &YeetAIDock::_tool_create_scroll_container },
-		{ "create_shape_cast_3d",                &YeetAIDock::_tool_create_shape_cast_3d },
 		{ "create_shader_material",              &YeetAIDock::_tool_create_shader_material },
-		{ "create_slider",                       &YeetAIDock::_tool_create_slider },
+		{ "create_shape_cast_3d",                &YeetAIDock::_tool_create_shape_cast_3d },
 		{ "create_sky",                          &YeetAIDock::_tool_create_sky },
+		{ "create_slider",                       &YeetAIDock::_tool_create_slider },
 		{ "create_sprite_2d",                    &YeetAIDock::_tool_create_sprite_2d },
-		{ "create_static_body_3d",                &YeetAIDock::_tool_create_static_body_3d },
 		{ "create_standard_material",            &YeetAIDock::_tool_create_standard_material },
+		{ "create_static_body_3d",                &YeetAIDock::_tool_create_static_body_3d },
 		{ "create_stylebox",                     &YeetAIDock::_tool_create_stylebox },
 		{ "create_tab_container",                &YeetAIDock::_tool_create_tab_container },
 		{ "create_texture_2d",                   &YeetAIDock::_tool_create_texture_2d },
@@ -207,6 +208,8 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 		{ "query_physics",                       &YeetAIDock::_tool_query_physics },
 		{ "raycast_query",                       &YeetAIDock::_tool_raycast_query },
 		{ "read_project_file",                   &YeetAIDock::_tool_read_project_file },
+		{ "reimport_project_files",              &YeetAIDock::_tool_reimport_project_files },
+		{ "reload_scene",                        &YeetAIDock::_tool_reload_scene },
 		{ "remove_animation_track",              &YeetAIDock::_tool_remove_animation_track },
 		{ "remove_collision_exception",          &YeetAIDock::_tool_remove_collision_exception },
 		{ "remove_input_action",                  &YeetAIDock::_tool_remove_input_action },
@@ -216,8 +219,6 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 		{ "reparent_node",                       &YeetAIDock::_tool_reparent_node },
 		{ "replace_in_project_files",            &YeetAIDock::_tool_replace_in_project_files },
 		{ "replace_node_with_scene",              &YeetAIDock::_tool_replace_node_with_scene },
-		{ "reimport_project_files",              &YeetAIDock::_tool_reimport_project_files },
-		{ "reload_scene",                        &YeetAIDock::_tool_reload_scene },
 		{ "resolve_resource_uid",                &YeetAIDock::_tool_resolve_resource_uid },
 		{ "run_gdscript_expression",             &YeetAIDock::_tool_run_gdscript_expression },
 		{ "run_gdscript_test",                   &YeetAIDock::_tool_run_gdscript_test },
@@ -235,9 +236,9 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 		{ "set_collision_layer_mask",            &YeetAIDock::_tool_set_collision_layer_mask },
 		{ "set_control_layout",                  &YeetAIDock::_tool_set_control_layout },
 		{ "set_control_theme_override",          &YeetAIDock::_tool_set_control_theme_override },
+		{ "set_default_import_presets",          &YeetAIDock::_tool_set_default_import_presets },
 		{ "set_editor_3d_camera",                &YeetAIDock::_tool_set_editor_3d_camera },
 		{ "set_editor_main_screen",              &YeetAIDock::_tool_set_editor_main_screen },
-		{ "set_default_import_presets",          &YeetAIDock::_tool_set_default_import_presets },
 		{ "set_environment_fog",                  &YeetAIDock::_tool_set_environment_fog },
 		{ "set_environment_ss_effects",           &YeetAIDock::_tool_set_environment_ss_effects },
 		{ "set_environment_tonemap",              &YeetAIDock::_tool_set_environment_tonemap },
@@ -263,22 +264,176 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 	};
 	static const int table_size = sizeof(table) / sizeof(table[0]);
 
-	// Binary search over the sorted table
-	const ToolEntry key = { p_tool_name.utf8().get_data(), nullptr };
+	// Binary search over the sorted table.
+	// NOTE: hold the CharString in a named lvalue so the underlying char* in `key`
+	// stays valid for the duration of the search. `p_tool_name.utf8().get_data()`
+	// inline would dangle past the full-expression.
+	const CharString tool_name_utf8 = p_tool_name.utf8();
+	const ToolEntry key = { tool_name_utf8.get_data(), nullptr };
 	const ToolEntry *found = std::lower_bound(table, table + table_size, key,
 			[](const ToolEntry &a, const ToolEntry &b) {
 				return strcmp(a.name, b.name) < 0;
 			});
 
-	ToolExecutionResult result;
-	if (found != table + table_size && strcmp(found->name, p_tool_name.utf8().get_data()) == 0) {
-		result.ok = true;
-		result.payload = (this->*found->handler)(p_args);
-		result.display_text = JSON::stringify(result.payload, "\t", false, true);
+ToolExecutionResult result;
+	if (found == table + table_size || strcmp(found->name, tool_name_utf8.get_data()) != 0) {
+		result.payload["error"] = "Unknown tool";
+		result.display_text = vformat("Unknown tool: %s", p_tool_name);
+		// Record failed tool execution metric
+		int64_t start_time = Time::get_singleton()->get_ticks_msec();
+		((YeetAIDock*)this)->_record_tool_execution(p_tool_name, Time::get_singleton()->get_ticks_msec() - start_time, false, false);
 		return result;
 	}
 
-	result.payload["error"] = "Unknown tool";
-	result.display_text = vformat("Unknown tool: %s", p_tool_name);
+// ── Enhanced Toolcalling: Validation & Normalization ─────────────────────────
+ 	// Validate arguments before schema pre-flight for early error detection.
+ 	// Normalize field names (e.g., "path" → "node_path") for consistency.
+ 	Dictionary effective_args = p_args;
+ 	String validation_error;
+ 	if (!_validate_tool_call(p_tool_name, effective_args, validation_error)) {
+ 		result.ok = false;
+ 		result.payload["error"] = validation_error;
+ 		result.payload["tool"] = p_tool_name;
+ 		result.payload["validation_failed"] = true;
+ 		result.display_text = vformat("Validation failed: %s", validation_error);
+ 		int64_t start_time = Time::get_singleton()->get_ticks_msec();
+ 		((YeetAIDock*)this)->_record_tool_execution(p_tool_name, Time::get_singleton()->get_ticks_msec() - start_time, false, false);
+ 		return result;
+ 	}
+ 	effective_args = _normalize_tool_arguments(p_tool_name, effective_args);
+	if (const ToolSchema *schema = YeetAIToolSchemaRegistry::get_schema(p_tool_name)) {
+		// Auto-resolve any node-path arguments flagged in the schema.
+		// Pulling the scene root once and reusing it keeps this O(args), not O(args*tree).
+		Node *resolve_root = nullptr;
+		bool resolve_root_attempted = false;
+		for (int i = 0; i < schema->arguments.size(); i++) {
+			const ToolArgSchema &arg_schema = schema->arguments[i];
+			if (!arg_schema.auto_resolve_node_path || !effective_args.has(arg_schema.name)) {
+				continue;
+			}
+			const Variant raw = effective_args[arg_schema.name];
+			if (raw.get_type() != Variant::STRING) {
+				continue;
+			}
+			const String raw_path = String(raw).strip_edges();
+			if (raw_path.is_empty() || YeetAIToolSchemaRegistry::is_valid_node_path(raw_path)) {
+				continue;
+			}
+			if (!resolve_root_attempted) {
+				resolve_root_attempted = true;
+				String _err;
+				resolve_root = _resolve_scene_root(effective_args.get("scene_path", ""), _err);
+			}
+			if (resolve_root == nullptr) {
+				continue;
+			}
+			String resolve_err;
+			const String resolved = YeetAIToolSchemaRegistry::auto_resolve_node_path(raw_path, resolve_root, resolve_err);
+			if (!resolved.is_empty()) {
+				effective_args[arg_schema.name] = resolved;
+			}
+		}
+
+		// Validate. On failure, return a structured error WITHOUT dispatching —
+		// this is what saves the model from spamming garbage tool calls.
+		Array errors;
+		if (!YeetAIToolSchemaRegistry::validate_arguments(*schema, effective_args, errors)) {
+			result.ok = false;
+			result.payload["error"] = "Invalid tool arguments";
+			result.payload["tool"] = p_tool_name;
+			result.payload["validation_errors"] = errors;
+			result.display_text = JSON::stringify(result.payload, "\t", false, true);
+			// Record failed tool execution metric
+			((YeetAIDock*)this)->_record_tool_execution(p_tool_name, 0, false, false);
+			return result;
+		}
+	}
+
+	result.ok = true;
+	
+	// ── Cache check for read-only tools ──────────────────────────────────────
+	// Read-only tools (get_*, validate_*) can be cached to avoid redundant calls
+	bool is_read_only = !schema || !schema->is_write_operation;
+	if (is_read_only && p_tool_name.begins_with("get_") || p_tool_name.begins_with("validate_")) {
+		String cache_key = _generate_cache_key(p_tool_name, effective_args);
+		Dictionary cached = _get_cached_result(cache_key);
+		if (!cached.is_empty()) {
+			result.payload = cached;
+			result.display_text = JSON::stringify(result.payload, "\t", false, true);
+			// Record cache hit metric
+			((YeetAIDock*)this)->_record_tool_execution(p_tool_name, 0, true, false);
+			return result;
+		}
+	}
+	
+// ── Timeout & Rate Limiting ──────────────────────────────────────────────
+ 	// Start timeout tracking to detect hanging tool calls.
+ 	_start_tool_call_timeout(p_tool_name);
+ 	// Check rate limit before execution.
+ 	if (!_check_rate_limit(p_tool_name)) {
+ 		_cancel_tool_call_timeout();
+ 		result.ok = false;
+ 		result.payload["error"] = "Rate limit exceeded for tool";
+ 		result.payload["tool"] = p_tool_name;
+ 		result.payload["rate_limited"] = true;
+ 		result.display_text = "Rate limit exceeded. Please wait before retrying.";
+ 		int64_t start_time = Time::get_singleton()->get_ticks_msec();
+ 		((YeetAIDock*)this)->_record_tool_execution(p_tool_name, Time::get_singleton()->get_ticks_msec() - start_time, false, false);
+ 		return result;
+ 	}
+ 	// Execute tool with timing.
+ 	int64_t tool_start_time = Time::get_singleton()->get_ticks_msec();
+ 	Dictionary payload = (this->*found->handler)(effective_args);
+ 	int64_t tool_duration = Time::get_singleton()->get_ticks_msec() - tool_start_time;
+ 	// Check for timeout after execution.
+ 	if (_check_tool_call_timeout()) {
+ 		result.ok = false;
+ 		result.payload["error"] = "Tool call timed out";
+ 		result.payload["tool"] = p_tool_name;
+ 		result.payload["timeout"] = true;
+ 		result.display_text = "Tool call timed out after " + String::num_int64(tool_duration) + "ms";
+ 		_cancel_tool_call_timeout();
+ 		_record_tool_call(p_tool_name);
+ 		((YeetAIDock*)this)->_record_tool_execution(p_tool_name, tool_duration, false, false);
+ 		return result;
+ 	}
+ 	// Cancel timeout and record rate limit usage.
+ 	_cancel_tool_call_timeout();
+ 	_record_tool_call(p_tool_name);
+	
+	// ── Cache write for read-only tools ──────────────────────────────────────
+	if (is_read_only && (p_tool_name.begins_with("get_") || p_tool_name.begins_with("validate_"))) {
+		String cache_key = _generate_cache_key(p_tool_name, effective_args);
+		_cache_result(cache_key, payload);
+	}
+	
+	// ── Handle failures with retry ───────────────────────────────────────────
+	if (!payload.get("ok", true) && payload.has("error")) {
+		String error_msg = String(payload.get("error", "Unknown error"));
+		result.ok = false;
+		result.payload = payload;
+		result.display_text = JSON::stringify(payload, "\t", false, true);
+		
+		// Record tool execution metric
+		((YeetAIDock*)this)->_record_tool_execution(p_tool_name, tool_duration, false, false);
+		
+		// Analyze for batching before returning
+		_analyze_batch_opportunity(p_tool_name, effective_args);
+		
+		// Handle retry
+		_handle_tool_failure(p_tool_name, effective_args, result);
+		
+		return result;
+	}
+	
+	result.payload = payload;
+	result.display_text = JSON::stringify(payload, "\t", false, true);
+	
+	// Record successful tool execution metric
+	((YeetAIDock*)this)->_record_tool_execution(p_tool_name, tool_duration, true, false);
+	
+	// Analyze for batching
+	_analyze_batch_opportunity(p_tool_name, effective_args);
+	
 	return result;
 }

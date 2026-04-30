@@ -259,6 +259,28 @@ void YeetAIDock::_stream_thread_body() {
 		return;
 	}
 
+	// ── Read response body ─────────────────────────────────────────────────────
+	if (!_stream_expects_sse) {
+		// Non-streaming response: read the entire body as a single JSON object.
+		String response_body;
+		while (client->get_status() == HTTPClient::STATUS_BODY && !_stream_should_stop) {
+			client->poll();
+			PackedByteArray raw = client->read_response_body_chunk();
+			if (!raw.is_empty()) {
+				response_body += String::utf8(reinterpret_cast<const char *>(raw.ptr()), raw.size());
+			}
+			OS::get_singleton()->delay_usec(1000);
+		}
+		memdelete(client);
+		MutexLock lock(_stream_mutex);
+		// Store the full response body as a single "chunk" so _finalize_stream can parse it.
+		if (!response_body.strip_edges().is_empty()) {
+			_pending_chunks.push_back(response_body);
+		}
+		_stream_done_flag = true;
+		return;
+	}
+
 	// ── Read SSE body ──────────────────────────────────────────────────────────
 	String sse_buf;
 	bool sse_done = false;
@@ -318,7 +340,36 @@ void YeetAIDock::_stream_thread_body() {
 				continue;
 			}
 			const Dictionary delta = dv;
-			const String content_chunk = delta.get("content", "");
+			String content_chunk = delta.get("content", "");
+			if (content_chunk.is_empty()) {
+				continue;
+			}
+			// Strip non-ASCII prefix artifacts (e.g., UTF-8 keep-alive bytes like 0xC4 0x81 = "ā").
+			{
+				int start = 0;
+				while (start < content_chunk.length()) {
+					const char32_t c = content_chunk[start];
+					if (c < 32 || c > 126) {
+						start++;
+					} else {
+						break;
+					}
+				}
+				content_chunk = content_chunk.substr(start);
+			}
+			// Strip trailing null-byte artifacts and other non-printing suffixes.
+			{
+				int end = content_chunk.length();
+				while (end > 0) {
+					const char32_t c = content_chunk[end - 1];
+					if (c < 32 || c > 126) {
+						end--;
+					} else {
+						break;
+					}
+				}
+				content_chunk = content_chunk.substr(0, end);
+			}
 			if (content_chunk.is_empty()) {
 				continue;
 			}
@@ -378,7 +429,42 @@ void YeetAIDock::_drain_stream_queue() {
 }
 
 void YeetAIDock::_finalize_stream() {
-	// Hand the fully accumulated SSE text off to the existing response handler.
-	// This re-uses all existing JSON parsing, tool-call dispatch, etc.
-	_handle_model_response(_stream_accumulated);
+	String accumulated = _stream_accumulated;
+	// Clean artifacts and check for empty response before processing.
+	if (accumulated.strip_edges().is_empty()) {
+		_set_waiting(false, TTR("Ready"));
+		_append_message("assistant", TTR("The model returned an empty response. Try again or adjust your prompt."));
+		return;
+	}
+
+	// Non-SSE response: parse full OpenAI JSON response object.
+	if (!_stream_expects_sse) {
+		Ref<JSON> json;
+		json.instantiate();
+		if (json->parse(accumulated) == OK) {
+			const Variant data = json->get_data();
+			if (data.get_type() == Variant::DICTIONARY) {
+				const Dictionary response = data;
+				const Array choices = response.get("choices", Array());
+				if (!choices.is_empty() && choices[0].get_type() == Variant::DICTIONARY) {
+					const Dictionary choice = choices[0];
+					const Dictionary message = choice.get("message", Dictionary());
+					const Array tool_calls = message.get("tool_calls", Array());
+					if (!tool_calls.is_empty()) {
+						// Native tool calls detected — handle them.
+						_handle_native_tool_calls(message);
+						return;
+					}
+					const String content = message.get("content", "");
+					if (!content.strip_edges().is_empty()) {
+						_handle_model_response(content);
+						return;
+					}
+				}
+			}
+		}
+		// If JSON parsing failed or no recognizable structure, fall through to text handling.
+	}
+
+	_handle_model_response(accumulated);
 }

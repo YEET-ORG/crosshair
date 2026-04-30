@@ -52,6 +52,7 @@ Dictionary YeetAIDock::_tool_create_sprite_2d(const Dictionary &p_args) const {
 	sprite->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(sprite->get_path());
 	return result;
 }
@@ -89,6 +90,7 @@ Dictionary YeetAIDock::_tool_create_animated_sprite_2d(const Dictionary &p_args)
 	anim->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(anim->get_path());
 	return result;
 }
@@ -129,6 +131,7 @@ Dictionary YeetAIDock::_tool_create_rigid_body_2d(const Dictionary &p_args) cons
 	body->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(body->get_path());
 	return result;
 }
@@ -163,6 +166,7 @@ Dictionary YeetAIDock::_tool_create_character_body_2d(const Dictionary &p_args) 
 	body->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(body->get_path());
 	return result;
 }
@@ -192,6 +196,7 @@ Dictionary YeetAIDock::_tool_create_area_2d(const Dictionary &p_args) const {
 	area->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(area->get_path());
 	return result;
 }
@@ -220,6 +225,7 @@ Dictionary YeetAIDock::_tool_create_ray_cast_2d(const Dictionary &p_args) const 
 	rc->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(rc->get_path());
 	return result;
 }
@@ -272,6 +278,7 @@ Dictionary YeetAIDock::_tool_create_line_2d(const Dictionary &p_args) const {
 	line->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(line->get_path());
 	return result;
 }
@@ -313,12 +320,13 @@ Dictionary YeetAIDock::_tool_create_path_2d(const Dictionary &p_args) const {
 
 	if (_arg_bool(p_args, "add_follow", true)) {
 		PathFollow2D *follow = memnew(PathFollow2D);
-		follow->set_name("PathFollow2D");
+		follow->set_name(node_name + "_follow");
 		_add_to_scene(path, follow, scene_root);
 		result["follow_path"] = String(follow->get_path());
 	}
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(path->get_path());
 	return result;
 }
@@ -356,6 +364,7 @@ Dictionary YeetAIDock::_tool_create_polygon_2d(const Dictionary &p_args) const {
 	poly->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(poly->get_path());
 	return result;
 }
@@ -400,6 +409,7 @@ Dictionary YeetAIDock::_tool_create_light_2d(const Dictionary &p_args) const {
 	light->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(light->get_path());
 	result["light_type"] = type;
 	return result;

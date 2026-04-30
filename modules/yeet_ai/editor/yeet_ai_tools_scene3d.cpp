@@ -23,6 +23,7 @@
 #include "scene/3d/physics/collision_shape_3d.h"
 #include "scene/3d/physics/rigid_body_3d.h"
 #include "scene/3d/physics/static_body_3d.h"
+#include "scene/3d/physics/vehicle_body_3d.h"
 #include "scene/3d/physics/ray_cast_3d.h"
 #include "scene/3d/physics/shape_cast_3d.h"
 #include "modules/csg/csg_shape.h"
@@ -89,6 +90,7 @@ Dictionary YeetAIDock::_tool_create_light(const Dictionary &p_args) const {
 	light->set_rotation_degrees(_arg_vector3(p_args, "rotation_degrees", Vector3()));
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(light->get_path());
 	result["light_type"] = type;
 	return result;
@@ -128,6 +130,7 @@ Dictionary YeetAIDock::_tool_create_camera_3d(const Dictionary &p_args) const {
 	cam->set_rotation_degrees(_arg_vector3(p_args, "rotation_degrees", Vector3()));
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(cam->get_path());
 	return result;
 }
@@ -187,6 +190,7 @@ Dictionary YeetAIDock::_tool_add_2d_collision_shape(const Dictionary &p_args) co
 	_add_to_scene(co, cs, scene_root);
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(cs->get_path());
 	result["shape_type"] = shape_type;
 	return result;
@@ -225,6 +229,7 @@ Dictionary YeetAIDock::_tool_create_rigid_body_3d(const Dictionary &p_args) cons
 	body->set_position(_arg_vector3(p_args, "position", Vector3()));
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(body->get_path());
 	return result;
 }
@@ -254,6 +259,7 @@ Dictionary YeetAIDock::_tool_create_static_body_3d(const Dictionary &p_args) con
 	body->set_position(_arg_vector3(p_args, "position", Vector3()));
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(body->get_path());
 	return result;
 }
@@ -285,6 +291,7 @@ Dictionary YeetAIDock::_tool_create_character_body_3d(const Dictionary &p_args) 
 	body->set_position(_arg_vector3(p_args, "position", Vector3()));
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(body->get_path());
 	return result;
 }
@@ -311,6 +318,7 @@ Dictionary YeetAIDock::_tool_create_area_3d(const Dictionary &p_args) const {
 	area->set_position(_arg_vector3(p_args, "position", Vector3()));
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(area->get_path());
 	return result;
 }
@@ -338,6 +346,7 @@ Dictionary YeetAIDock::_tool_create_ray_cast_3d(const Dictionary &p_args) const 
 	rc->set_position(_arg_vector3(p_args, "position", Vector3()));
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(rc->get_path());
 	return result;
 }
@@ -364,6 +373,7 @@ Dictionary YeetAIDock::_tool_create_shape_cast_3d(const Dictionary &p_args) cons
 	sc->set_position(_arg_vector3(p_args, "position", Vector3()));
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(sc->get_path());
 	return result;
 }
@@ -415,6 +425,7 @@ Dictionary YeetAIDock::_tool_add_csg_primitive(const Dictionary &p_args) const {
 	csg->set_rotation_degrees(_arg_vector3(p_args, "rotation_degrees", Vector3()));
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(csg->get_path());
 	result["csg_type"] = type;
 	return result;
@@ -456,12 +467,13 @@ Dictionary YeetAIDock::_tool_create_path_3d(const Dictionary &p_args) const {
 
 	if (_arg_bool(p_args, "add_follow", true)) {
 		PathFollow3D *follow = memnew(PathFollow3D);
-		follow->set_name("PathFollow3D");
+		follow->set_name(node_name + "_follow");
 		_add_to_scene(path, follow, scene_root);
 		result["follow_path"] = String(follow->get_path());
 	}
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(path->get_path());
 	return result;
 }
@@ -474,9 +486,37 @@ Dictionary YeetAIDock::_tool_create_vehicle_body_3d(const Dictionary &p_args) co
 		return _make_error(err);
 	}
 
-	// This is a minimal vehicle stub — full VehicleBody3D with wheels is complex.
-	// Return a helpful error guiding the AI to compose it manually.
-	return _make_error("VehicleBody3D setup is complex. Use add_node with type=VehicleBody3D, then add_node with type=VehicleWheel3D as children, then set_node_property for each wheel's steering/engine/brake properties.");
+	const String node_name = _arg_string(p_args, "name", "VehicleBody3D");
+	const float engine_force = _arg_float(p_args, "engine_force", 0.0);
+	const float brake = _arg_float(p_args, "brake", 0.0);
+	const float steering = _arg_float(p_args, "steering", 0.0);
+
+	VehicleBody3D *body = memnew(VehicleBody3D);
+	body->set_name(node_name);
+	body->set_mass(_arg_float(p_args, "mass", 1.0));
+	body->set_gravity_scale(_arg_float(p_args, "gravity_scale", 1.0));
+
+	if (p_args.has("engine_force")) {
+		body->set_engine_force(engine_force);
+	}
+	if (p_args.has("brake")) {
+		body->set_brake(brake);
+	}
+	if (p_args.has("steering")) {
+		body->set_steering(steering);
+	}
+
+	Node3D *parent = Object::cast_to<Node3D>(_resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err));
+	if (parent == nullptr) {
+		parent = Object::cast_to<Node3D>(scene_root);
+	}
+	_add_to_scene(parent, body, scene_root);
+	body->set_position(_arg_vector3(p_args, "position", Vector3()));
+
+	result["ok"] = true;
+	result["node_path"] = String(body->get_path());
+	_mark_unsaved();
+	return result;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -549,8 +589,48 @@ Dictionary YeetAIDock::_arg_dict(const Dictionary &p_args, const String &p_key) 
 }
 
 Vector3 YeetAIDock::_arg_vector3(const Dictionary &p_args, const String &p_key, const Vector3 &p_default) {
-	if (p_args.has(p_key)) {
-		return (Vector3)p_args[p_key];
+	if (!p_args.has(p_key)) {
+		return p_default;
+	}
+	const Variant &v = p_args[p_key];
+	if (v.get_type() == Variant::VECTOR3) {
+		return v;
+	}
+	if (v.get_type() == Variant::DICTIONARY) {
+		const Dictionary d = v;
+		return Vector3(
+				d.has("x") ? double(d["x"]) : p_default.x,
+				d.has("y") ? double(d["y"]) : p_default.y,
+				d.has("z") ? double(d["z"]) : p_default.z);
+	}
+	if (v.get_type() == Variant::ARRAY) {
+		const Array a = v;
+		if (a.size() >= 3) {
+			return Vector3(double(a[0]), double(a[1]), double(a[2]));
+		}
+	}
+	return p_default;
+}
+
+Vector2 YeetAIDock::_arg_vector2(const Dictionary &p_args, const String &p_key, const Vector2 &p_default) {
+	if (!p_args.has(p_key)) {
+		return p_default;
+	}
+	const Variant &v = p_args[p_key];
+	if (v.get_type() == Variant::VECTOR2) {
+		return v;
+	}
+	if (v.get_type() == Variant::DICTIONARY) {
+		const Dictionary d = v;
+		return Vector2(
+				d.has("x") ? double(d["x"]) : p_default.x,
+				d.has("y") ? double(d["y"]) : p_default.y);
+	}
+	if (v.get_type() == Variant::ARRAY) {
+		const Array a = v;
+		if (a.size() >= 2) {
+			return Vector2(double(a[0]), double(a[1]));
+		}
 	}
 	return p_default;
 }
@@ -559,14 +639,33 @@ Color YeetAIDock::_arg_color(const Dictionary &p_args, const String &p_key, cons
 	if (!p_args.has(p_key)) {
 		return p_default;
 	}
-
 	const Variant &v = p_args[p_key];
 	if (v.get_type() == Variant::COLOR) {
 		return v;
 	}
 	if (v.get_type() == Variant::DICTIONARY) {
-		Dictionary d = v;
-		return Color(d.get("r", 0.0), d.get("g", 0.0), d.get("b", 0.0), d.get("a", 1.0));
+		const Dictionary d = v;
+		const double r = d.has("r") ? double(d["r"]) : (d.has("red") ? double(d["red"]) : 0.0);
+		const double g = d.has("g") ? double(d["g"]) : (d.has("green") ? double(d["green"]) : 0.0);
+		const double b = d.has("b") ? double(d["b"]) : (d.has("blue") ? double(d["blue"]) : 0.0);
+		const double a = d.has("a") ? double(d["a"]) : (d.has("alpha") ? double(d["alpha"]) : 1.0);
+		return Color(r, g, b, a);
+	}
+	if (v.get_type() == Variant::ARRAY) {
+		const Array a = v;
+		if (a.size() >= 3) {
+			return Color(double(a[0]), double(a[1]), double(a[2]), a.size() >= 4 ? double(a[3]) : 1.0);
+		}
+	}
+	if (v.get_type() == Variant::STRING) {
+		const String s = String(v).strip_edges();
+		if (s.begins_with("#")) {
+			return Color::html(s);
+		}
+		const PackedStringArray parts = s.split(",");
+		if (parts.size() >= 3) {
+			return Color(parts[0].to_float(), parts[1].to_float(), parts[2].to_float(), parts.size() >= 4 ? parts[3].to_float() : 1.0);
+		}
 	}
 	return p_default;
 }

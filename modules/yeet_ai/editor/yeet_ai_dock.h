@@ -14,10 +14,12 @@
 #include "core/variant/variant.h"
 #include "core/os/mutex.h"
 #include "core/os/thread.h"
+#include "core/templates/hash_map.h"
 #include "core/templates/hash_set.h"
 #include "core/templates/vector.h"
 #include "scene/gui/box_container.h"
 #include "scene/resources/material.h"
+#include "editor/yeet_ai_response_parser.h"
 
 class Button;
 class ColorRect;
@@ -80,7 +82,6 @@ class YeetAIDock : public VBoxContainer {
 	Button *send_button = nullptr;
 	Button *stop_button = nullptr;
 	Button *clear_button = nullptr;
-	HTTPRequest *request = nullptr; // kept (unused) – _on_request_completed still defined
 
 	PanelContainer *header_panel = nullptr;
 	PanelContainer *chat_panel = nullptr;
@@ -155,6 +156,142 @@ class YeetAIDock : public VBoxContainer {
 	bool intro_message_added = false;
 	bool _session_loaded = false;
 	String turn_context_prompt;
+	
+	// ── Conversation Window Management ─────────────────────────────────────────
+	struct ConversationWindow {
+		int max_tokens;
+		int current_tokens;
+		int trim_threshold; // Start trimming when exceeding this
+		bool sliding_enabled;
+		int min_keep_messages; // Always keep at least N messages (system, errors)
+		
+		int estimate_message_tokens(const String &text) const;
+	};
+	ConversationWindow _conversation_window;
+	
+	void _init_conversation_window();
+	void _add_message_to_window(const String &role, const String &text);
+	void _trim_conversation_window();
+	void _trim_to_fit(int new_message_tokens);
+	int _get_windowed_messages_count() const;
+	
+	// ── Metrics Collector ──────────────────────────────────────────────────────
+	struct ToolMetrics {
+		int calls = 0;
+		int errors = 0;
+		int retries = 0;
+		int64_t total_time_ms = 0;
+		double avg_time_ms = 0.0;
+	};
+	
+	struct SessionMetrics {
+		int total_api_calls = 0;
+		int total_api_errors = 0;
+		int cache_hits = 0;
+		int cache_misses = 0;
+		int64_t total_execution_time_ms = 0;
+		int64_t session_start_time = 0;
+	};
+	
+	mutable HashMap<String, ToolMetrics> _tool_metrics;
+	mutable SessionMetrics _session_metrics;
+	
+	void _record_tool_execution(const String &tool_name, int64_t duration_ms, bool success, bool was_retry);
+	Dictionary _export_metrics_summary() const;
+	void _reset_metrics();
+	
+	// ── Cache Eviction ─────────────────────────────────────────────────────────
+	void _evict_expired_cache_entries();
+	void _evict_least_recently_used(int max_entries = 100);
+	void _evict_cache_if_needed();
+	
+	// ── Exponential Backoff ────────────────────────────────────────────────────
+	struct RetryPolicy {
+		int max_attempts = 3;
+		int base_delay_ms = 1000;
+		int max_delay_ms = 30000;
+		double backoff_multiplier = 2.0;
+	};
+	RetryPolicy _retry_policy;
+	
+	int64_t _calculate_backoff_delay(int attempt) const;
+	
+	// ── Stream Snapshot ────────────────────────────────────────────────────────
+	struct StreamSnapshot {
+		String accumulated_content;
+		bool partial_tool_call_detected;
+		String partial_tool_name;
+		Dictionary partial_tool_args;
+		int64_t timestamp;
+	};
+	StreamSnapshot _stream_snapshot;
+	bool _stream_paused = false;
+	
+	void _pause_streaming();
+	void _resume_streaming();
+	void _save_stream_snapshot();
+	void _restore_stream_snapshot();
+	bool _has_pending_tool_call() const;
+	
+	// ── System Prompt Modularization ───────────────────────────────────────────
+	struct SystemPromptSection {
+		String id;
+		String name;
+		String content;
+		bool enabled = true;
+	};
+	
+	Vector<SystemPromptSection> _system_prompt_sections;
+	
+	void _build_default_prompt_sections();
+	void _add_prompt_section(const String &id, const String &name, const String &content);
+	void _remove_prompt_section(const String &id);
+	void _enable_prompt_section(const String &id, bool enabled);
+	String _build_modular_system_prompt() const;
+	
+	// ── Native tool calling (OpenAI tools parameter) ──────────────────────────
+	bool _native_tools_enabled = true;
+	Array _build_tools_payload() const;
+	Dictionary _convert_native_tool_call_to_envelope(const Dictionary &p_tool_call) const;
+	bool _response_has_native_tool_calls(const Dictionary &p_response) const;
+	Array _extract_native_tool_calls(const Dictionary &p_response) const;
+	void _handle_native_tool_calls(const Dictionary &p_message);
+	
+	// ── Retry logic ───────────────────────────────────────────────────────────
+	struct RetryState {
+		String tool_name;
+		Dictionary original_args;
+		Array last_tool_results; // Last N results for context
+		int attempt_count = 0;
+		int max_attempts = 3;
+		String last_error;
+	};
+	RetryState _current_retry;
+	void _start_retry(const String &tool_name, const Dictionary &args, const String &error);
+	void _execute_retry();
+	void _cancel_retry();
+	
+	// ── Result caching ────────────────────────────────────────────────────────
+	struct CacheEntry {
+		Dictionary result;
+		int64_t expires_at; // Timestamp when cache expires
+		bool is_valid() const { return Time::get_singleton()->get_unix_time() < expires_at; }
+	};
+	HashMap<String, CacheEntry> _result_cache;
+	static constexpr int CACHE_TTL_SECONDS = 30; // 30 second TTL
+	void _cache_result(const String &cache_key, const Dictionary &result);
+	Dictionary _get_cached_result(const String &cache_key);
+	void _invalidate_cache(const String &pattern = "");
+	
+	// ── Automatic batching ────────────────────────────────────────────────────
+	struct BatchOpportunity {
+		String tool_name;
+		Dictionary args;
+		String dependency_group; // Related operations
+	};
+	Vector<BatchOpportunity> _pending_batch_ops;
+	void _analyze_batch_opportunity(const String &tool_name, const Dictionary &args);
+	void _execute_pending_batch();
 
 	// ── Prompt history ────────────────────────────────────────────────────────
 	Vector<String> _prompt_history;
@@ -175,6 +312,7 @@ class YeetAIDock : public VBoxContainer {
 	String _stream_endpoint;
 	Vector<String> _stream_req_headers;
 	String _stream_req_body;
+	bool _stream_expects_sse = true; // false for non-streaming (native tool calls)
 
 	void _start_streaming();
 	void _cancel_streaming();
@@ -516,6 +654,7 @@ protected:
 	static Array _arg_array(const Dictionary &p_args, const String &p_key);
 	static Dictionary _arg_dict(const Dictionary &p_args, const String &p_key);
 	static Vector3 _arg_vector3(const Dictionary &p_args, const String &p_key, const Vector3 &p_default = Vector3());
+	static Vector2 _arg_vector2(const Dictionary &p_args, const String &p_key, const Vector2 &p_default = Vector2());
 	static Color _arg_color(const Dictionary &p_args, const String &p_key, const Color &p_default = Color());
 
 	// Common resolution patterns — return error Dictionary on failure, empty on success.
@@ -542,6 +681,7 @@ protected:
 	bool _get_editor_setting_bool(const String &p_setting, bool p_default) const;
 	Dictionary _make_user_message_with_optional_vision(const String &p_tool_name, const Dictionary &p_tool_payload) const;
 	String _build_system_prompt() const;
+	String _build_compact_system_prompt() const;
 	String _escape_bbcode(const String &p_text) const;
 	String _extract_message_content(const Dictionary &p_response_json) const;
 	Dictionary _extract_response_envelope(const String &p_content) const;
@@ -549,10 +689,84 @@ protected:
 	Dictionary _normalize_envelope(const Dictionary &p_envelope) const;
 	Dictionary _normalize_batch_tool_arguments(const Dictionary &p_args) const;
 	Dictionary _parse_one_batch_call(const Variant &p_call_var, int p_index, const Dictionary &p_shared_arguments) const;
+	
+	// ── Structured parser integration ─────────────────────────────────────────
+	Dictionary _extract_structured_response(const String &p_content) const;
+	YeetAIResponseType _parse_response_type(const String &p_content) const;
+	
+	// ── Retry methods ─────────────────────────────────────────────────────────
+	void _handle_tool_failure(const String &tool_name, const Dictionary &args, const ToolExecutionResult &result);
+	bool _should_retry(const String &tool_name, const String &error);
+	Dictionary _prepare_retry_context(const String &tool_name, const Dictionary &original_args);
+	
+	// ── Cache methods ─────────────────────────────────────────────────────────
+	String _generate_cache_key(const String &tool_name, const Dictionary &args) const;
+	
+	// ── Batching methods ──────────────────────────────────────────────────────
+	bool _can_batch_with_previous(const String &current_tool, const String &prev_tool);
+	Dictionary _prepare_batch_request(const Vector<BatchOpportunity> &ops);
 	Vector<String> _variant_array_to_string_vector(const Array &p_values) const;
 	bool _is_allowed_text_file(const String &p_path) const;
-
-	void _on_request_completed(int p_result, int p_response_code, const PackedStringArray &p_headers, const PackedByteArray &p_body);
+	
+	// ── Batch execution refinement ────────────────────────────────────────────
+	struct BatchExecutionState {
+		Vector<BatchOpportunity> operations;
+		bool is_executing = false;
+		int completed_count = 0;
+		int error_count = 0;
+		bool stop_on_error = false;
+	};
+	BatchExecutionState _current_batch_execution;
+	
+	void _execute_batch_as_single_call(const Vector<BatchOpportunity> &ops);
+	bool _can_optimize_to_batch(const String &tool_name, const Dictionary &args) const;
+	
+	// ── Tool Call Timeout Handling ────────────────────────────────────────────
+	struct ToolCallTimeout {
+		String tool_name;
+		int64_t start_time;
+		int64_t timeout_ms;
+		bool is_active;
+	};
+	ToolCallTimeout _current_tool_timeout;
+	
+	int64_t _get_tool_call_timeout(const String &tool_name) const;
+	void _start_tool_call_timeout(const String &tool_name);
+	bool _check_tool_call_timeout() const;
+	void _cancel_tool_call_timeout();
+	
+	// ── Tool Call Validation ─────────────────────────────────────────────────
+	struct ToolValidationRule {
+		String tool_name;
+		String required_field;
+		String field_type; // "string", "int", "bool", "array", "dict"
+		bool is_required;
+	};
+	
+	Vector<ToolValidationRule> _get_validation_rules(const String &tool_name) const;
+	bool _validate_tool_call(const String &tool_name, const Dictionary &args, String &r_error) const;
+	Dictionary _normalize_tool_arguments(const String &tool_name, const Dictionary &args) const;
+	
+	// ── Rate Limiting ────────────────────────────────────────────────────────
+	struct RateLimitEntry {
+		String tool_name;
+		int64_t last_call_time;
+		int call_count;
+	};
+	HashMap<String, RateLimitEntry> _rate_limits;
+	int _get_rate_limit_for_tool(const String &tool_name) const;
+	bool _check_rate_limit(const String &tool_name) const;
+	void _record_tool_call(const String &tool_name);
+	
+	// ── Enhanced Error Recovery ──────────────────────────────────────────────
+	enum class ErrorSeverity {
+		RECOVERABLE,
+		PARTIAL_FAILURE,
+		CRITICAL
+	};
+	ErrorSeverity _classify_error(const String &error_msg) const;
+	Dictionary _generate_recovery_context(const String &tool_name, const Dictionary &args, const String &error) const;
+	
 	void _notification(int p_what);
 
 protected:

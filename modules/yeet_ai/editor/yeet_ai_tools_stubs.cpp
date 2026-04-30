@@ -870,21 +870,21 @@ Dictionary YeetAIDock::_tool_reimport_project_files(const Dictionary &p_args) co
 		return _make_error("EditorFileSystem is unavailable.");
 	}
 	int reimported = 0;
+	Vector<String> to_reimport;
 	for (int i = 0; i < paths.size(); i++) {
 		const String path = paths[i];
 		if (efs->get_file_type(path) != String()) {
-			Vector<String> path_vec;
-			for (int j = i; j < paths.size(); j++) {
-				path_vec.push_back(paths[j]);
-			}
-			efs->reimport_files(path_vec);
-			reimported = paths.size();
-			break;
+			to_reimport.push_back(path);
 		}
+	}
+	if (!to_reimport.is_empty()) {
+		efs->reimport_files(to_reimport);
+		reimported = to_reimport.size();
 	}
 	Dictionary result;
 	result["ok"] = true;
 	result["reimported"] = reimported;
+	result["attempted"] = paths.size();
 	return result;
 }
 
@@ -911,7 +911,43 @@ Dictionary YeetAIDock::_tool_replace_in_project_files(const Dictionary &p_args) 
 	if (grep_result.has("error")) {
 		return grep_result;
 	}
-	return _make_error("Not yet implemented. Use grep_project_files to find matches, then update_gdscript_file or write_project_file to apply replacements.");
+	const Array matches = grep_result.get("matches", Array());
+	int replaced_count = 0;
+	Array modified_files;
+	for (int i = 0; i < matches.size(); i++) {
+		const Dictionary match = matches[i];
+		const String file_path = match.get("path", "");
+		if (file_path.is_empty() || !_is_allowed_text_file(file_path)) {
+			continue;
+		}
+		Error read_err = OK;
+		String content = FileAccess::get_file_as_string(file_path, &read_err);
+		if (read_err != OK) {
+			continue;
+		}
+		const String new_content = content.replace(query, replacement);
+		if (new_content == content) {
+			continue;
+		}
+		Dictionary write_args;
+		write_args["path"] = file_path;
+		write_args["contents"] = new_content;
+		write_args["overwrite"] = true;
+		Dictionary write_result = _tool_write_project_file(write_args);
+		if (!write_result.has("error")) {
+			replaced_count++;
+			if (!modified_files.has(file_path)) {
+				modified_files.push_back(file_path);
+			}
+		}
+	}
+	Dictionary result;
+	result["ok"] = true;
+	result["query"] = query;
+	result["replacement"] = replacement;
+	result["files_modified"] = modified_files;
+	result["replaced_count"] = replaced_count;
+	return result;
 }
 
 Dictionary YeetAIDock::_tool_resolve_resource_uid(const Dictionary &p_args) const {

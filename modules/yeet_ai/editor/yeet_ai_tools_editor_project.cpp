@@ -312,6 +312,15 @@ Dictionary YeetAIDock::_tool_replace_node_with_scene(const Dictionary &p_args) c
 
 	int old_idx = old_node->get_index();
 
+	// Reparent old node's children to the new instance before removing the old node.
+	// Otherwise they would be orphaned when the old node is freed.
+	while (old_node->get_child_count() > 0) {
+		Node *child = old_node->get_child(0);
+		child->remove_child(child);
+		child->set_owner(instance != nullptr ? instance : old_node->get_owner());
+		instance->add_child(child, true);
+	}
+
 	old_node->get_parent()->remove_child(old_node);
 
 	_add_to_scene(parent, instance, scene_root);
@@ -452,7 +461,8 @@ Dictionary YeetAIDock::_tool_create_sky(const Dictionary &p_args) const {
 
 	const String sky_type = _arg_string(p_args, "sky_type", "procedural").to_lower();
 
-	Ref<Sky> sky = memnew(Sky);
+	Ref<Sky> sky;
+	sky.instantiate();
 
 	if (sky_type == "panorama") {
 		const String panorama_path = _arg_string(p_args, "panorama_path", "");
@@ -489,6 +499,7 @@ Dictionary YeetAIDock::_tool_create_sky(const Dictionary &p_args) const {
 	we->get_environment()->set_sky_custom_fov(_arg_float(p_args, "sky_custom_fov", 0.0));
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["sky_type"] = sky_type;
 	return result;
 }
@@ -547,6 +558,7 @@ Dictionary YeetAIDock::_tool_set_environment_fog(const Dictionary &p_args) const
 	}
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["fog_type"] = fog_type;
 	return result;
 }
@@ -580,6 +592,7 @@ Dictionary YeetAIDock::_tool_set_environment_tonemap(const Dictionary &p_args) c
 	env->set_tonemap_white(_arg_float(p_args, "white", 1.0));
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["tone_mapper"] = mapper;
 	return result;
 }
@@ -616,6 +629,7 @@ Dictionary YeetAIDock::_tool_set_environment_ss_effects(const Dictionary &p_args
 	}
 
 	_mark_unsaved();
+	result["ok"] = true;
 	result["updated"] = true;
 	return result;
 }
@@ -650,6 +664,8 @@ Dictionary YeetAIDock::_tool_create_fog_volume(const Dictionary &p_args) const {
 	}
 	_add_to_scene(parent, fv, scene_root);
 	fv->set_position(_arg_vector3(p_args, "position", Vector3()));
+	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(fv->get_path());
 	return result;
 }
@@ -684,6 +700,8 @@ Dictionary YeetAIDock::_tool_create_reflection_probe(const Dictionary &p_args) c
 	}
 	_add_to_scene(parent, rp, scene_root);
 	rp->set_position(_arg_vector3(p_args, "position", Vector3()));
+	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(rp->get_path());
 	return result;
 }
@@ -718,6 +736,8 @@ Dictionary YeetAIDock::_tool_create_gi_probe(const Dictionary &p_args) const {
 	}
 	_add_to_scene(parent, gi, scene_root);
 	gi->set_position(_arg_vector3(p_args, "position", Vector3()));
+	_mark_unsaved();
+	result["ok"] = true;
 	result["node_path"] = String(gi->get_path());
 	result["note"] = "Bake the VoxelGI manually from the editor (select the node → Bake).";
 	return result;

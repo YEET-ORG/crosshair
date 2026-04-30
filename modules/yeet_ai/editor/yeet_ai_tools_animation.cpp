@@ -320,7 +320,7 @@ Dictionary YeetAIDock::_tool_set_animation_blend_amount(const Dictionary &p_args
 	String err;
 	Node *scene_root;
 	Node *node;
-	if (!_resolve_scene_and_node(p_args, "tree_node_path", &scene_root, &node, err)) {
+	if (!_resolve_scene_and_node(p_args, "node_path", &scene_root, &node, err)) {
 		return _make_error(err);
 	}
 

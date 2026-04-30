@@ -41,7 +41,9 @@ Dictionary YeetAIDock::_tool_create_multiplayer_spawner(const Dictionary &p_args
 	}
 	_add_to_scene(parent, spawner, scene_root);
 
+	result["ok"] = true;
 	result["node_path"] = String(spawner->get_path());
+	_mark_unsaved();
 	return result;
 }
 
@@ -79,7 +81,9 @@ Dictionary YeetAIDock::_tool_create_multiplayer_synchronizer(const Dictionary &p
 	}
 	_add_to_scene(parent, sync, scene_root);
 
+	result["ok"] = true;
 	result["node_path"] = String(sync->get_path());
+	_mark_unsaved();
 	return result;
 }
 

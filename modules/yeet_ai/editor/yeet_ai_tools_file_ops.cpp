@@ -58,12 +58,15 @@ Dictionary YeetAIDock::_tool_create_scene_file(const Dictionary &p_args) const {
 	const Error pack_error = packed_scene->pack(root);
 	if (pack_error != OK) {
 		memdelete(root);
+		root = nullptr;
 		result["error"] = vformat("Failed to pack scene: %d", pack_error);
 		return result;
 	}
 
 	const Error save_error = ResourceSaver::save(packed_scene, scene_path, ResourceSaver::FLAG_CHANGE_PATH);
-	memdelete(root);
+	if (root != nullptr) {
+		memdelete(root);
+	}
 	if (save_error != OK) {
 		result["error"] = vformat("Failed to save scene: %d", save_error);
 		return result;

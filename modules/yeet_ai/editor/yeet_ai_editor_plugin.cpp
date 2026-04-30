@@ -43,6 +43,7 @@ void YeetAIEditorPlugin::_register_crosshair_editor_setting_hints() {
 	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/max_base64_chars", PROPERTY_HINT_RANGE, "10000,10000000,1000", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/game_screenshot_timeout_ms", PROPERTY_HINT_RANGE, "1000,120000,100", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::FLOAT, "yeet_ai/chat/temperature", PROPERTY_HINT_RANGE, "-1,2,0.01,or_less,or_greater", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/chat/native_tools_enabled", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/vision_default_max_dimension", PROPERTY_HINT_RANGE, "64,4096,1", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/tools/allow_project_settings_write", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/tools/allow_editor_settings_write", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
@@ -141,6 +142,17 @@ void YeetAIEditorPlugin::_ensure_editor_settings() {
 		}
 		settings->set_setting("yeet_ai/chat/max_tokens_legacy_bump_v2", true);
 	}
+	// Catch-all: bump any remaining low values (e.g., 786, 1024, 4096) to 32k.
+	if (!settings->has_setting("yeet_ai/chat/max_tokens_legacy_bump_v3")) {
+		settings->set_initial_value("yeet_ai/chat/max_tokens_legacy_bump_v3", true, true);
+		if (settings->has_setting("yeet_ai/chat/max_tokens")) {
+			const int v = int(settings->get_setting("yeet_ai/chat/max_tokens"));
+			if (v < 16384) {
+				settings->set_setting("yeet_ai/chat/max_tokens", 32768);
+			}
+		}
+		settings->set_setting("yeet_ai/chat/max_tokens_legacy_bump_v3", true);
+	}
 	if (!settings->has_setting("yeet_ai/chat/max_tool_round_trips") || int(settings->get_setting("yeet_ai/chat/max_tool_round_trips")) < 100) {
 		settings->set_initial_value("yeet_ai/chat/max_tool_round_trips", 100, true);
 		settings->set_setting("yeet_ai/chat/max_tool_round_trips", 100);
@@ -161,6 +173,10 @@ void YeetAIEditorPlugin::_ensure_editor_settings() {
 		// Lower than 1.0 helps instruction models (e.g. Qwen) stick to JSON tool output.
 		settings->set_initial_value("yeet_ai/chat/temperature", 0.25, true);
 		settings->set_setting("yeet_ai/chat/temperature", 0.25);
+	}
+	if (!settings->has_setting("yeet_ai/chat/native_tools_enabled")) {
+		settings->set_initial_value("yeet_ai/chat/native_tools_enabled", true, true);
+		settings->set_setting("yeet_ai/chat/native_tools_enabled", true);
 	}
 	if (!settings->has_setting("yeet_ai/chat/vision_default_max_dimension")) {
 		settings->set_initial_value("yeet_ai/chat/vision_default_max_dimension", 1280, true);

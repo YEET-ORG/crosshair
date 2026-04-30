@@ -308,6 +308,55 @@ Variant YeetAIDock::_variant_from_json(const Variant &p_input, Variant::Type p_h
 		if ((p_hint_type == Variant::COLOR || p_hint_type == Variant::NIL) && dict.has("r") && dict.has("g") && dict.has("b")) {
 			return Color(dict.get("r", 0.0), dict.get("g", 0.0), dict.get("b", 0.0), dict.get("a", 1.0));
 		}
+		if ((p_hint_type == Variant::COLOR || p_hint_type == Variant::NIL) && dict.has("red") && dict.has("green") && dict.has("blue")) {
+			return Color(dict.get("red", 0.0), dict.get("green", 0.0), dict.get("blue", 0.0), dict.get("alpha", 1.0));
+		}
+	}
+
+	if (p_input.get_type() == Variant::ARRAY) {
+		if (p_hint_type == Variant::COLOR || p_hint_type == Variant::NIL) {
+			const Array a = p_input;
+			if (a.size() >= 3) {
+				return Color(double(a[0]), double(a[1]), double(a[2]), a.size() >= 4 ? double(a[3]) : 1.0);
+			}
+		}
+		if (p_hint_type == Variant::VECTOR2 || p_hint_type == Variant::NIL) {
+			const Array a = p_input;
+			if (a.size() >= 2) {
+				return Vector2(double(a[0]), double(a[1]));
+			}
+		}
+		if (p_hint_type == Variant::VECTOR3 || p_hint_type == Variant::NIL) {
+			const Array a = p_input;
+			if (a.size() >= 3) {
+				return Vector3(double(a[0]), double(a[1]), double(a[2]));
+			}
+		}
+	}
+
+	if (p_input.get_type() == Variant::STRING) {
+		const String s = String(p_input).strip_edges();
+		if (p_hint_type == Variant::COLOR || p_hint_type == Variant::NIL) {
+			if (s.begins_with("#")) {
+				return Color::html(s);
+			}
+			const PackedStringArray parts = s.split(",");
+			if (parts.size() >= 3) {
+				return Color(parts[0].to_float(), parts[1].to_float(), parts[2].to_float(), parts.size() >= 4 ? parts[3].to_float() : 1.0);
+			}
+		}
+		if (p_hint_type == Variant::VECTOR3 || p_hint_type == Variant::NIL) {
+			const PackedStringArray parts = s.split(",");
+			if (parts.size() >= 3) {
+				return Vector3(parts[0].to_float(), parts[1].to_float(), parts[2].to_float());
+			}
+		}
+		if (p_hint_type == Variant::VECTOR2 || p_hint_type == Variant::NIL) {
+			const PackedStringArray parts = s.split(",");
+			if (parts.size() >= 2) {
+				return Vector2(parts[0].to_float(), parts[1].to_float());
+			}
+		}
 	}
 
 	switch (p_hint_type) {
@@ -592,11 +641,14 @@ Dictionary YeetAIDock::_parse_one_batch_call(const Variant &p_call_var, int p_in
 		tool_name = String(call.get("name", "")).strip_edges();
 	}
 	if (tool_name.is_empty()) {
+		tool_name = String(call.get("method", "")).strip_edges();
+	}
+	if (tool_name.is_empty()) {
 		const Dictionary fn = call.get("function", Dictionary());
 		tool_name = String(fn.get("name", "")).strip_edges();
 	}
 	if (tool_name.is_empty()) {
-		out["error"] = "Each batch call needs a tool name (`tool`, `name`, or `function.name`).";
+		out["error"] = "Each batch call needs a tool name (`tool`, `name`, `method`, or `function.name`).";
 		out["failed_index"] = p_index;
 		return out;
 	}

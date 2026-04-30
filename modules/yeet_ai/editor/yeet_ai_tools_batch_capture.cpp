@@ -163,12 +163,28 @@ Dictionary YeetAIDock::_tool_batch_tool_calls(const Dictionary &p_args) const {
 	}
 
 	if (!scenes_to_save.is_empty()) {
+		EditorNode *editor_node = EditorNode::get_singleton();
 		EditorInterface *editor = EditorInterface::get_singleton();
-		if (editor != nullptr) {
+		if (editor_node != nullptr && editor != nullptr) {
+			// Build the actually-savable subset: only scenes that are currently
+			// open in the editor. EditorNode::save_scene_list looks them up by
+			// scene index — no async scene switching, no clobbering whatever the
+			// user is editing right now.
+			HashSet<String> savable;
 			Array saved_paths;
+			const TypedArray<Node> open_roots = editor->get_open_scene_roots();
 			for (const String &scene_path : scenes_to_save) {
-				editor->save_scene_as(scene_path, false);
-				saved_paths.push_back(scene_path);
+				for (int r = 0; r < open_roots.size(); r++) {
+					Node *root = Object::cast_to<Node>(open_roots[r]);
+					if (root != nullptr && root->get_scene_file_path() == scene_path) {
+						savable.insert(scene_path);
+						saved_paths.push_back(scene_path);
+						break;
+					}
+				}
+			}
+			if (!savable.is_empty()) {
+				editor_node->save_scene_list(savable);
 			}
 			result["auto_saved_scenes"] = saved_paths;
 		}
