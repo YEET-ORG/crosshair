@@ -10,6 +10,7 @@
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
 #include "core/io/resource_loader.h"
+#include "core/os/os.h"
 #include "editor/editor_interface.h"
 #include "scene/2d/navigation/navigation_region_2d.h"
 #include "scene/2d/physics/collision_object_2d.h"
@@ -407,18 +408,66 @@ Dictionary YeetAIDock::_tool_get_navigation_region_info(const Dictionary &p_args
 Dictionary YeetAIDock::_tool_open_scene(const Dictionary &p_args) const {
 	Dictionary result;
 	const String scene_path = p_args.get("scene_path", "");
+	if (scene_path.is_empty()) {
+		result["error"] = "scene_path is required.";
+		return result;
+	}
 	if (!scene_path.begins_with("res://")) {
-		result["error"] = "scene_path must start with res://";
+		result["error"] = "scene_path must start with res:// (e.g., res://scenes/main.tscn)";
+		return result;
+	}
+	if (!FileAccess::exists(scene_path)) {
+		result["error"] = vformat("Scene file does not exist: %s", scene_path);
 		return result;
 	}
 
-	String error;
-	Node *scene_root = _resolve_scene_root(scene_path, error);
+	EditorInterface *editor = EditorInterface::get_singleton();
+	if (editor == nullptr) {
+		result["error"] = "EditorInterface is unavailable.";
+		return result;
+	}
+
+	// Check if scene is already open and return early
+	TypedArray<Node> open_roots = editor->get_open_scene_roots();
+	for (int i = 0; i < open_roots.size(); i++) {
+		Node *open_root = Object::cast_to<Node>(open_roots[i]);
+		if (open_root != nullptr && open_root->get_scene_file_path() == scene_path) {
+			result["ok"] = true;
+			result["scene_path"] = open_root->get_scene_file_path();
+			result["root_name"] = open_root->get_name();
+			result["root_type"] = open_root->get_class();
+			result["already_open"] = true;
+			return result;
+		}
+	}
+
+	// Open the scene
+	editor->open_scene_from_path(scene_path);
+
+	// Retry finding the scene root with a few attempts
+	// (scene loading may not be immediate)
+	Node *scene_root = nullptr;
+	for (int attempt = 0; attempt < 5; attempt++) {
+		open_roots = editor->get_open_scene_roots();
+		for (int i = 0; i < open_roots.size(); i++) {
+			Node *open_root = Object::cast_to<Node>(open_roots[i]);
+			if (open_root != nullptr && open_root->get_scene_file_path() == scene_path) {
+				scene_root = open_root;
+				break;
+			}
+		}
+		if (scene_root != nullptr) {
+			break;
+		}
+		OS::get_singleton()->delay_usec(10000); // 10ms delay between attempts
+	}
+
 	if (scene_root == nullptr) {
-		result["error"] = error;
+		result["error"] = vformat("Failed to open scene: %s. The file may be corrupted or not a valid scene.", scene_path);
 		return result;
 	}
 
+	result["ok"] = true;
 	result["scene_path"] = scene_root->get_scene_file_path();
 	result["root_name"] = scene_root->get_name();
 	result["root_type"] = scene_root->get_class();
@@ -445,6 +494,8 @@ Dictionary YeetAIDock::_tool_save_current_scene(const Dictionary &p_args) const 
 	result["error_code"] = err;
 	if (err != OK) {
 		result["error"] = vformat("save_scene failed with error %d", err);
+	} else {
+		result["ok"] = true;
 	}
 	return result;
 }
@@ -465,8 +516,16 @@ Dictionary YeetAIDock::_tool_save_all_scenes(const Dictionary &p_args) const {
 Dictionary YeetAIDock::_tool_reload_scene(const Dictionary &p_args) const {
 	Dictionary result;
 	const String scene_path = p_args.get("scene_path", "");
+	if (scene_path.is_empty()) {
+		result["error"] = "scene_path is required.";
+		return result;
+	}
 	if (!scene_path.begins_with("res://")) {
 		result["error"] = "scene_path must start with res://";
+		return result;
+	}
+	if (!FileAccess::exists(scene_path)) {
+		result["error"] = vformat("Scene file does not exist: %s", scene_path);
 		return result;
 	}
 	EditorInterface *editor = EditorInterface::get_singleton();
@@ -475,6 +534,7 @@ Dictionary YeetAIDock::_tool_reload_scene(const Dictionary &p_args) const {
 		return result;
 	}
 	editor->reload_scene_from_path(scene_path);
+	result["ok"] = true;
 	result["scene_path"] = scene_path;
 	result["reloaded"] = true;
 	return result;
@@ -493,6 +553,7 @@ Dictionary YeetAIDock::_tool_select_file(const Dictionary &p_args) const {
 		return result;
 	}
 	editor->select_file(path);
+	result["ok"] = true;
 	result["path"] = path;
 	return result;
 }
@@ -505,6 +566,7 @@ Dictionary YeetAIDock::_tool_get_unsaved_scenes(const Dictionary &p_args) const 
 		result["error"] = "EditorInterface is unavailable.";
 		return result;
 	}
+	result["ok"] = true;
 	result["unsaved_scenes"] = editor->get_unsaved_scenes();
 	return result;
 }
