@@ -2053,6 +2053,50 @@ void YeetAIDock::_append_tool_result(const String &p_tool_name, const Dictionary
 		chat_log->pop();
 	}
 
+	// ── Batch result expansion ──
+	if (p_tool_name == "batch_tool_calls" && p_result.payload.has("results")) {
+		const Array batch_results = p_result.payload["results"];
+		if (!batch_results.is_empty()) {
+			chat_log->push_indent(1);
+			chat_log->push_font_size(small_fs);
+			chat_log->append_text("\n");
+			for (int i = 0; i < batch_results.size(); i++) {
+				if (batch_results[i].get_type() != Variant::DICTIONARY) {
+					continue;
+				}
+				const Dictionary entry = batch_results[i];
+				const bool entry_ok = bool(entry.get("ok", false));
+				const String entry_tool = String(entry.get("tool", ""));
+				const String entry_result = JSON::stringify(entry.get("result", Dictionary()), "", false, true);
+
+				// Status dot
+				chat_log->push_color(entry_ok ? success : error);
+				chat_log->add_text(entry_ok ? "● " : "● ");
+				chat_log->pop();
+
+				// Tool name
+				chat_log->push_color(font_base);
+				chat_log->push_bold();
+				chat_log->add_text(_humanize_tool_name(entry_tool));
+				chat_log->pop();
+				chat_log->pop();
+
+				// Error preview on failure
+				if (!entry_ok && entry_result.length() > 2) {
+					chat_log->push_color(Color(error.r, error.g, error.b, 0.8f));
+					chat_log->push_mono();
+					const String err_preview = _truncate_preview(entry_result, 80);
+					chat_log->add_text(" " + err_preview);
+					chat_log->pop();
+					chat_log->pop();
+				}
+				chat_log->append_text("\n");
+			}
+			chat_log->pop();
+			chat_log->pop();
+		}
+	}
+
 	// ── Output preview ──
 	const String preview = _truncate_preview(p_result.display_text, 280);
 	if (!preview.is_empty() && !p_result.ok) {
