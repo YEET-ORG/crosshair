@@ -58,6 +58,7 @@ void YeetAIEditorPlugin::_register_crosshair_editor_setting_hints() {
 	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/tools/allow_reimport", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/tools/allow_resource_save", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/tools/allow_replace_in_files", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/chat/debug_mode", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
 }
 
 void YeetAIEditorPlugin::_bind_methods() {
@@ -197,6 +198,10 @@ void YeetAIEditorPlugin::_ensure_editor_settings() {
 	if (!settings->has_setting("yeet_ai/chat/native_tools_enabled")) {
 		settings->set_initial_value("yeet_ai/chat/native_tools_enabled", true, true);
 		settings->set_setting("yeet_ai/chat/native_tools_enabled", true);
+	}
+	if (!settings->has_setting("yeet_ai/chat/debug_mode")) {
+		settings->set_initial_value("yeet_ai/chat/debug_mode", false, true);
+		settings->set_setting("yeet_ai/chat/debug_mode", false);
 	}
 	if (!settings->has_setting("yeet_ai/chat/vision_default_max_dimension")) {
 		settings->set_initial_value("yeet_ai/chat/vision_default_max_dimension", 1280, true);

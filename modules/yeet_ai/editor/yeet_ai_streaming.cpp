@@ -476,6 +476,10 @@ void YeetAIDock::_drain_stream_queue() {
 void YeetAIDock::_finalize_stream() {
 	String accumulated = _stream_accumulated;
 
+	if (_get_editor_setting_bool("yeet_ai/chat/debug_mode", false)) {
+		WARN_PRINT(vformat("[YeetAI Debug] Response (%s):\n%s", _stream_has_tool_calls ? "tool_calls" : "text", accumulated));
+	}
+
 	// Check for accumulated streaming tool calls first.
 	if (_stream_has_tool_calls && !_stream_tool_call_accumulator.is_empty()) {
 		Dictionary message;

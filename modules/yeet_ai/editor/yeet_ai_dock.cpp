@@ -2423,6 +2423,11 @@ void YeetAIDock::_request_model_response() {
 	_stream_endpoint = endpoint;
 	_stream_req_headers = headers;
 	_stream_req_body = JSON::stringify(payload);
+
+	if (_get_editor_setting_bool("yeet_ai/chat/debug_mode", false)) {
+		WARN_PRINT(vformat("[YeetAI Debug] Request to %s:\n%s", endpoint, _stream_req_body));
+	}
+
 	_set_waiting(true, TTR("Thinking..."));
 	_start_streaming();
 }
