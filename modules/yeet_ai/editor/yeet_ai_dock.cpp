@@ -653,7 +653,7 @@ YeetAIDock::YeetAIDock() {
 	// New chat button
 	_new_chat_button = memnew(Button);
 	_new_chat_button->set_theme_type_variation("FlatButton");
-	_new_chat_button->set_tooltip_text(TTR("New Chat"));
+	_new_chat_button->set_tooltip_text(TTR("New Chat (Ctrl+Shift+N)"));
 	_new_chat_button->connect(SceneStringName(pressed), callable_mp(this, &YeetAIDock::_on_new_chat_pressed));
 	controls_row->add_child(_new_chat_button);
 
@@ -812,6 +812,7 @@ YeetAIDock::YeetAIDock() {
 	send_button->set_text(TTR("Send"));
 	send_button->set_h_size_flags(Control::SIZE_SHRINK_END);
 	send_button->set_theme_type_variation("FlatButton");
+	send_button->set_tooltip_text(TTR("Send prompt (Ctrl+Enter)"));
 	send_button->connect(SceneStringName(pressed), callable_mp(this, &YeetAIDock::_send_prompt));
 	button_row->add_child(send_button);
 
@@ -820,6 +821,7 @@ YeetAIDock::YeetAIDock() {
 	stop_button->set_text(TTR("Stop"));
 	stop_button->set_h_size_flags(Control::SIZE_SHRINK_END);
 	stop_button->set_theme_type_variation("FlatButton");
+	stop_button->set_tooltip_text(TTR("Stop generation (Escape)"));
 	stop_button->set_visible(false);
 	stop_button->connect(SceneStringName(pressed), callable_mp(this, &YeetAIDock::_on_stop_pressed));
 	button_row->add_child(stop_button);
@@ -832,6 +834,7 @@ YeetAIDock::YeetAIDock() {
 	clear_button = memnew(Button);
 	clear_button->set_theme_type_variation("FlatButton");
 	clear_button->set_text(TTR("Clear"));
+	clear_button->set_tooltip_text(TTR("Clear conversation (Ctrl+L)"));
 	clear_button->set_h_size_flags(Control::SIZE_SHRINK_END);
 	clear_button->connect(SceneStringName(pressed), callable_mp(this, &YeetAIDock::_clear_chat));
 	button_row->add_child(clear_button);
