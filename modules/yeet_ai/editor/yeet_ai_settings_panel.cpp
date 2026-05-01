@@ -503,61 +503,61 @@ void YeetAISettingsPanel::_build_ui() {
 	settings_game_screenshot_timeout_ms->set_step(100);
 	_add_settings_labeled_row(vb, TTR("Game shot wait (ms)"), settings_game_screenshot_timeout_ms, TTR("How long to wait when capturing the running game view."));
 
-	settings_enabled->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_gemini_api_key->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_enabled->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_checkbox_toggled));
+	settings_gemini_api_key->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
 	settings_gemini_api_key->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_openrouter_api_key->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_openrouter_api_key->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
 	settings_openrouter_api_key->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_yeet_chat_url->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_yeet_chat_url->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
 	settings_yeet_chat_url->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_yeet_tags_url->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_yeet_tags_url->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
 	settings_yeet_tags_url->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_yeet_api_key->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_yeet_api_key->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
 	settings_yeet_api_key->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_completions_url->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_completions_url->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
 	settings_completions_url->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_model->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_model->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
 	settings_model->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
 	settings_gemini_model_choice->connect(SceneStringName(item_selected), callable_mp(this, &YeetAISettingsPanel::_on_gemini_model_selected));
 	settings_gemini_model_custom->connect(SceneStringName(text_changed), callable_mp(this, &YeetAISettingsPanel::_on_gemini_model_custom_changed));
-	settings_gemini_model_custom->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_gemini_model_custom->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
 	settings_gemini_model_custom->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
 	settings_gemini_models_refresh->connect(SceneStringName(pressed), callable_mp(this, &YeetAISettingsPanel::_fetch_gemini_models_list));
 	settings_openrouter_model_choice->connect(SceneStringName(item_selected), callable_mp(this, &YeetAISettingsPanel::_on_openrouter_model_selected));
 	settings_openrouter_model_custom->connect(SceneStringName(text_changed), callable_mp(this, &YeetAISettingsPanel::_on_openrouter_model_custom_changed));
-	settings_openrouter_model_custom->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_openrouter_model_custom->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
 	settings_openrouter_model_custom->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
 	settings_openrouter_models_refresh->connect(SceneStringName(pressed), callable_mp(this, &YeetAISettingsPanel::_fetch_openrouter_models_list));
 	settings_yeet_model_choice->connect(SceneStringName(item_selected), callable_mp(this, &YeetAISettingsPanel::_on_yeet_model_selected));
 	settings_yeet_model_custom->connect(SceneStringName(text_changed), callable_mp(this, &YeetAISettingsPanel::_on_yeet_model_custom_changed));
-	settings_yeet_model_custom->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_yeet_model_custom->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
 	settings_yeet_model_custom->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
 	settings_yeet_models_refresh->connect(SceneStringName(pressed), callable_mp(this, &YeetAISettingsPanel::_fetch_yeet_models_list));
-	settings_api_key->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_api_key->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
 	settings_api_key->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_max_tokens->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_temperature->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_max_tool_round_trips->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_vision_enabled->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_vision_default_max_dimension->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_allow_project_settings_write->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_allow_editor_settings_write->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_extended_read_extensions->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_allow_reimport->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_allow_resource_save->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_allow_replace_in_files->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_max_base64_chars->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_game_screenshot_timeout_ms->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_max_tokens->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_spinbox_changed));
+	settings_temperature->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_spinbox_changed));
+	settings_max_tool_round_trips->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_spinbox_changed));
+	settings_vision_enabled->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_checkbox_toggled));
+	settings_vision_default_max_dimension->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_spinbox_changed));
+	settings_allow_project_settings_write->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_checkbox_toggled));
+	settings_allow_editor_settings_write->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_checkbox_toggled));
+	settings_extended_read_extensions->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_checkbox_toggled));
+	settings_allow_reimport->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_checkbox_toggled));
+	settings_allow_resource_save->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_checkbox_toggled));
+	settings_allow_replace_in_files->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_checkbox_toggled));
+	settings_max_base64_chars->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_spinbox_changed));
+	settings_game_screenshot_timeout_ms->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_spinbox_changed));
 
-	settings_azure_endpoint->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_azure_endpoint->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
 	settings_azure_endpoint->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_azure_deployment->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_azure_deployment->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
 	settings_azure_deployment->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_azure_api_version->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_azure_api_version->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
 	settings_azure_api_version->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_azure_api_key->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_azure_api_key->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
 	settings_azure_api_key->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
-	settings_azure_model->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_azure_model->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
 	settings_azure_model->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
 }
 
@@ -1285,8 +1285,7 @@ void YeetAISettingsPanel::_load_from_settings() {
 	settings_committing = false;
 }
 
-void YeetAISettingsPanel::_commit_to_settings(const String &p_unused) {
-	(void)p_unused; // Swallow argument from text_submitted signal.
+void YeetAISettingsPanel::_commit_to_settings() {
 	if (settings_committing) {
 		return;
 	}
@@ -1361,9 +1360,24 @@ void YeetAISettingsPanel::_notification(int p_what) {
 		if (yeet_models_http != nullptr && yeet_models_http->get_http_client_status() != HTTPClient::STATUS_DISCONNECTED) {
 			yeet_models_http->cancel_request();
 		}
-		EditorSettings *s = EditorSettings::get_singleton();
-		if (s != nullptr && s->is_connected("settings_changed", callable_mp(this, &YeetAISettingsPanel::_on_external_settings_changed))) {
-			s->disconnect("settings_changed", callable_mp(this, &YeetAISettingsPanel::_on_external_settings_changed));
-		}
+	EditorSettings *s = EditorSettings::get_singleton();
+	if (s != nullptr && s->is_connected("settings_changed", callable_mp(this, &YeetAISettingsPanel::_on_external_settings_changed))) {
+		s->disconnect("settings_changed", callable_mp(this, &YeetAISettingsPanel::_on_external_settings_changed));
 	}
+}
+}
+
+void YeetAISettingsPanel::_commit_text_submitted(const String &p_text) {
+	(void)p_text;
+	_commit_to_settings();
+}
+
+void YeetAISettingsPanel::_commit_spinbox_changed(double p_value) {
+	(void)p_value;
+	_commit_to_settings();
+}
+
+void YeetAISettingsPanel::_commit_checkbox_toggled(bool p_pressed) {
+	(void)p_pressed;
+	_commit_to_settings();
 }

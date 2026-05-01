@@ -2321,7 +2321,7 @@ void YeetAIDock::_request_model_response() {
 		static bool low_max_tokens_warned = false;
 		if (!low_max_tokens_warned) {
 			low_max_tokens_warned = true;
-			WARN_PRINT(vformat("[YeetAI] WARNING: yeet_ai/chat/max_tokens is %d, which is very low. Tool calls and long responses will be truncated. Consider raising it to at least 8192.", max_tokens));
+			WARN_PRINT(vformat("[YeetAI] WARNING: yeet_ai/chat/max_tokens is %d, which is very low. Tool calls and long responses will be truncated. Set it to 0 to use the server default, or raise it to at least 8192.", max_tokens));
 		}
 	}
 	if (_get_editor_setting_bool("yeet_ai/chat/debug_mode", false)) {

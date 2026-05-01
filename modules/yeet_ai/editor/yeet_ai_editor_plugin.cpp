@@ -175,6 +175,18 @@ void YeetAIEditorPlugin::_ensure_editor_settings() {
 		}
 		settings->set_setting("yeet_ai/chat/max_tokens_legacy_bump_v3", true);
 	}
+	// v4: Very low values (≤2048) are almost certainly legacy defaults.
+	// Switch them to 0 (server default) to avoid provider-specific rate limits.
+	if (!settings->has_setting("yeet_ai/chat/max_tokens_legacy_bump_v4")) {
+		settings->set_initial_value("yeet_ai/chat/max_tokens_legacy_bump_v4", true, true);
+		if (settings->has_setting("yeet_ai/chat/max_tokens")) {
+			const int v = int(settings->get_setting("yeet_ai/chat/max_tokens"));
+			if (v > 0 && v <= 2048) {
+				settings->set_setting("yeet_ai/chat/max_tokens", 0);
+			}
+		}
+		settings->set_setting("yeet_ai/chat/max_tokens_legacy_bump_v4", true);
+	}
 	if (!settings->has_setting("yeet_ai/chat/max_tool_round_trips") || int(settings->get_setting("yeet_ai/chat/max_tool_round_trips")) < 100) {
 		settings->set_initial_value("yeet_ai/chat/max_tool_round_trips", 100, true);
 		settings->set_setting("yeet_ai/chat/max_tool_round_trips", 100);

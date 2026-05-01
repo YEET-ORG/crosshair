@@ -74,7 +74,10 @@ class YeetAISettingsPanel : public VBoxContainer {
 	void _add_settings_labeled_row(VBoxContainer *p_vb, const String &p_label, Control *p_control, const String &p_tooltip = String());
 	void _build_ui();
 	void _load_from_settings();
-	void _commit_to_settings(const String &p_unused = String());
+	void _commit_to_settings();
+	void _commit_text_submitted(const String &p_text);
+	void _commit_spinbox_changed(double p_value);
+	void _commit_checkbox_toggled(bool p_pressed);
 	void _on_external_settings_changed();
 	void _update_provider_blocks();
 	void _on_provider_selected(int p_index);

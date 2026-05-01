@@ -162,10 +162,9 @@ void YeetAIDock::_stream_thread_body() {
 	}
 
 	// ── Retry loop for transient errors ──────────────────────────────────────
-	// Retry up to 3 times on 429 (rate limit), 502/503/504 (gateway errors).
+	// Retry gateway failures. Treat 429 as terminal so quota errors do not replay
+	// the same expensive request several times.
 	static constexpr int MAX_RETRIES = 3;
-	String last_err_body;
-	int last_resp_code = 0;
 
 	for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
 		if (_stream_should_stop) {
@@ -177,7 +176,7 @@ void YeetAIDock::_stream_thread_body() {
 		if (attempt > 0) {
 			// Exponential backoff: 1s, 2s, 4s
 			const int delay_ms = 1000 << (attempt - 1);
-			OS::get_singleton()->delay_msec(delay_ms);
+			OS::get_singleton()->delay_usec(uint32_t(delay_ms) * 1000);
 			if (_stream_should_stop) {
 				MutexLock lock(_stream_mutex);
 				_stream_done_flag = true;
@@ -298,10 +297,15 @@ void YeetAIDock::_stream_thread_body() {
 			memdelete(client);
 
 			// Decide whether to retry.
-			const bool is_retryable = (resp_code == 429 || resp_code == 502 || resp_code == 503 || resp_code == 504);
+			if (resp_code == 429) {
+				MutexLock lock(_stream_mutex);
+				_stream_error_flag = true;
+				_stream_error_msg = vformat("HTTP 429 rate limit/quota exceeded (not retried): %s", err_body.substr(0, 400));
+				_stream_done_flag = true;
+				return;
+			}
+			const bool is_retryable = (resp_code == 502 || resp_code == 503 || resp_code == 504);
 			if (is_retryable && attempt < MAX_RETRIES) {
-				last_err_body = err_body;
-				last_resp_code = resp_code;
 				continue; // Retry with backoff
 			}
 
