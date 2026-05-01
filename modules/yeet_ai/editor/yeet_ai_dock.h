@@ -505,12 +505,30 @@ protected:
 	Dictionary _tool_create_animated_sprite_2d(const Dictionary &p_args) const;
 	Dictionary _tool_create_rigid_body_2d(const Dictionary &p_args) const;
 	Dictionary _tool_create_character_body_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_static_body_2d(const Dictionary &p_args) const;
 	Dictionary _tool_create_area_2d(const Dictionary &p_args) const;
 	Dictionary _tool_create_ray_cast_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_shape_cast_2d(const Dictionary &p_args) const;
 	Dictionary _tool_create_line_2d(const Dictionary &p_args) const;
 	Dictionary _tool_create_path_2d(const Dictionary &p_args) const;
 	Dictionary _tool_create_polygon_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_collision_polygon_2d(const Dictionary &p_args) const;
 	Dictionary _tool_create_light_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_camera_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_marker_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_tile_map(const Dictionary &p_args) const;
+	Dictionary _tool_create_cpu_particles_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_gpu_particles_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_animatable_body_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_audio_stream_player_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_canvas_layer(const Dictionary &p_args) const;
+	Dictionary _tool_create_parallax_background(const Dictionary &p_args) const;
+	Dictionary _tool_create_parallax_layer(const Dictionary &p_args) const;
+	Dictionary _tool_create_visible_on_screen_notifier_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_remote_transform_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_navigation_agent_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_navigation_region_2d(const Dictionary &p_args) const;
+	Dictionary _tool_add_collision_shape_2d(const Dictionary &p_args) const;
 
 	// ── C. Animation ──────────────────────────────────────────────────────────
 	Dictionary _tool_create_animation(const Dictionary &p_args) const;
