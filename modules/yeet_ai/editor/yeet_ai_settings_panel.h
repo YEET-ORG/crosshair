@@ -24,10 +24,12 @@ class YeetAISettingsPanel : public VBoxContainer {
 	VBoxContainer *gemini_settings_block = nullptr;
 	VBoxContainer *openrouter_settings_block = nullptr;
 	VBoxContainer *yeet_settings_block = nullptr;
+	VBoxContainer *azure_settings_block = nullptr;
 	VBoxContainer *model_local_gemini_block = nullptr;
 	VBoxContainer *model_gemini_block = nullptr;
 	VBoxContainer *model_openrouter_block = nullptr;
 	VBoxContainer *model_yeet_block = nullptr;
+	VBoxContainer *model_azure_block = nullptr;
 	LineEdit *settings_completions_url = nullptr;
 	LineEdit *settings_model = nullptr;
 	OptionButton *settings_openrouter_model_choice = nullptr;
@@ -48,6 +50,11 @@ class YeetAISettingsPanel : public VBoxContainer {
 	LineEdit *settings_gemini_api_key = nullptr;
 	LineEdit *settings_openrouter_api_key = nullptr;
 	LineEdit *settings_yeet_api_key = nullptr;
+	LineEdit *settings_azure_endpoint = nullptr;
+	LineEdit *settings_azure_deployment = nullptr;
+	LineEdit *settings_azure_api_version = nullptr;
+	LineEdit *settings_azure_api_key = nullptr;
+	LineEdit *settings_azure_model = nullptr;
 	SpinBox *settings_max_tokens = nullptr;
 	SpinBox *settings_max_tool_round_trips = nullptr;
 	SpinBox *settings_max_base64_chars = nullptr;
@@ -67,7 +74,7 @@ class YeetAISettingsPanel : public VBoxContainer {
 	void _add_settings_labeled_row(VBoxContainer *p_vb, const String &p_label, Control *p_control, const String &p_tooltip = String());
 	void _build_ui();
 	void _load_from_settings();
-	void _commit_to_settings();
+	void _commit_to_settings(const String &p_unused = String());
 	void _on_external_settings_changed();
 	void _update_provider_blocks();
 	void _on_provider_selected(int p_index);

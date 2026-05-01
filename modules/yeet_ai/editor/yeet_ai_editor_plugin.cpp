@@ -28,7 +28,7 @@ void YeetAIEditorPlugin::_register_crosshair_editor_setting_hints() {
 
 	// Makes Crosshair keys readable in Editor → Editor Settings (same backing store as the dock panel).
 	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/enabled", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
-	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/provider", PROPERTY_HINT_ENUM, "Berry Model:0,Gemini:1,OpenRouter:2,Yeet Models:3", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/provider", PROPERTY_HINT_ENUM, "Berry Model:0,Gemini:1,OpenRouter:2,Yeet Models:3,Azure OpenAI:4", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/completions_url", PROPERTY_HINT_PLACEHOLDER_TEXT, "https://host/v1/chat/completions", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/model", PROPERTY_HINT_PLACEHOLDER_TEXT, "berrymodel", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/api_key", PROPERTY_HINT_PASSWORD, "", PROPERTY_USAGE_DEFAULT));
@@ -37,6 +37,10 @@ void YeetAIEditorPlugin::_register_crosshair_editor_setting_hints() {
 	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/yeet_chat_url", PROPERTY_HINT_PLACEHOLDER_TEXT, "https://gpt.yeetlabs.fun/v1/chat/completions", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/yeet_tags_url", PROPERTY_HINT_PLACEHOLDER_TEXT, "https://gpt.yeetlabs.fun/api/tags", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/yeet_api_key", PROPERTY_HINT_PASSWORD, "", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/azure_endpoint", PROPERTY_HINT_PLACEHOLDER_TEXT, "https://crosshair-resource.services.ai.azure.com", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/azure_deployment", PROPERTY_HINT_PLACEHOLDER_TEXT, "gpt-4o", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/azure_api_version", PROPERTY_HINT_PLACEHOLDER_TEXT, "2024-06-01", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/azure_api_key", PROPERTY_HINT_PASSWORD, "", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/max_tokens", PROPERTY_HINT_RANGE, "256,262144,1", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/max_tool_round_trips", PROPERTY_HINT_RANGE, "1,500,1", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/chat/vision_enabled", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
@@ -106,6 +110,22 @@ void YeetAIEditorPlugin::_ensure_editor_settings() {
 	if (!settings->has_setting("yeet_ai/chat/yeet_api_key")) {
 		settings->set_initial_value("yeet_ai/chat/yeet_api_key", "", true);
 		settings->set_setting("yeet_ai/chat/yeet_api_key", "");
+	}
+	if (!settings->has_setting("yeet_ai/chat/azure_endpoint")) {
+		settings->set_initial_value("yeet_ai/chat/azure_endpoint", "https://crosshair-resource.services.ai.azure.com", true);
+		settings->set_setting("yeet_ai/chat/azure_endpoint", "https://crosshair-resource.services.ai.azure.com");
+	}
+	if (!settings->has_setting("yeet_ai/chat/azure_deployment")) {
+		settings->set_initial_value("yeet_ai/chat/azure_deployment", "", true);
+		settings->set_setting("yeet_ai/chat/azure_deployment", "");
+	}
+	if (!settings->has_setting("yeet_ai/chat/azure_api_version")) {
+		settings->set_initial_value("yeet_ai/chat/azure_api_version", "2024-06-01", true);
+		settings->set_setting("yeet_ai/chat/azure_api_version", "2024-06-01");
+	}
+	if (!settings->has_setting("yeet_ai/chat/azure_api_key")) {
+		settings->set_initial_value("yeet_ai/chat/azure_api_key", "", true);
+		settings->set_setting("yeet_ai/chat/azure_api_key", "");
 	}
 	if (!settings->has_setting("yeet_ai/chat/completions_url")) {
 		settings->set_initial_value("yeet_ai/chat/completions_url", "https://llm.adityaberry.me/v1/chat/completions", true);

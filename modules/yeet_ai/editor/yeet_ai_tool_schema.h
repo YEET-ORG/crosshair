@@ -65,7 +65,9 @@ public:
 	
 	// Generate OpenAI-compatible tool definitions for native function calling.
 	// Returns an Array of Dictionary objects, each with "type", "function", "name", "description", "parameters".
-	static Array build_openai_tools_payload();
+	// If p_tool_names is provided, generates schemas for those specific tools (using inference if needed).
+	// Otherwise, uses only explicitly registered schemas.
+	static Array build_openai_tools_payload(const Vector<String> &p_tool_names = Vector<String>());
 	// Convert a single ToolSchema to an OpenAI-compatible function definition Dictionary.
 	static Dictionary tool_schema_to_openai_function(const ToolSchema &p_schema);
 	

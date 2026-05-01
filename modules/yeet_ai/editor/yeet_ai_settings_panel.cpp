@@ -78,19 +78,23 @@ void YeetAISettingsPanel::_update_provider_blocks() {
 	ERR_FAIL_NULL(gemini_settings_block);
 	ERR_FAIL_NULL(openrouter_settings_block);
 	ERR_FAIL_NULL(yeet_settings_block);
+	ERR_FAIL_NULL(azure_settings_block);
 	ERR_FAIL_NULL(model_local_gemini_block);
 	ERR_FAIL_NULL(model_gemini_block);
 	ERR_FAIL_NULL(model_openrouter_block);
 	ERR_FAIL_NULL(model_yeet_block);
+	ERR_FAIL_NULL(model_azure_block);
 	const int id = settings_provider->get_selected_id();
 	local_settings_block->set_visible(id == 0);
 	gemini_settings_block->set_visible(id == 1);
 	openrouter_settings_block->set_visible(id == 2);
 	yeet_settings_block->set_visible(id == 3);
+	azure_settings_block->set_visible(id == 4);
 	model_local_gemini_block->set_visible(id == 0);
 	model_gemini_block->set_visible(id == 1);
 	model_openrouter_block->set_visible(id == 2);
 	model_yeet_block->set_visible(id == 3);
+	model_azure_block->set_visible(id == 4);
 }
 
 void YeetAISettingsPanel::_on_provider_selected(int p_index) {
@@ -110,6 +114,8 @@ void YeetAISettingsPanel::_on_provider_selected(int p_index) {
 				model_val = _get_openrouter_model_slug_from_ui();
 			} else if (prev_id == 3) {
 				model_val = _get_yeet_model_slug_from_ui();
+			} else if (prev_id == 4) {
+				model_val = settings_azure_model->get_text();
 			} else {
 				model_val = String::utf8(k_berry_model_id);
 			}
@@ -130,6 +136,9 @@ void YeetAISettingsPanel::_on_provider_selected(int p_index) {
 	if (new_id == 3) {
 		_fetch_yeet_models_list();
 		_sync_yeet_model_ui_from_slug(_get_setting_string("yeet_ai/chat/model", ""));
+	}
+	if (new_id == 4) {
+		settings_azure_model->set_text(_get_setting_string("yeet_ai/chat/model", "gpt-4o"));
 	}
 
 	_commit_to_settings();
@@ -202,6 +211,7 @@ void YeetAISettingsPanel::_build_ui() {
 	settings_provider->add_item(TTR("Gemini"), 1);
 	settings_provider->add_item(TTR("OpenRouter"), 2);
 	settings_provider->add_item(TTR("Yeet Models"), 3);
+	settings_provider->add_item(TTR("Azure OpenAI"), 4);
 	settings_provider->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	settings_provider->connect(SceneStringName(item_selected), callable_mp(this, &YeetAISettingsPanel::_on_provider_selected));
 	vb->add_child(settings_provider);
@@ -268,6 +278,32 @@ void YeetAISettingsPanel::_build_ui() {
 	yeet_hint->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
 	yeet_hint->set_text(TTR("Below, choose a model from the Yeet tags list or Custom."));
 	yeet_settings_block->add_child(yeet_hint);
+
+	azure_settings_block = memnew(VBoxContainer);
+	azure_settings_block->add_theme_constant_override("separation", int(10.0f * EDSCALE));
+	vb->add_child(azure_settings_block);
+
+	settings_azure_endpoint = memnew(LineEdit);
+	settings_azure_endpoint->set_placeholder(TTR("https://crosshair-resource.services.ai.azure.com"));
+	_add_settings_labeled_row(azure_settings_block, TTR("Azure endpoint"), settings_azure_endpoint, TTR("Azure OpenAI resource endpoint (e.g. https://crosshair-resource.services.ai.azure.com)."));
+
+	settings_azure_deployment = memnew(LineEdit);
+	settings_azure_deployment->set_placeholder(TTR("gpt-4o"));
+	_add_settings_labeled_row(azure_settings_block, TTR("Azure deployment"), settings_azure_deployment, TTR("Deployment name configured in Azure AI Foundry / OpenAI Studio."));
+
+	settings_azure_api_version = memnew(LineEdit);
+	settings_azure_api_version->set_placeholder(TTR("2024-05-01-preview"));
+	_add_settings_labeled_row(azure_settings_block, TTR("API version"), settings_azure_api_version, TTR("Azure AI API version (e.g. 2024-05-01-preview)."));
+
+	settings_azure_api_key = memnew(LineEdit);
+	settings_azure_api_key->set_secret(true);
+	settings_azure_api_key->set_placeholder(TTR("Azure API key"));
+	_add_settings_labeled_row(azure_settings_block, TTR("Azure API key"), settings_azure_api_key, TTR("Key from Azure Portal or AI Foundry. Sent as Authorization: Bearer."));
+
+	Label *azure_hint = memnew(Label);
+	azure_hint->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
+	azure_hint->set_text(TTR("Below, enter the model name matching your Azure deployment (e.g. gpt-4o)."));
+	azure_settings_block->add_child(azure_hint);
 
 	model_local_gemini_block = memnew(VBoxContainer);
 	model_local_gemini_block->add_theme_constant_override("separation", int(10.0f * EDSCALE));
@@ -369,6 +405,15 @@ void YeetAISettingsPanel::_build_ui() {
 	yt_row->add_child(yt_ml);
 	yt_row->add_child(yt_col);
 	model_yeet_block->add_child(yt_row);
+
+	model_azure_block = memnew(VBoxContainer);
+	model_azure_block->add_theme_constant_override("separation", int(10.0f * EDSCALE));
+	vb->add_child(model_azure_block);
+
+	settings_azure_model = memnew(LineEdit);
+	settings_azure_model->set_placeholder(TTR("gpt-4o"));
+	settings_azure_model->set_tooltip_text(TTR("Model name for this Azure deployment (e.g. gpt-4o). Used in chat payload."));
+	_add_settings_labeled_row(model_azure_block, TTR("Model"), settings_azure_model, TTR("Model name matching your Azure deployment (e.g. gpt-4o)."));
 
 	openrouter_models_http = memnew(HTTPRequest);
 	openrouter_models_http->set_use_threads(true);
@@ -503,6 +548,17 @@ void YeetAISettingsPanel::_build_ui() {
 	settings_allow_replace_in_files->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
 	settings_max_base64_chars->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
 	settings_game_screenshot_timeout_ms->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+
+	settings_azure_endpoint->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_azure_endpoint->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_azure_deployment->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_azure_deployment->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_azure_api_version->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_azure_api_version->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_azure_api_key->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_azure_api_key->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_azure_model->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_azure_model->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
 }
 
 void YeetAISettingsPanel::_rebuild_openrouter_model_dropdown(const Vector<String> &p_api_slugs) {
@@ -1105,6 +1161,9 @@ String YeetAISettingsPanel::_get_model_value_for_commit() const {
 	if (id == 3) {
 		return _get_yeet_model_slug_from_ui();
 	}
+	if (id == 4) {
+		return settings_azure_model->get_text();
+	}
 	return String::utf8(k_berry_model_id);
 }
 
@@ -1191,6 +1250,11 @@ void YeetAISettingsPanel::_load_from_settings() {
 	settings_yeet_chat_url->set_text(_get_setting_string("yeet_ai/chat/yeet_chat_url", "https://gpt.yeetlabs.fun/v1/chat/completions"));
 	settings_yeet_tags_url->set_text(_get_setting_string("yeet_ai/chat/yeet_tags_url", "https://gpt.yeetlabs.fun/api/tags"));
 	settings_yeet_api_key->set_text(_get_setting_string("yeet_ai/chat/yeet_api_key", ""));
+	settings_azure_endpoint->set_text(_get_setting_string("yeet_ai/chat/azure_endpoint", "https://crosshair-resource.services.ai.azure.com"));
+	settings_azure_deployment->set_text(_get_setting_string("yeet_ai/chat/azure_deployment", ""));
+	settings_azure_api_version->set_text(_get_setting_string("yeet_ai/chat/azure_api_version", "2024-05-01-preview"));
+	settings_azure_api_key->set_text(_get_setting_string("yeet_ai/chat/azure_api_key", ""));
+	settings_azure_model->set_text(_get_setting_string("yeet_ai/chat/model", "gpt-4o"));
 	_update_provider_blocks();
 	if (cached_provider_id == 1) {
 		_sync_gemini_model_ui_from_slug(model_setting);
@@ -1200,6 +1264,9 @@ void YeetAISettingsPanel::_load_from_settings() {
 	}
 	if (cached_provider_id == 3) {
 		_sync_yeet_model_ui_from_slug(model_setting);
+	}
+	if (cached_provider_id == 4) {
+		settings_azure_model->set_text(model_setting);
 	}
 	settings_max_tokens->set_value_no_signal(_get_setting_int("yeet_ai/chat/max_tokens", 32768));
 	settings_temperature->set_value_no_signal((double)_get_setting_float("yeet_ai/chat/temperature", 0.25f));
@@ -1218,7 +1285,8 @@ void YeetAISettingsPanel::_load_from_settings() {
 	settings_committing = false;
 }
 
-void YeetAISettingsPanel::_commit_to_settings() {
+void YeetAISettingsPanel::_commit_to_settings(const String &p_unused) {
+	(void)p_unused; // Swallow argument from text_submitted signal.
 	if (settings_committing) {
 		return;
 	}
@@ -1239,6 +1307,10 @@ void YeetAISettingsPanel::_commit_to_settings() {
 	s->set_setting("yeet_ai/chat/yeet_chat_url", settings_yeet_chat_url->get_text());
 	s->set_setting("yeet_ai/chat/yeet_tags_url", settings_yeet_tags_url->get_text());
 	s->set_setting("yeet_ai/chat/yeet_api_key", settings_yeet_api_key->get_text());
+	s->set_setting("yeet_ai/chat/azure_endpoint", settings_azure_endpoint->get_text());
+	s->set_setting("yeet_ai/chat/azure_deployment", settings_azure_deployment->get_text());
+	s->set_setting("yeet_ai/chat/azure_api_version", settings_azure_api_version->get_text());
+	s->set_setting("yeet_ai/chat/azure_api_key", settings_azure_api_key->get_text());
 	s->set_setting("yeet_ai/chat/max_tokens", int(settings_max_tokens->get_value()));
 	s->set_setting("yeet_ai/chat/temperature", float(settings_temperature->get_value()));
 	s->set_setting("yeet_ai/chat/max_tool_round_trips", int(settings_max_tool_round_trips->get_value()));

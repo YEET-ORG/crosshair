@@ -8,8 +8,10 @@
 #include "yeet_ai_response_parser.h"
 #include "core/io/json.h"
 #include "core/math/math_funcs.h"
+#include "core/error/error_macros.h"
 
-// ── Main parse entry point ──────────────────────────────────────────────────
+static String _clean_content_artifacts(String p_text);
+extern String strip_reasoning_markers(String p_text);
 
 YeetAIResponseEnvelope YeetAIResponseParser::parse(const String &raw_response) {
 	YeetAIResponseEnvelope envelope;
@@ -281,15 +283,13 @@ int YeetAIResponseParser::find_json_end(const String &s, int start) {
 }
 
 bool YeetAIResponseParser::parse_json_dict(const String &json, Dictionary &r_result, String &r_error) {
-	// Try parsing with JSON class
-	Error err = ERR_FAILED;
-	Variant parsed = JSON::parse_string(json, &err);
-	
-	if (err != OK || parsed.get_type() != Variant::DICTIONARY) {
-		r_error = "JSON parse failed: " + String::num_int64((int64_t)err);
+	Variant parsed = JSON::parse_string(json);
+
+	if (parsed.get_type() != Variant::DICTIONARY) {
+		r_error = "JSON parse did not return a dictionary";
 		return false;
 	}
-	
+
 	r_result = parsed;
 	return true;
 }
@@ -344,21 +344,33 @@ String YeetAIResponseParser::fix_json_syntax(const String &json) {
 	
 	bool in_string = false;
 	char32_t string_delim = 0;
+	bool escape = false;
 	
 	for (int i = 0; i < json.length(); i++) {
 		const char32_t c = json[i];
 		
 		if (in_string) {
 			fixed += c;
-			if (c == string_delim && (i == 0 || json[i - 1] != '\\')) {
+			if (escape) {
+				escape = false;
+				continue;
+			}
+			if (c == string_delim) {
 				in_string = false;
 			}
+			continue;
+		}
+
+		if (c == '\\') {
+			escape = true;
+			fixed += c;
 			continue;
 		}
 		
 		if (c == '"' || c == '\'') {
 			in_string = true;
 			string_delim = c;
+			escape = false;
 			fixed += c;
 			continue;
 		}
@@ -412,6 +424,3 @@ static String _clean_content_artifacts(String p_text) {
 	}
 	return out;
 }
-
-// Forward declaration for strip_reasoning_markers (defined in yeet_ai_dock.cpp)
-extern String strip_reasoning_markers(String p_text);

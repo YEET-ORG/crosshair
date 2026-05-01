@@ -24,7 +24,7 @@
 // _execute_tool — sorted dispatch table (binary search)
 // ═══════════════════════════════════════════════════════════════════════════
 
-YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_name, const Dictionary &p_args) const {
+YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_name, const Dictionary &p_args) {
 	using ToolHandler = Dictionary (YeetAIDock::*)(const Dictionary &) const;
 
 	struct ToolEntry {
@@ -301,7 +301,8 @@ ToolExecutionResult result;
  		return result;
  	}
  	effective_args = _normalize_tool_arguments(p_tool_name, effective_args);
-	if (const ToolSchema *schema = YeetAIToolSchemaRegistry::get_schema(p_tool_name)) {
+	const ToolSchema *schema = YeetAIToolSchemaRegistry::get_schema(p_tool_name);
+	if (schema != nullptr) {
 		// Auto-resolve any node-path arguments flagged in the schema.
 		// Pulling the scene root once and reusing it keeps this O(args), not O(args*tree).
 		Node *resolve_root = nullptr;
@@ -350,11 +351,11 @@ ToolExecutionResult result;
 	}
 
 	result.ok = true;
-	
+
 	// ── Cache check for read-only tools ──────────────────────────────────────
 	// Read-only tools (get_*, validate_*) can be cached to avoid redundant calls
-	bool is_read_only = !schema || !schema->is_write_operation;
-	if (is_read_only && p_tool_name.begins_with("get_") || p_tool_name.begins_with("validate_")) {
+	bool is_read_only = (schema == nullptr || !schema->is_write_operation) && (p_tool_name.begins_with("get_") || p_tool_name.begins_with("validate_"));
+	if (is_read_only) {
 		String cache_key = _generate_cache_key(p_tool_name, effective_args);
 		Dictionary cached = _get_cached_result(cache_key);
 		if (!cached.is_empty()) {
@@ -365,7 +366,7 @@ ToolExecutionResult result;
 			return result;
 		}
 	}
-	
+
 // ── Timeout & Rate Limiting ──────────────────────────────────────────────
  	// Start timeout tracking to detect hanging tool calls.
  	_start_tool_call_timeout(p_tool_name);
@@ -400,40 +401,120 @@ ToolExecutionResult result;
  	// Cancel timeout and record rate limit usage.
  	_cancel_tool_call_timeout();
  	_record_tool_call(p_tool_name);
-	
+
 	// ── Cache write for read-only tools ──────────────────────────────────────
 	if (is_read_only && (p_tool_name.begins_with("get_") || p_tool_name.begins_with("validate_"))) {
 		String cache_key = _generate_cache_key(p_tool_name, effective_args);
 		_cache_result(cache_key, payload);
 	}
-	
+
 	// ── Handle failures with retry ───────────────────────────────────────────
 	if (!payload.get("ok", true) && payload.has("error")) {
 		String error_msg = String(payload.get("error", "Unknown error"));
 		result.ok = false;
 		result.payload = payload;
 		result.display_text = JSON::stringify(payload, "\t", false, true);
-		
+
 		// Record tool execution metric
 		((YeetAIDock*)this)->_record_tool_execution(p_tool_name, tool_duration, false, false);
-		
-		// Analyze for batching before returning
-		_analyze_batch_opportunity(p_tool_name, effective_args);
-		
+
 		// Handle retry
 		_handle_tool_failure(p_tool_name, effective_args, result);
-		
+
 		return result;
 	}
-	
+
 	result.payload = payload;
 	result.display_text = JSON::stringify(payload, "\t", false, true);
-	
+
 	// Record successful tool execution metric
 	((YeetAIDock*)this)->_record_tool_execution(p_tool_name, tool_duration, true, false);
-	
-	// Analyze for batching
-	_analyze_batch_opportunity(p_tool_name, effective_args);
-	
+
 	return result;
+}
+
+// ── Tool name enumeration ───────────────────────────────────────────────────
+
+Vector<String> yeet_ai_get_all_tool_names() {
+	static const char *names[] = {
+		"add_2d_collision_shape", "add_animation_track", "add_animation_transition",
+		"add_audio_bus_effect", "add_collision_exception", "add_collision_shape",
+		"add_csg_primitive", "add_custom_class", "add_node", "add_primitive_mesh",
+		"add_tileset_atlas_source", "assign_resource_to_property", "attach_script",
+		"bake_navigation_mesh", "batch_reparent_nodes", "batch_set_node_property",
+		"batch_tool_calls", "capture_dual_view", "capture_editor_viewport",
+		"capture_game_viewport", "capture_subviewport", "capture_texture_resource",
+		"clear_tilemap_cells", "connect_signal", "copy_project_file",
+		"create_animated_sprite_2d", "create_animation", "create_area_2d",
+		"create_area_3d", "create_atlas_texture", "create_audio_player",
+		"create_blend_tree", "create_camera_3d", "create_character_body_2d",
+		"create_character_body_3d", "create_container_layout", "create_control_node",
+		"create_curve", "create_fog_volume", "create_font", "create_gdscript_file",
+		"create_gi_probe", "create_gradient", "create_graph_node",
+		"create_input_action", "create_item_list", "create_light",
+		"create_light_2d", "create_line_2d", "create_multiplayer_spawner",
+		"create_multiplayer_synchronizer", "create_navigation_link",
+		"create_navigation_obstacle", "create_noise_texture", "create_option_button",
+		"create_particle_emitter", "create_path_2d", "create_path_3d",
+		"create_polygon_2d", "create_progress_bar", "create_project_folder",
+		"create_ray_cast_2d", "create_ray_cast_3d", "create_reflection_probe",
+		"create_rigid_body_2d", "create_rigid_body_3d", "create_scene_file",
+		"create_scroll_container", "create_shader_material", "create_shape_cast_3d",
+		"create_sky", "create_slider", "create_sprite_2d", "create_standard_material",
+		"create_static_body_3d", "create_stylebox", "create_tab_container",
+		"create_texture_2d", "create_theme", "create_tileset", "create_tree_widget",
+		"create_ui_element", "create_vehicle_body_3d", "debugger_continue",
+		"delete_project_file", "disconnect_signal", "duplicate_node", "edit_script",
+		"editor_undo", "export_project", "extract_sub_scene", "file_exists",
+		"find_project_files", "focus_scene_tree_node", "get_animation_player_state",
+		"get_audio_buses", "get_autoloads", "get_binary_file_metadata",
+		"get_class_reference", "get_collision_exceptions", "get_console_output",
+		"get_current_scene", "get_debug_snapshot", "get_editor_3d_camera_transform",
+		"get_editor_inspector_subject", "get_editor_log", "get_editor_settings",
+		"get_editor_version", "get_enum_values", "get_export_presets",
+		"get_gdscript_docs", "get_gdscript_errors", "get_gdscript_symbols",
+		"get_global_classes", "get_input_actions", "get_method_signature",
+		"get_navigation_path", "get_navigation_region_info", "get_network_state",
+		"get_node_api", "get_node_collision_layers", "get_node_details",
+		"get_node_groups", "get_open_scenes", "get_project_settings",
+		"get_project_tree", "get_remote_scene_tree", "get_resource_dependencies",
+		"get_runtime_debugger_state", "get_scene_dependency_closure",
+		"get_scene_tree", "get_selected_nodes", "get_shader_code",
+		"get_shader_uniforms", "get_signal_connections", "get_tilemap_info",
+		"get_tileset_sources", "get_translation_overview", "get_unsaved_scenes",
+		"get_world_environment", "git_branch", "git_diff_file", "git_log",
+		"git_status", "grep_project_files", "import_asset", "inspect_runtime_node",
+		"inspect_runtime_variable", "instantiate_scene", "lint_gdscript",
+		"list_directory", "manage_autoloads", "manage_editor_plugins",
+		"manage_export_presets", "merge_scenes", "monitor_runtime_performance",
+		"move_child", "move_project_file", "open_scene", "paint_terrain",
+		"patch_editor_settings", "patch_project_settings", "play_animation",
+		"play_audio", "play_current_scene", "play_main_scene", "profile_frame",
+		"query_physics", "raycast_query", "read_project_file",
+		"reimport_project_files", "reload_scene", "remove_animation_track",
+		"remove_collision_exception", "remove_input_action", "remove_node",
+		"rename_node", "rename_resource_references", "reparent_node",
+		"replace_in_project_files", "replace_node_with_scene", "resolve_resource_uid",
+		"run_gdscript_expression", "run_gdscript_test", "run_scene_script",
+		"save_all_scenes", "save_current_scene", "save_resource",
+		"scan_project_filesystem", "search_class_db", "search_project_settings_keys",
+		"select_file", "set_animation_blend_amount", "set_animation_track_key",
+		"set_breakpoint", "set_collision_layer_mask", "set_control_layout",
+		"set_control_theme_override", "set_default_import_presets",
+		"set_editor_3d_camera", "set_editor_main_screen", "set_environment_fog",
+		"set_environment_ss_effects", "set_environment_tonemap", "set_import_setting",
+		"set_input_action_bindings", "set_main_scene", "set_navigation_agent_params",
+		"set_node_collision_layers", "set_node_meta", "set_node_property",
+		"set_physics_material", "set_shader_uniform", "set_tile_collision_polygon",
+		"set_tilemap_cells", "set_world_environment", "shape_cast_query",
+		"stop_audio", "stop_playing_scene", "update_gdscript_file",
+		"update_shader_code", "validate_scene", "write_project_file",
+	};
+	static const int count = sizeof(names) / sizeof(names[0]);
+	Vector<String> out;
+	out.resize(count);
+	for (int i = 0; i < count; i++) {
+		out.write[i] = String(names[i]);
+	}
+	return out;
 }

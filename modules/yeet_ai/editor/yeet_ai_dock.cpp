@@ -7,6 +7,8 @@
 
 #include "yeet_ai_dock.h"
 
+#include "yeet_ai_tool_schema.h"
+
 #include "core/config/project_settings.h"
 #include "core/core_bind.h"
 #include "core/input/input_map.h"
@@ -116,40 +118,6 @@ static String _clean_content_artifacts(String p_text) {
 		}
 	}
 	return out;
-}
-
-// Reasoning / distilled models often wrap chain-of-thought in tags; strip so JSON can be found.
-String strip_reasoning_markers(String p_text) {
-	String s = p_text;
-	for (int safety = 0; safety < 256; safety++) {
-		bool changed = false;
-		struct TagPair {
-			const char *open;
-			const char *close;
-		};
-		static const TagPair tags[] = {
-			{ "`<redacted_thinking>`", "`</redacted_thinking>`" },
-			{ "<reasoning>", "</reasoning>" },
-			{ "<redacted_thinking>", "</redacted_thinking>" },
-		};
-		for (const TagPair &tp : tags) {
-			const int a = s.find(tp.open);
-			if (a == -1) {
-				continue;
-			}
-			const int b = s.find(tp.close, a + int(strlen(tp.open)));
-			if (b == -1) {
-				continue;
-			}
-			s = s.substr(0, a) + s.substr(b + int(strlen(tp.close)));
-			changed = true;
-			break;
-		}
-		if (!changed) {
-			break;
-		}
-	}
-	return s.strip_edges();
 }
 
 // Balanced `}` for JSON object starting at `p_start` (respects strings and escapes).
@@ -363,6 +331,40 @@ static String yeet_describe_http_client_status(HTTPClient::Status p_s) {
 }
 } // namespace
 
+// Reasoning / distilled models often wrap chain-of-thought in tags; strip so JSON can be found.
+String strip_reasoning_markers(String p_text) {
+	String s = p_text;
+	for (int safety = 0; safety < 256; safety++) {
+		bool changed = false;
+		struct TagPair {
+			const char *open;
+			const char *close;
+		};
+		static const TagPair tags[] = {
+			{ "`<redacted_thinking>`", "`</redacted_thinking>`" },
+			{ "<reasoning>", "</reasoning>" },
+			{ "<redacted_thinking>", "</redacted_thinking>" },
+		};
+		for (const TagPair &tp : tags) {
+			const int a = s.find(tp.open);
+			if (a == -1) {
+				continue;
+			}
+			const int b = s.find(tp.close, a + int(strlen(tp.open)));
+			if (b == -1) {
+				continue;
+			}
+			s = s.substr(0, a) + s.substr(b + int(strlen(tp.close)));
+			changed = true;
+			break;
+		}
+		if (!changed) {
+			break;
+		}
+	}
+	return s.strip_edges();
+}
+
 bool is_valid_input_action_name(const String &p_name) {
 	if (p_name.is_empty()) {
 		return false;
@@ -462,50 +464,47 @@ void YeetAIDock::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("_trim_conversation_window"), &YeetAIDock::_trim_conversation_window);
 	ClassDB::bind_method(D_METHOD("_trim_to_fit", "new_message_tokens"), &YeetAIDock::_trim_to_fit);
 	ClassDB::bind_method(D_METHOD("_get_windowed_messages_count"), &YeetAIDock::_get_windowed_messages_count);
-	
+
 	ClassDB::bind_method(D_METHOD("_record_tool_execution", "tool_name", "duration_ms", "success", "was_retry"), &YeetAIDock::_record_tool_execution);
 	ClassDB::bind_method(D_METHOD("_export_metrics_summary"), &YeetAIDock::_export_metrics_summary);
 	ClassDB::bind_method(D_METHOD("_reset_metrics"), &YeetAIDock::_reset_metrics);
-	
+
 	ClassDB::bind_method(D_METHOD("_evict_expired_cache_entries"), &YeetAIDock::_evict_expired_cache_entries);
 	ClassDB::bind_method(D_METHOD("_evict_least_recently_used", "max_entries"), &YeetAIDock::_evict_least_recently_used);
 	ClassDB::bind_method(D_METHOD("_evict_cache_if_needed"), &YeetAIDock::_evict_cache_if_needed);
-	
+
 	ClassDB::bind_method(D_METHOD("_calculate_backoff_delay", "attempt"), &YeetAIDock::_calculate_backoff_delay);
-	
+
 	ClassDB::bind_method(D_METHOD("_pause_streaming"), &YeetAIDock::_pause_streaming);
 	ClassDB::bind_method(D_METHOD("_resume_streaming"), &YeetAIDock::_resume_streaming);
 	ClassDB::bind_method(D_METHOD("_save_stream_snapshot"), &YeetAIDock::_save_stream_snapshot);
 	ClassDB::bind_method(D_METHOD("_restore_stream_snapshot"), &YeetAIDock::_restore_stream_snapshot);
 	ClassDB::bind_method(D_METHOD("_has_pending_tool_call"), &YeetAIDock::_has_pending_tool_call);
-	
+
 	ClassDB::bind_method(D_METHOD("_build_default_prompt_sections"), &YeetAIDock::_build_default_prompt_sections);
 	ClassDB::bind_method(D_METHOD("_add_prompt_section", "id", "name", "content"), &YeetAIDock::_add_prompt_section);
 	ClassDB::bind_method(D_METHOD("_remove_prompt_section", "id"), &YeetAIDock::_remove_prompt_section);
 	ClassDB::bind_method(D_METHOD("_enable_prompt_section", "id", "enabled"), &YeetAIDock::_enable_prompt_section);
 	ClassDB::bind_method(D_METHOD("_build_modular_system_prompt"), &YeetAIDock::_build_modular_system_prompt);
-	
-	ClassDB::bind_method(D_METHOD("_execute_batch_as_single_call", "ops"), &YeetAIDock::_execute_batch_as_single_call);
- 	ClassDB::bind_method(D_METHOD("_can_optimize_to_batch", "tool_name", "args"), &YeetAIDock::_can_optimize_to_batch);
- 	
- 	// Enhanced toolcalling methods
- 	ClassDB::bind_method(D_METHOD("_get_tool_call_timeout", "tool_name"), &YeetAIDock::_get_tool_call_timeout);
- 	ClassDB::bind_method(D_METHOD("_start_tool_call_timeout", "tool_name"), &YeetAIDock::_start_tool_call_timeout);
- 	ClassDB::bind_method(D_METHOD("_check_tool_call_timeout"), &YeetAIDock::_check_tool_call_timeout);
- 	ClassDB::bind_method(D_METHOD("_cancel_tool_call_timeout"), &YeetAIDock::_cancel_tool_call_timeout);
- 	
- 	ClassDB::bind_method(D_METHOD("_get_validation_rules", "tool_name"), &YeetAIDock::_get_validation_rules);
- 	ClassDB::bind_method(D_METHOD("_validate_tool_call", "tool_name", "args", "r_error"), &YeetAIDock::_validate_tool_call);
- 	ClassDB::bind_method(D_METHOD("_normalize_tool_arguments", "tool_name", "args"), &YeetAIDock::_normalize_tool_arguments);
- 	
+
+	ClassDB::bind_method(D_METHOD("_can_optimize_to_batch", "tool_name", "args"), &YeetAIDock::_can_optimize_to_batch);
+
+	// Enhanced toolcalling methods
+	ClassDB::bind_method(D_METHOD("_get_tool_call_timeout", "tool_name"), &YeetAIDock::_get_tool_call_timeout);
+	ClassDB::bind_method(D_METHOD("_start_tool_call_timeout", "tool_name"), &YeetAIDock::_start_tool_call_timeout);
+	ClassDB::bind_method(D_METHOD("_check_tool_call_timeout"), &YeetAIDock::_check_tool_call_timeout);
+	ClassDB::bind_method(D_METHOD("_cancel_tool_call_timeout"), &YeetAIDock::_cancel_tool_call_timeout);
+
+	ClassDB::bind_method(D_METHOD("_normalize_tool_arguments", "tool_name", "args"), &YeetAIDock::_normalize_tool_arguments);
+
  	ClassDB::bind_method(D_METHOD("_get_rate_limit_for_tool", "tool_name"), &YeetAIDock::_get_rate_limit_for_tool);
  	ClassDB::bind_method(D_METHOD("_check_rate_limit", "tool_name"), &YeetAIDock::_check_rate_limit);
  	ClassDB::bind_method(D_METHOD("_record_tool_call", "tool_name"), &YeetAIDock::_record_tool_call);
- 	
+
  	ClassDB::bind_method(D_METHOD("_classify_error", "error_msg"), &YeetAIDock::_classify_error);
  	ClassDB::bind_method(D_METHOD("_generate_recovery_context", "tool_name", "args", "error"), &YeetAIDock::_generate_recovery_context);
  }
- 
+
  void YeetAIDock::_apply_dock_theme() {
 	const Ref<StyleBox> panel_fg = get_theme_stylebox(SNAME("PanelForeground"), EditorStringName(EditorStyles));
 	if (panel_fg.is_valid()) {
@@ -847,7 +846,7 @@ YeetAIDock::YeetAIDock() {
 	_build_agent_presets();
 	_create_new_chat();
 	_update_chat_selector();
-	
+
 	// Initialize new architecture features
 	_init_conversation_window();
 	_build_default_prompt_sections();
@@ -936,7 +935,7 @@ void YeetAIDock::_record_tool_execution(const String &tool_name, int64_t duratio
 	if (metrics.calls > 0) {
 		metrics.avg_time_ms = (double)metrics.total_time_ms / metrics.calls;
 	}
-	
+
 	_session_metrics.total_api_calls++;
 	_session_metrics.total_execution_time_ms += duration_ms;
 	if (!success) {
@@ -951,10 +950,11 @@ Dictionary YeetAIDock::_export_metrics_summary() const {
 	summary["cache_hits"] = _session_metrics.cache_hits;
 	summary["cache_misses"] = _session_metrics.cache_misses;
 	summary["total_execution_time_ms"] = _session_metrics.total_execution_time_ms;
-	
+
 	Array tool_stats;
-	for (const String &name : _tool_metrics.keys()) {
-		const ToolMetrics &m = _tool_metrics[name];
+	for (const KeyValue<String, ToolMetrics> &E : _tool_metrics) {
+		const String &name = E.key;
+		const ToolMetrics &m = E.value;
 		Dictionary ts;
 		ts["name"] = name;
 		ts["calls"] = m.calls;
@@ -970,7 +970,7 @@ Dictionary YeetAIDock::_export_metrics_summary() const {
 
 void YeetAIDock::_reset_metrics() {
 	_session_metrics = {};
-	_session_metrics.session_start_time = Time::get_singleton()->get_unix_time();
+	_session_metrics.session_start_time = Time::get_singleton()->get_unix_time_from_system();
 	_tool_metrics.clear();
 }
 
@@ -978,8 +978,9 @@ void YeetAIDock::_reset_metrics() {
 
 void YeetAIDock::_evict_expired_cache_entries() {
 	Array to_remove;
-	for (const String &key : _result_cache.keys()) {
-		const CacheEntry &entry = _result_cache[key];
+	for (const KeyValue<String, CacheEntry> &E : _result_cache) {
+		const String &key = E.key;
+		const CacheEntry &entry = E.value;
 		if (!entry.is_valid()) {
 			to_remove.push_back(key);
 		}
@@ -995,8 +996,8 @@ void YeetAIDock::_evict_least_recently_used(int max_entries) {
 	}
 	int to_remove = (int)_result_cache.size() - max_entries;
 	Array keys;
-	for (const String &key : _result_cache.keys()) {
-		keys.push_back(key);
+	for (const KeyValue<String, CacheEntry> &E : _result_cache) {
+		keys.push_back(E.key);
 	}
 	for (int i = 0; i < to_remove && i < keys.size(); i++) {
 		_result_cache.erase(keys[i]);
@@ -1033,7 +1034,7 @@ void YeetAIDock::_resume_streaming() {
 void YeetAIDock::_save_stream_snapshot() {
 	_stream_snapshot.accumulated_content = _stream_accumulated;
 	_stream_snapshot.partial_tool_call_detected = _has_pending_tool_call();
-	_stream_snapshot.timestamp = Time::get_singleton()->get_unix_time();
+	_stream_snapshot.timestamp = Time::get_singleton()->get_unix_time_from_system();
 }
 
 void YeetAIDock::_restore_stream_snapshot() {
@@ -1050,13 +1051,13 @@ bool YeetAIDock::_has_pending_tool_call() const {
 
 void YeetAIDock::_build_default_prompt_sections() {
 	_add_prompt_section("core", "Core Instructions", "\n\n## Core Instructions\n- You are a Godot Engine expert assistant\n- You help with scene editing, scripting, and project configuration\n- Always provide working, tested code when possible\n- Respect the project's existing patterns and conventions");
-	
+
 	_add_prompt_section("tools", "Tool Usage", "\n\n## Tool Usage Guidelines\n- Use available tools to inspect and modify the project\n- Verify changes before confirming completion\n- Provide clear explanations for tool usage");
-	
+
 	_add_prompt_section("safety", "Safety Rules", "\n\n## Safety Rules\n- Never delete project files without explicit confirmation\n- Always warn about destructive operations\n- Respect user workspace boundaries");
-	
+
 	_add_prompt_section("scene", "Scene Construction", "\n\n## Scene Construction\n- Follow Godot best practices for scene hierarchy\n- Use appropriate node types for the task\n- Consider performance implications");
-	
+
 	_add_prompt_section("scripting", "Scripting Standards", "\n\n## Scripting Standards\n- Use GDScript for most logic unless C# is configured\n- Follow Godot's GDScript style guide\n- Use signals for communication between nodes");
 }
 
@@ -1081,7 +1082,7 @@ void YeetAIDock::_remove_prompt_section(const String &id) {
 void YeetAIDock::_enable_prompt_section(const String &id, bool enabled) {
 	for (int i = 0; i < _system_prompt_sections.size(); i++) {
 		if (_system_prompt_sections[i].id == id) {
-			_system_prompt_sections[i].enabled = enabled;
+			_system_prompt_sections.write[i].enabled = enabled;
 			break;
 		}
 	}
@@ -1103,31 +1104,32 @@ void YeetAIDock::_execute_batch_as_single_call(const Vector<BatchOpportunity> &o
 	if (ops.is_empty()) {
 		return;
 	}
-	
+
 	// Mark batch execution as in progress
 	_current_batch_execution.operations = ops;
 	_current_batch_execution.is_executing = true;
 	_current_batch_execution.completed_count = 0;
 	_current_batch_execution.error_count = 0;
 	_current_batch_execution.stop_on_error = false;
-	
+
 	// Create a single batch tool call with all operations
 	Dictionary batch_call;
 	batch_call["tool_calls"] = Array();
-	
+
+	Array batch_tool_calls = batch_call["tool_calls"];
 	for (int i = 0; i < ops.size(); i++) {
 		Dictionary call;
 		call["tool"] = ops[i].tool_name;
 		call["arguments"] = ops[i].args;
 		call["batch_index"] = i;
 		call["dependency_group"] = ops[i].dependency_group;
-		batch_call["tool_calls"].append(call);
+		batch_tool_calls.append(call);
 	}
-	
+	batch_call["tool_calls"] = batch_tool_calls;
+
 	// Execute as single batch call
-	Dictionary result = _normalize_batch_arguments(batch_call);
-	ToolExecutionResult batch_result = _execute_tool("batch_tool_calls", result);
-	
+	ToolExecutionResult batch_result = _execute_tool("batch_tool_calls", batch_call);
+
 	// Update batch execution state
 	if (batch_result.ok) {
 		_current_batch_execution.completed_count = ops.size();
@@ -1135,7 +1137,7 @@ void YeetAIDock::_execute_batch_as_single_call(const Vector<BatchOpportunity> &o
 		_current_batch_execution.error_count = ops.size();
 	}
 	_current_batch_execution.is_executing = false;
-	
+
 	// Record metrics for each tool in the batch
 	for (int i = 0; i < ops.size(); i++) {
 		_record_tool_execution(ops[i].tool_name, 0, batch_result.ok, false);
@@ -1149,7 +1151,7 @@ bool YeetAIDock::_can_optimize_to_batch(const String &tool_name, const Dictionar
  		"add_node",
  		"set_node_collision_layers"
  	};
- 	
+
  	for (const String &bt : batchable_tools) {
  		if (tool_name == bt) {
  			return true;
@@ -1171,15 +1173,15 @@ int64_t YeetAIDock::_get_tool_call_timeout(const String &tool_name) const {
  	} else {
  		category = "default";
  	}
- 	
+
  	const Vector<String> timeouts = {"3000", "5000", "10000", "3000", "3000"};
  	const char *categories[] = {"file", "scene", "network", "script", "default"};
- 	
- 	for (int i = 0; i < 5; i++) {
- 		if (category == categories[i]) {
- 			return timeouts[i].to_int64();
- 		}
- 	}
+
+	for (int i = 0; i < 5; i++) {
+		if (category == categories[i]) {
+			return timeouts[i].to_int();
+		}
+	}
  	return 5000;
 }
 
@@ -1203,120 +1205,105 @@ void YeetAIDock::_cancel_tool_call_timeout() {
  	_current_tool_timeout.tool_name = "";
 }
 
-// ── Tool Call Validation ─────────────────────────────────────────────────
-
-Vector<YeetAIDock::ToolValidationRule> YeetAIDock::_get_validation_rules(const String &tool_name) const {
- 	Vector<ToolValidationRule> rules;
- 	String tn = tool_name.to_lower();
- 	
- 	if (tn.contains("scene") || tn.contains("script") || tn.contains("file") || tn.contains("path")) {
- 		ToolValidationRule rule;
- 		rule.tool_name = tool_name;
- 		rule.required_field = "path";
- 		rule.field_type = "string";
- 		rule.is_required = true;
- 		rules.push_back(rule);
- 	}
- 	
- 	if (tn.contains("node") || tn.contains("add") || tn.contains("create") || tn.contains("set")) {
- 		ToolValidationRule rule;
- 		rule.tool_name = tool_name;
- 		rule.required_field = "node_path";
- 		rule.field_type = "string";
- 		rule.is_required = true;
- 		rules.push_back(rule);
- 	}
- 	
- 	if (tn.contains("property") || tn.contains("set") || tn.contains("assign")) {
- 		ToolValidationRule rule;
- 		rule.tool_name = tool_name;
- 		rule.required_field = "property_name";
- 		rule.field_type = "string";
- 		rule.is_required = true;
- 		rules.push_back(rule);
- 	}
- 	
- 	if (tn.contains("signal") || tn.contains("connect")) {
- 		ToolValidationRule rule;
- 		rule.tool_name = tool_name;
- 		rule.required_field = "signal_name";
- 		rule.field_type = "string";
- 		rule.is_required = true;
- 		rules.push_back(rule);
- 	}
- 	
- 	if (tn.contains("collision") || tn.contains("shape")) {
- 		ToolValidationRule rule;
- 		rule.tool_name = tool_name;
- 		rule.required_field = "shape_type";
- 		rule.field_type = "string";
- 		rule.is_required = false;
- 		rules.push_back(rule);
- 	}
- 	
- 	return rules;
-}
+// ── Tool Argument Helpers ────────────────────────────────────────────────
 
 bool YeetAIDock::_validate_tool_call(const String &tool_name, const Dictionary &args, String &r_error) const {
- 	Vector<ToolValidationRule> rules = _get_validation_rules(tool_name);
- 	
- 	for (const ToolValidationRule &rule : rules) {
- 		if (!args.has(rule.required_field)) {
- 			if (rule.is_required) {
- 				r_error = vformat("Missing required field: %s", rule.required_field);
- 				return false;
- 			}
- 			continue;
- 		}
- 		
- 		const Variant &value = args[rule.required_field];
- 		if (rule.field_type == "string" && value.get_type() != Variant::STRING) {
- 			if (rule.is_required) {
- 				r_error = vformat("Field '%s' must be a string", rule.required_field);
- 				return false;
- 			}
- 		} else if (rule.field_type == "int" && value.get_type() != Variant::INT) {
- 			if (rule.is_required) {
- 				r_error = vformat("Field '%s' must be an integer", rule.required_field);
- 				return false;
- 			}
- 		} else if (rule.field_type == "bool" && value.get_type() != Variant::BOOL) {
- 			if (rule.is_required) {
- 				r_error = vformat("Field '%s' must be a boolean", rule.required_field);
- 				return false;
- 			}
- 		} else if (rule.field_type == "array" && value.get_type() != Variant::ARRAY) {
- 			if (rule.is_required) {
- 				r_error = vformat("Field '%s' must be an array", rule.required_field);
- 				return false;
- 			}
- 		} else if (rule.field_type == "dict" && value.get_type() != Variant::DICTIONARY) {
- 			if (rule.is_required) {
- 				r_error = vformat("Field '%s' must be a dictionary", rule.required_field);
- 				return false;
- 			}
- 		}
- 	}
- 	
- 	return true;
+	// Schema-based validation in YeetAIToolSchemaRegistry::validate_arguments() is authoritative.
+	// This shim remains for callers in yeet_ai_tools.cpp.
+	(void)tool_name;
+	(void)args;
+	(void)r_error;
+	return true;
 }
 
 Dictionary YeetAIDock::_normalize_tool_arguments(const String &tool_name, const Dictionary &args) const {
  	Dictionary normalized = args.duplicate();
  	String tn = tool_name.to_lower();
- 	
+
+	if (tn == "batch_tool_calls" || tn == "batch_tools" || tn == "batch_tool_call" || tn == "batch") {
+		return _normalize_batch_tool_arguments(normalized);
+	}
+
+	if (tn == "add_node") {
+		if (!normalized.has("node_name") && normalized.has("name")) {
+			normalized["node_name"] = normalized["name"];
+		}
+		if (!normalized.has("node_type") && normalized.has("type")) {
+			normalized["node_type"] = normalized["type"];
+		}
+	}
+
+	if (tn == "instantiate_scene") {
+		if (!normalized.has("packed_scene_path") && normalized.has("scene_path")) {
+			normalized["packed_scene_path"] = normalized["scene_path"];
+			normalized.erase("scene_path");
+		}
+		if (!normalized.has("node_name") && normalized.has("name")) {
+			normalized["node_name"] = normalized["name"];
+		}
+	}
+
+	if (tn == "add_primitive_mesh") {
+		if (!normalized.has("node_name") && normalized.has("name")) {
+			normalized["node_name"] = normalized["name"];
+		}
+		if (!normalized.has("mesh_type") && normalized.has("primitive_type")) {
+			normalized["mesh_type"] = normalized["primitive_type"];
+		}
+		if (!normalized.has("parameters") && normalized.has("size")) {
+			Dictionary parameters;
+			parameters["size"] = normalized["size"];
+			normalized["parameters"] = parameters;
+		}
+	}
+
+	if (tn == "add_collision_shape") {
+		if (!normalized.has("node_name") && normalized.has("name")) {
+			normalized["node_name"] = normalized["name"];
+		}
+		if (!normalized.has("parent_path") && normalized.has("node_path")) {
+			normalized["parent_path"] = normalized["node_path"];
+			normalized.erase("node_path");
+		}
+		if (!normalized.has("parameters") && normalized.has("size")) {
+			Dictionary parameters;
+			parameters["size"] = normalized["size"];
+			normalized["parameters"] = parameters;
+		}
+	}
+
+	if (tn == "create_standard_material") {
+		if (!normalized.has("albedo") && normalized.has("albedo_color")) {
+			normalized["albedo"] = normalized["albedo_color"];
+		}
+	}
+
+	if (tn == "create_input_action" && !normalized.has("events") && normalized.has("event")) {
+		Array events;
+		events.push_back(normalized["event"]);
+		normalized["events"] = events;
+	}
+
+	if (tn == "duplicate_node" && !normalized.has("new_name") && normalized.has("name")) {
+		normalized["new_name"] = normalized["name"];
+	}
+
+	if (tn == "move_child" && !normalized.has("new_index") && normalized.has("index")) {
+		normalized["new_index"] = normalized["index"];
+	}
+
  	if (tn.contains("node") && !normalized.has("node_path") && normalized.has("path")) {
  		normalized["node_path"] = normalized["path"];
  	}
- 	
+
  	if (tn.contains("script") && !normalized.has("script_path") && normalized.has("path")) {
  		normalized["script_path"] = normalized["path"];
  	}
- 	
+
  	if (tn.contains("scene") && !normalized.has("scene_path") && normalized.has("path")) {
  		normalized["scene_path"] = normalized["path"];
  	}
- 	
+
  	return normalized;
 }
 
@@ -1333,10 +1320,10 @@ int YeetAIDock::_get_rate_limit_for_tool(const String &tool_name) const {
  	} else {
  		category = "default";
  	}
- 	
+
  	const Vector<String> limits = {"5", "10", "3", "10"};
  	const char *categories[] = {"file_ops", "scene_ops", "network_ops", "default"};
- 	
+
  	for (int i = 0; i < 4; i++) {
  		if (category == categories[i]) {
  			return limits[i].to_int();
@@ -1346,59 +1333,59 @@ int YeetAIDock::_get_rate_limit_for_tool(const String &tool_name) const {
 }
 
 bool YeetAIDock::_check_rate_limit(const String &tool_name) const {
- 	int64_t now = Time::get_singleton()->get_ticks_msec();
- 	int64_t window_ms = 1000;
- 	int max_calls = _get_rate_limit_for_tool(tool_name);
- 	
- 	const RateLimitEntry *entry = _rate_limits.get_ptr(tool_name);
- 	if (!entry) {
- 		return true;
- 	}
- 	
- 	if (now - entry->last_call_time < window_ms) {
- 		return entry->call_count < max_calls;
- 	}
- 	return true;
+	int64_t now = Time::get_singleton()->get_ticks_msec();
+	int64_t window_ms = 1000;
+	int max_calls = _get_rate_limit_for_tool(tool_name);
+
+	auto iter = _rate_limits.find(tool_name);
+	if (!iter) {
+		return true;
+	}
+
+	if (now - iter->value.last_call_time < window_ms) {
+		return iter->value.call_count < max_calls;
+	}
+	return true;
 }
 
 void YeetAIDock::_record_tool_call(const String &tool_name) {
- 	int64_t now = Time::get_singleton()->get_ticks_msec();
- 	RateLimitEntry entry;
- 	entry.tool_name = tool_name;
- 	entry.call_count = 0;
- 	entry.last_call_time = 0;
- 	
- 	const RateLimitEntry *existing = _rate_limits.get_ptr(tool_name);
- 	if (existing && now - existing->last_call_time < 1000) {
- 		entry = *existing;
- 		entry.call_count++;
- 	} else {
- 		entry.call_count = 1;
- 	}
- 	entry.last_call_time = now;
- 	_rate_limits[tool_name] = entry;
+	int64_t now = Time::get_singleton()->get_ticks_msec();
+	RateLimitEntry entry;
+	entry.tool_name = tool_name;
+	entry.call_count = 0;
+	entry.last_call_time = 0;
+
+	auto iter = _rate_limits.find(tool_name);
+	if (iter && now - iter->value.last_call_time < 1000) {
+		entry = iter->value;
+		entry.call_count++;
+	} else {
+		entry.call_count = 1;
+	}
+	entry.last_call_time = now;
+	_rate_limits[tool_name] = entry;
 }
 
 // ── Enhanced Error Recovery ──────────────────────────────────────────────
 
 YeetAIDock::ErrorSeverity YeetAIDock::_classify_error(const String &error_msg) const {
  	String lower = error_msg.to_lower();
- 	
+
  	if (lower.contains("timeout") || lower.contains("network") || lower.contains("connection") ||
  		lower.contains("refused") || lower.contains("dns")) {
  		return ErrorSeverity::RECOVERABLE;
  	}
- 	
+
  	if (lower.contains("invalid") || lower.contains("missing") || lower.contains("not found") ||
  		lower.contains("permission") || lower.contains("access")) {
  		return ErrorSeverity::PARTIAL_FAILURE;
  	}
- 	
+
  	if (lower.contains("fatal") || lower.contains("critical") || lower.contains("crash") ||
  		lower.contains("segfault")) {
  		return ErrorSeverity::CRITICAL;
  	}
- 	
+
  	return ErrorSeverity::PARTIAL_FAILURE;
 }
 
@@ -1409,10 +1396,10 @@ Dictionary YeetAIDock::_generate_recovery_context(const String &tool_name, const
  	context["error"] = error;
  	context["error_severity"] = (int)_classify_error(error);
  	context["timestamp"] = Time::get_singleton()->get_ticks_msec();
- 	
+
  	String recovery_hint;
  	String lower = error.to_lower();
- 	
+
  	if (lower.contains("timeout")) {
  		recovery_hint = "Tool timed out. Consider reducing operation scope or increasing timeout.";
  	} else if (lower.contains("not found") || lower.contains("missing")) {
@@ -1425,7 +1412,7 @@ Dictionary YeetAIDock::_generate_recovery_context(const String &tool_name, const
  		recovery_hint = "Unknown error. Suggest retry with modified parameters.";
  	}
  	context["recovery_hint"] = recovery_hint;
- 	
+
  	return context;
 }
 
@@ -2149,7 +2136,7 @@ void YeetAIDock::_set_waiting(bool p_waiting, const String &p_status) {
 }
 
 void YeetAIDock::_request_model_response() {
-	// 0 = Berry (OpenAI-compatible), 1 = Gemini, 2 = OpenRouter, 3 = Yeet Models (in-house Ollama-compatible).
+	// 0 = Berry (OpenAI-compatible), 1 = Gemini, 2 = OpenRouter, 3 = Yeet Models (in-house Ollama-compatible), 4 = Azure OpenAI.
 	const int provider = _get_editor_setting_int("yeet_ai/chat/provider", 0);
 	static const char *k_gemini_openai_url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 	static const char *k_openrouter_url = "https://openrouter.ai/api/v1/chat/completions";
@@ -2169,13 +2156,26 @@ void YeetAIDock::_request_model_response() {
 			endpoint = String::utf8(k_yeet_chat_default);
 		}
 		api_key = _get_editor_setting_string("yeet_ai/chat/yeet_api_key", "");
+	} else if (provider == 4) {
+		// Azure AI Services: endpoint is {base}/models/chat/completions?api-version={version}
+		// Auth uses Authorization: Bearer (not api-key).
+		String azure_endpoint = _get_editor_setting_string("yeet_ai/chat/azure_endpoint", "https://crosshair-resource.services.ai.azure.com");
+		String azure_api_version = _get_editor_setting_string("yeet_ai/chat/azure_api_version", "2024-05-01-preview");
+		if (azure_endpoint.strip_edges().is_empty()) {
+			azure_endpoint = "https://crosshair-resource.services.ai.azure.com";
+		}
+		if (!azure_endpoint.ends_with("/")) {
+			azure_endpoint += "/";
+		}
+		endpoint = azure_endpoint + "models/chat/completions?api-version=" + azure_api_version;
+		api_key = _get_editor_setting_string("yeet_ai/chat/azure_api_key", "");
 	} else {
 		endpoint = _get_editor_setting_string("yeet_ai/chat/completions_url", "https://llm.adityaberry.me/v1/chat/completions");
 		api_key = _get_editor_setting_string("yeet_ai/chat/api_key", "");
 	}
 
 	String model = _get_editor_setting_string("yeet_ai/chat/model", "berrymodel");
-	// Berry (provider 0) is fixed to the server’s model id (Ollama-style tags list: `berrymodel`).
+	// Berry (provider 0) is fixed to the server's model id (Ollama-style tags list: `berrymodel`).
 	if (provider == 0) {
 		model = "berrymodel";
 	} else if (provider == 1 && model.strip_edges().is_empty()) {
@@ -2184,6 +2184,8 @@ void YeetAIDock::_request_model_response() {
 		model = "qwen/qwen3.6-plus:free";
 	} else if (provider == 3 && model.strip_edges().is_empty()) {
 		model = "qwen3-coder:latest";
+	} else if (provider == 4 && model.strip_edges().is_empty()) {
+		model = "gpt-4o";
 	}
 
 	if (provider == 0 && endpoint.strip_edges().is_empty()) {
@@ -2198,6 +2200,10 @@ void YeetAIDock::_request_model_response() {
 		_append_message("assistant", TTR("OpenRouter is selected but `yeet_ai/chat/openrouter_api_key` is empty. Add your API key in Editor Settings → Crosshair."));
 		return;
 	}
+	if (provider == 4 && api_key.strip_edges().is_empty()) {
+		_append_message("assistant", TTR("Azure OpenAI is selected but `yeet_ai/chat/azure_api_key` is empty. Add your API key in Editor Settings → Crosshair."));
+		return;
+	}
 
 	const int max_tokens = _get_editor_setting_int("yeet_ai/chat/max_tokens", 32768);
 	if (max_tokens < 4096) {
@@ -2209,7 +2215,7 @@ void YeetAIDock::_request_model_response() {
 
 	// Determine whether to use native OpenAI tools parameter.
 	// Provider 0 (Berry/Ollama) often doesn't support tools well, so default off for it.
-	// Provider 1 (Gemini), 2 (OpenRouter), 3 (Yeet) usually support tools.
+	// Provider 1 (Gemini), 2 (OpenRouter), 3 (Yeet), 4 (Azure) usually support tools.
 	_native_tools_enabled = _get_editor_setting_bool("yeet_ai/chat/native_tools_enabled", provider != 0);
 
 	Dictionary payload;
@@ -2313,6 +2319,7 @@ void YeetAIDock::_request_model_response() {
 		if (!tools.is_empty()) {
 			payload["tools"] = tools;
 			payload["tool_choice"] = "auto";
+			payload["parallel_tool_calls"] = true;
 			// Native tool calling is more reliable with non-streaming responses
 			// because tool_calls arrive as structured JSON, not SSE deltas.
 			_stream_expects_sse = false;
@@ -2590,8 +2597,11 @@ String YeetAIDock::_get_editor_setting_string(const String &p_setting, const Str
 
 // _get_editor_setting_int/bool are in yeet_ai_helpers.cpp
 
+// Forward declaration from yeet_ai_tools.cpp
+extern Vector<String> yeet_ai_get_all_tool_names();
+
 Array YeetAIDock::_build_tools_payload() const {
-	return YeetAIToolSchemaRegistry::build_openai_tools_payload();
+	return YeetAIToolSchemaRegistry::build_openai_tools_payload(yeet_ai_get_all_tool_names());
 }
 
 float YeetAIDock::_get_editor_setting_float(const String &p_setting, float p_default) const {
@@ -3518,7 +3528,7 @@ void YeetAIDock::_switch_to_chat(int p_index) {
 	tool_round_trips = 0;
 	turn_context_prompt = String();
 	_session_modified_files.clear();
-	
+
 	// Initialize conversation window for this chat session
 	_conversation_window.current_tokens = 0;
 	for (int i = 0; i < conversation_messages.size(); i++) {
@@ -3759,6 +3769,7 @@ void YeetAIDock::_on_model_selector_pressed() {
 			}
 		}
 	}
+	// Azure OpenAI (provider 4) doesn't have a models/tags endpoint; deployments are fixed.
 }
 
 void YeetAIDock::_populate_model_list(const String &p_filter) {
@@ -3791,6 +3802,17 @@ void YeetAIDock::_populate_model_list(const String &p_filter) {
 		models.push_back("meta-llama/llama-4-maverick:free");
 		models.push_back("meta-llama/llama-4-scout:free");
 		models.push_back("mistralai/mistral-small-3.1-24b-instruct:free");
+	} else if (provider == 4) {
+		// Azure OpenAI models are fixed by the deployment name.
+		models.push_back("gpt-4o");
+		models.push_back("gpt-4o-mini");
+		models.push_back("gpt-4-turbo");
+		models.push_back("gpt-4");
+		models.push_back("gpt-35-turbo");
+		String azure_deployment = _get_editor_setting_string("yeet_ai/chat/azure_deployment", "");
+		if (!azure_deployment.is_empty() && !models.has(azure_deployment)) {
+			models.push_back(azure_deployment);
+		}
 	} else {
 		models.push_back("berrymodel");
 		for (const String &tag : _fetched_model_tags) {
@@ -4035,9 +4057,9 @@ void YeetAIDock::_history_navigate(int p_direction) {
 Dictionary YeetAIDock::_extract_structured_response(const String &p_content) const {
 	// Use structured parser for reliable extraction
 	YeetAIResponseEnvelope envelope = YeetAIResponseParser::parse(p_content);
-	
+
 	Dictionary result;
-	
+
 	if (envelope.is_tool_call()) {
 		result["type"] = "tool_call";
 		result["tool"] = envelope.tool_call.tool_name;
@@ -4059,7 +4081,7 @@ Dictionary YeetAIDock::_extract_structured_response(const String &p_content) con
 		result.clear();
 		return result;
 	}
-	
+
 	return result;
 }
 
@@ -4067,25 +4089,25 @@ YeetAIResponseType YeetAIDock::_parse_response_type(const String &p_content) con
 	// Quick type detection without full parsing
 	String cleaned = p_content.strip_edges();
 	cleaned = _clean_content_artifacts(cleaned);
-	
+
 	// Check for thinking
 	if (YeetAIResponseParser::is_thinking_response(cleaned)) {
 		return YeetAIResponseType::THINKING;
 	}
-	
+
 	// Find JSON object
 	int json_start = cleaned.find("{");
 	if (json_start == -1) {
 		return YeetAIResponseType::UNKNOWN;
 	}
-	
+
 	int json_end = find_json_object_end(cleaned, json_start);
 	if (json_end == -1) {
 		return YeetAIResponseType::UNKNOWN;
 	}
-	
+
 	String json = cleaned.substr(json_start, json_end - json_start + 1);
-	
+
 	// Check for type field
 	if (json.contains("\"type\":\"tool_call\"") || json.contains("\"type\": \"tool_call\"")) {
 		return YeetAIResponseType::TOOL_CALL;
@@ -4093,7 +4115,7 @@ YeetAIResponseType YeetAIDock::_parse_response_type(const String &p_content) con
 	if (json.contains("\"type\":\"final\"") || json.contains("\"type\": \"final\"")) {
 		return YeetAIResponseType::FINAL_ANSWER;
 	}
-	
+
 	return YeetAIResponseType::UNKNOWN;
 }
 
@@ -4103,21 +4125,24 @@ YeetAIResponseType YeetAIDock::_parse_response_type(const String &p_content) con
 
 void YeetAIDock::_start_retry(const String &tool_name, const Dictionary &args, const String &error) {
 	_cancel_retry();
-	
+
 	_current_retry.tool_name = tool_name;
 	_current_retry.original_args = args;
 	_current_retry.attempt_count = 0;
 	_current_retry.max_attempts = 3;
 	_current_retry.last_error = error;
-	
+
 	// Keep last 3 tool results for context
 	if (!_chat_records.is_empty()) {
 		int recent = MIN(3, _chat_records.size());
 		for (int i = 0; i < recent; i++) {
-			_current_retry.last_tool_results.push_back(_chat_records[_chat_records.size() - 1 - i]);
+			Dictionary record_dict;
+			record_dict["role"] = _chat_records[_chat_records.size() - 1 - i].role;
+			record_dict["text"] = _chat_records[_chat_records.size() - 1 - i].text;
+			_current_retry.last_tool_results.push_back(record_dict);
 		}
 	}
-	
+
 	_append_status_row(TTR("Retrying tool call..."));
 }
 
@@ -4125,15 +4150,15 @@ void YeetAIDock::_execute_retry() {
 	if (_current_retry.tool_name.is_empty()) {
 		return;
 	}
-	
+
 	_current_retry.attempt_count++;
-	
+
 	if (_current_retry.attempt_count > _current_retry.max_attempts) {
 		_append_status_row(TTR("Retry limit reached for tool: ") + _current_retry.tool_name);
 		_cancel_retry();
 		return;
 	}
-	
+
 	// Apply exponential backoff delay before retry
 	int64_t backoff_delay = _calculate_backoff_delay(_current_retry.attempt_count - 1);
 	if (backoff_delay > 0) {
@@ -4141,20 +4166,20 @@ void YeetAIDock::_execute_retry() {
 		// For now, we log the intended delay
 		WARN_PRINT(vformat("[YeetAI] Retry backoff: %lld ms before attempt %d", backoff_delay, _current_retry.attempt_count));
 	}
-	
+
 	// Prepare retry context with error information
 	Dictionary retry_args = _prepare_retry_context(_current_retry.tool_name, _current_retry.original_args);
-	
+
 	// Execute tool with retry context
 	ToolExecutionResult result = _execute_tool(_current_retry.tool_name, retry_args);
-	
+
 	// Record retry metric
 	_record_tool_execution(_current_retry.tool_name, 0, result.ok, true);
-	
+
 	if (result.ok) {
-		_append_status_row(TTR("Retry successful on attempt %d"), _current_retry.attempt_count);
+		_append_status_row(vformat(TTR("Retry successful on attempt %d"), _current_retry.attempt_count));
 		_cancel_retry();
-		
+
 		// Continue with normal flow
 		Dictionary tool_payload = result.payload;
 		tool_payload["ok"] = true;
@@ -4162,15 +4187,15 @@ void YeetAIDock::_execute_retry() {
 		_request_model_response();
 		return;
 	}
-	
+
 	// Retry failed - try again or give up
 	String error_msg = String(result.payload.get("error", "Unknown error"));
 	if (_should_retry(_current_retry.tool_name, error_msg)) {
-		_append_status_row(TTR("Retry %d/%d failed: %s"), _current_retry.attempt_count, _current_retry.max_attempts, error_msg);
+		_append_status_row(vformat(TTR("Retry %d/%d failed: %s"), _current_retry.attempt_count, _current_retry.max_attempts, error_msg));
 		_current_retry.last_error = error_msg;
 		_execute_retry(); // Try again
 	} else {
-		_append_status_row(TTR("Giving up on retry: %s"), error_msg);
+		_append_status_row(vformat(TTR("Giving up on retry: %s"), error_msg));
 		_cancel_retry();
 	}
 }
@@ -4185,11 +4210,11 @@ void YeetAIDock::_cancel_retry() {
 
 void YeetAIDock::_handle_tool_failure(const String &tool_name, const Dictionary &args, const ToolExecutionResult &result) {
 	String error_msg = String(result.payload.get("error", "Unknown error"));
-	
+
 	if (!_should_retry(tool_name, error_msg)) {
 		return;
 	}
-	
+
 	_start_retry(tool_name, args, error_msg);
 	_execute_retry();
 }
@@ -4200,31 +4225,32 @@ bool YeetAIDock::_should_retry(const String &tool_name, const String &error) {
 		"not found", "timeout", "connection", "network",
 		"invalid", "missing", "permission", "access denied",
 	};
-	
+
 	for (const char *pattern : retryable_errors) {
 		if (error.to_lower().contains(pattern)) {
 			return true;
 		}
 	}
-	
+
 	// Retry for most tool errors except permanent failures
 	return !error.to_lower().contains("permanent") && !error.to_lower().contains("fatal");
 }
 
 Dictionary YeetAIDock::_prepare_retry_context(const String &tool_name, const Dictionary &original_args) {
 	Dictionary retry_args = original_args.duplicate();
-	
+
 	// Add retry context
 	retry_args["retry_attempt"] = _current_retry.attempt_count;
 	retry_args["last_error"] = _current_retry.last_error;
-	
+
 	// Add recent tool results for context
 	Array context_results;
 	for (int i = 0; i < _current_retry.last_tool_results.size(); i++) {
-		context_results.push_back(_current_retry.last_tool_results[i].text);
+		Dictionary d = _current_retry.last_tool_results[i];
+		context_results.push_back(d.get("text", ""));
 	}
 	retry_args["recent_context"] = context_results;
-	
+
 	return retry_args;
 }
 
@@ -4235,55 +4261,48 @@ Dictionary YeetAIDock::_prepare_retry_context(const String &tool_name, const Dic
 String YeetAIDock::_generate_cache_key(const String &tool_name, const Dictionary &args) const {
 	// Simple hash-based cache key
 	String key = tool_name;
-	
+
 	// Include relevant argument values
-	Array arg_values;
-	Array sorted_keys = args.get_key_list();
+	Vector<String> arg_values;
+	Array sorted_keys = args.keys();
 	for (int i = 0; i < sorted_keys.size(); i++) {
 		Variant val = args[sorted_keys[i]];
 		if (val.get_type() == Variant::STRING) {
-			arg_values.push_back(String(sorted_keys[i]) + "=" + val);
+			arg_values.push_back(String(sorted_keys[i]) + "=" + String(val));
 		}
 	}
-	
+
 	key += ":" + String(", ").join(arg_values);
-	
+
 	// Simple hash
 	uint32_t hash = 5381;
 	for (int i = 0; i < key.length(); i++) {
 		hash = hash * 33 + key[i];
 	}
-	
+
 	return vformat("%s_%u", tool_name, hash);
 }
 
 void YeetAIDock::_cache_result(const String &cache_key, const Dictionary &result) {
 	CacheEntry entry;
 	entry.result = result;
-	entry.expires_at = Time::get_singleton()->get_unix_time() + CACHE_TTL_SECONDS;
+	entry.expires_at = Time::get_singleton()->get_unix_time_from_system() + CACHE_TTL_SECONDS;
 	_result_cache[cache_key] = entry;
 }
 
-Dictionary YeetAIDock::_get_cached_result(const String &cache_key) {
-	Dictionary cached_entry = _result_cache.get(cache_key, Dictionary());
-	if (cached_entry.is_empty()) {
-		// Record cache miss
+Dictionary YeetAIDock::_get_cached_result(const String &cache_key) const {
+	auto iter = _result_cache.find(cache_key);
+	if (iter == _result_cache.end()) {
 		_session_metrics.cache_misses++;
 		return Dictionary();
 	}
-	
-	CacheEntry entry;
-	entry.result = cached_entry.get("result", Dictionary());
-	entry.expires_at = (int64_t)cached_entry.get("expires_at", 0);
-	
+
+	const CacheEntry &entry = iter->value;
 	if (!entry.is_valid()) {
-		_result_cache.erase(cache_key);
-		// Record cache miss (expired)
 		_session_metrics.cache_misses++;
 		return Dictionary();
 	}
-	
-	// Record cache hit
+
 	_session_metrics.cache_hits++;
 	return entry.result;
 }
@@ -4293,14 +4312,15 @@ void YeetAIDock::_invalidate_cache(const String &pattern) {
 		_result_cache.clear();
 		return;
 	}
-	
+
 	Vector<String> keys_to_remove;
-	for (const String &key : _result_cache.keys()) {
+	for (const KeyValue<String, CacheEntry> &E : _result_cache) {
+		const String &key = E.key;
 		if (key.contains(pattern)) {
 			keys_to_remove.push_back(key);
 		}
 	}
-	
+
 	for (const String &key : keys_to_remove) {
 		_result_cache.erase(key);
 	}
@@ -4315,7 +4335,7 @@ void YeetAIDock::_analyze_batch_opportunity(const String &tool_name, const Dicti
 	if (tool_name == "batch_tool_calls") {
 		return;
 	}
-	
+
 	// Determine dependency group
 	String dep_group;
 	if (tool_name.contains("create_") || tool_name.contains("add_")) {
@@ -4327,9 +4347,9 @@ void YeetAIDock::_analyze_batch_opportunity(const String &tool_name, const Dicti
 	} else {
 		dep_group = "other";
 	}
-	
+
 	// Check if we can batch with previous operation
-	if (!_pending_batch_ops.is_empty() && _can_batch_with_previous(_pending_batch_ops.back()->tool_name, tool_name)) {
+	if (!_pending_batch_ops.is_empty() && _can_batch_with_previous(_pending_batch_ops[_pending_batch_ops.size() - 1].tool_name, tool_name)) {
 		// Can batch - add to pending
 		BatchOpportunity op;
 		op.tool_name = tool_name;
@@ -4341,7 +4361,7 @@ void YeetAIDock::_analyze_batch_opportunity(const String &tool_name, const Dicti
 		if (!_pending_batch_ops.is_empty()) {
 			_execute_pending_batch();
 		}
-		
+
 		// Start new batch group
 		BatchOpportunity op;
 		op.tool_name = tool_name;
@@ -4356,32 +4376,32 @@ bool YeetAIDock::_can_batch_with_previous(const String &current_tool, const Stri
 	if (prev_tool == "batch_tool_calls" || current_tool == "batch_tool_calls") {
 		return false;
 	}
-	
+
 	// Script operations must not be mixed with scene operations
 	bool prev_is_script = prev_tool.contains("gdscript") || prev_tool.contains("script");
 	bool curr_is_script = current_tool.contains("gdscript") || current_tool.contains("script");
 	if (prev_is_script != curr_is_script) {
 		return false;
 	}
-	
+
 	// Scene construction operations can be batched
 	if (prev_tool.contains("create_") || prev_tool.contains("add_")) {
 		if (current_tool.contains("create_") || current_tool.contains("add_")) {
 			return true;
 		}
 	}
-	
+
 	// Property setting operations can be batched
 	if (prev_tool == "set_node_property" && current_tool == "set_node_property") {
 		return true;
 	}
-	
+
 	return false;
 }
 
 Dictionary YeetAIDock::_prepare_batch_request(const Vector<BatchOpportunity> &ops) {
 	Dictionary batch_call;
-	
+
 	Array calls;
 	for (int i = 0; i < ops.size(); i++) {
 		Dictionary call;
@@ -4389,11 +4409,11 @@ Dictionary YeetAIDock::_prepare_batch_request(const Vector<BatchOpportunity> &op
 		call["arguments"] = ops[i].args;
 		calls.push_back(call);
 	}
-	
+
 	batch_call["calls"] = calls;
 	batch_call["stop_on_error"] = false;
 	batch_call["dry_run"] = false;
-	
+
 	return batch_call;
 }
 
@@ -4401,17 +4421,18 @@ void YeetAIDock::_execute_pending_batch() {
 	if (_pending_batch_ops.is_empty()) {
 		return;
 	}
-	
+
 	// Group by dependency to avoid conflicts
 	HashMap<String, Vector<BatchOpportunity>> groups;
 	for (int i = 0; i < _pending_batch_ops.size(); i++) {
 		groups[_pending_batch_ops[i].dependency_group].push_back(_pending_batch_ops[i]);
 	}
-	
+
 	// Execute each group as a batch
-	for (const String &group : groups.keys()) {
-		const Vector<BatchOpportunity> &group_ops = groups[group];
-		
+	for (const KeyValue<String, Vector<BatchOpportunity>> &E : groups) {
+		const String &group = E.key;
+		const Vector<BatchOpportunity> &group_ops = E.value;
+
 		if (group_ops.size() == 1) {
 			// Single operation - execute directly
 			ToolExecutionResult result = _execute_tool(group_ops[0].tool_name, group_ops[0].args);
@@ -4427,7 +4448,7 @@ void YeetAIDock::_execute_pending_batch() {
 			}
 		}
 	}
-	
+
 	_clear_pending_batch();
 }
 

@@ -104,7 +104,7 @@ Dictionary YeetAIDock::_tool_batch_tool_calls(const Dictionary &p_args) const {
 		const String tool_name = String(parsed["tool"]);
 		const Dictionary call_args = parsed["arguments"];
 
-		ToolExecutionResult call_result = _execute_tool(tool_name, call_args);
+		ToolExecutionResult call_result = const_cast<YeetAIDock *>(this)->_execute_tool(tool_name, call_args);
 		Dictionary call_entry;
 		call_entry["tool"] = tool_name;
 		call_entry["arguments"] = call_args;

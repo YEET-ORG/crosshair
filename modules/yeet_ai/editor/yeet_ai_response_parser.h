@@ -9,7 +9,7 @@
 
 #include "core/variant/dictionary.h"
 #include "core/variant/variant.h"
-#include "core/string/string.h"
+#include "core/string/ustring.h"
 
 // Response types the parser recognizes
 enum class YeetAIResponseType {

@@ -14,12 +14,13 @@
 #include "core/variant/variant.h"
 #include "core/os/mutex.h"
 #include "core/os/thread.h"
+#include "core/os/time.h"
 #include "core/templates/hash_map.h"
 #include "core/templates/hash_set.h"
 #include "core/templates/vector.h"
 #include "scene/gui/box_container.h"
 #include "scene/resources/material.h"
-#include "editor/yeet_ai_response_parser.h"
+#include "yeet_ai_response_parser.h"
 
 class Button;
 class ColorRect;
@@ -275,12 +276,12 @@ class YeetAIDock : public VBoxContainer {
 	struct CacheEntry {
 		Dictionary result;
 		int64_t expires_at; // Timestamp when cache expires
-		bool is_valid() const { return Time::get_singleton()->get_unix_time() < expires_at; }
+		bool is_valid() const { return Time::get_singleton()->get_unix_time_from_system() < expires_at; }
 	};
 	HashMap<String, CacheEntry> _result_cache;
 	static constexpr int CACHE_TTL_SECONDS = 30; // 30 second TTL
 	void _cache_result(const String &cache_key, const Dictionary &result);
-	Dictionary _get_cached_result(const String &cache_key);
+	Dictionary _get_cached_result(const String &cache_key) const;
 	void _invalidate_cache(const String &pattern = "");
 	
 	// ── Automatic batching ────────────────────────────────────────────────────
@@ -292,6 +293,7 @@ class YeetAIDock : public VBoxContainer {
 	Vector<BatchOpportunity> _pending_batch_ops;
 	void _analyze_batch_opportunity(const String &tool_name, const Dictionary &args);
 	void _execute_pending_batch();
+	void _clear_pending_batch();
 
 	// ── Prompt history ────────────────────────────────────────────────────────
 	Vector<String> _prompt_history;
@@ -371,7 +373,7 @@ class YeetAIDock : public VBoxContainer {
 protected:
 	// Tool methods are protected so yeet_ai_tools.cpp can take their
 	// addresses for the dispatch table.
-	ToolExecutionResult _execute_tool(const String &p_tool_name, const Dictionary &p_args) const;
+	ToolExecutionResult _execute_tool(const String &p_tool_name, const Dictionary &p_args);
 	String _build_runtime_context_prompt() const;
 	String _build_task_hints_for_user_prompt(const String &p_user_prompt) const;
 	Node *_resolve_scene_root(const String &p_scene_path, String &r_error) const;
@@ -735,15 +737,7 @@ protected:
 	bool _check_tool_call_timeout() const;
 	void _cancel_tool_call_timeout();
 	
-	// ── Tool Call Validation ─────────────────────────────────────────────────
-	struct ToolValidationRule {
-		String tool_name;
-		String required_field;
-		String field_type; // "string", "int", "bool", "array", "dict"
-		bool is_required;
-	};
-	
-	Vector<ToolValidationRule> _get_validation_rules(const String &tool_name) const;
+	// ── Tool Argument Helpers ────────────────────────────────────────────────
 	bool _validate_tool_call(const String &tool_name, const Dictionary &args, String &r_error) const;
 	Dictionary _normalize_tool_arguments(const String &tool_name, const Dictionary &args) const;
 	
@@ -779,3 +773,5 @@ public:
 	// Used by yeet_ai_tools_*.cpp translation units.
 	static BaseMaterial3D::Transparency parse_transparency_mode(const String &p_value, bool &r_ok);
 };
+
+VARIANT_ENUM_CAST(YeetAIDock::ErrorSeverity)
