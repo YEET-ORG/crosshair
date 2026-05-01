@@ -2230,6 +2230,367 @@ const HashMap<String, ToolSchema> &YeetAIToolSchemaRegistry::get_all_schemas() {
 		schemas["create_animatable_body_2d"] = schema;
 	}
 
+	// === TIMER / TWEEN / PATHFOLLOW ===
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_timer";
+		schema.description = "Create a Timer node for timed events, cooldowns, and delays";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("Timer");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_wait;
+		arg_wait.name = "wait_time";
+		arg_wait.type_hint = Variant::FLOAT;
+		arg_wait.required = false;
+		arg_wait.default_value = 1.0;
+		schema.arguments.push_back(arg_wait);
+
+		ToolArgSchema arg_oneshot;
+		arg_oneshot.name = "one_shot";
+		arg_oneshot.type_hint = Variant::BOOL;
+		arg_oneshot.required = false;
+		arg_oneshot.default_value = false;
+		schema.arguments.push_back(arg_oneshot);
+
+		ToolArgSchema arg_autostart;
+		arg_autostart.name = "autostart";
+		arg_autostart.type_hint = Variant::BOOL;
+		arg_autostart.required = false;
+		arg_autostart.default_value = false;
+		schema.arguments.push_back(arg_autostart);
+
+		ToolArgSchema arg_target;
+		arg_target.name = "timeout_target_path";
+		arg_target.type_hint = Variant::STRING;
+		arg_target.required = false;
+		arg_target.description = "Node path to connect timeout signal to";
+		schema.arguments.push_back(arg_target);
+
+		ToolArgSchema arg_method;
+		arg_method.name = "timeout_method";
+		arg_method.type_hint = Variant::STRING;
+		arg_method.required = false;
+		arg_method.description = "Method name on target node to call on timeout";
+		schema.arguments.push_back(arg_method);
+
+		schemas["create_timer"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_tween";
+		schema.description = "Animate a property on a node using an AnimationPlayer (Tween equivalent)";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("TweenAnimation");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_target;
+		arg_target.name = "target_path";
+		arg_target.type_hint = Variant::STRING;
+		arg_target.required = true;
+		arg_target.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_target);
+
+		ToolArgSchema arg_property;
+		arg_property.name = "property";
+		arg_property.type_hint = Variant::STRING;
+		arg_property.required = false;
+		arg_property.default_value = String("position");
+		arg_property.description = "Property to animate: position, scale, rotation, modulate";
+		schema.arguments.push_back(arg_property);
+
+		ToolArgSchema arg_duration;
+		arg_duration.name = "duration";
+		arg_duration.type_hint = Variant::FLOAT;
+		arg_duration.required = false;
+		arg_duration.default_value = 1.0;
+		schema.arguments.push_back(arg_duration);
+
+		ToolArgSchema arg_from;
+		arg_from.name = "from";
+		arg_from.type_hint = Variant::DICTIONARY;
+		arg_from.required = true;
+		arg_from.description = "Start value: {x, y} for vectors or {value} for floats";
+		schema.arguments.push_back(arg_from);
+
+		ToolArgSchema arg_to;
+		arg_to.name = "to";
+		arg_to.type_hint = Variant::DICTIONARY;
+		arg_to.required = true;
+		arg_to.description = "End value: {x, y} for vectors or {value} for floats";
+		schema.arguments.push_back(arg_to);
+
+		ToolArgSchema arg_ease;
+		arg_ease.name = "ease";
+		arg_ease.type_hint = Variant::STRING;
+		arg_ease.required = false;
+		arg_ease.default_value = String("in_out");
+		arg_ease.valid_values = Vector<String>{"linear", "ease_in", "ease_out", "ease_in_out"};
+		schema.arguments.push_back(arg_ease);
+
+		ToolArgSchema arg_loop;
+		arg_loop.name = "loop";
+		arg_loop.type_hint = Variant::BOOL;
+		arg_loop.required = false;
+		arg_loop.default_value = false;
+		schema.arguments.push_back(arg_loop);
+
+		ToolArgSchema arg_autoplay;
+		arg_autoplay.name = "autoplay";
+		arg_autoplay.type_hint = Variant::BOOL;
+		arg_autoplay.required = false;
+		arg_autoplay.default_value = false;
+		schema.arguments.push_back(arg_autoplay);
+
+		schemas["create_tween"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_path_follow_2d";
+		schema.description = "Create a PathFollow2D node for moving objects along a Path2D";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("PathFollow2D");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "path_2d_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = true;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_progress;
+		arg_progress.name = "progress_ratio";
+		arg_progress.type_hint = Variant::FLOAT;
+		arg_progress.required = false;
+		arg_progress.default_value = 0.0;
+		schema.arguments.push_back(arg_progress);
+
+		ToolArgSchema arg_rotates;
+		arg_rotates.name = "rotates";
+		arg_rotates.type_hint = Variant::BOOL;
+		arg_rotates.required = false;
+		arg_rotates.default_value = true;
+		schema.arguments.push_back(arg_rotates);
+
+		ToolArgSchema arg_loop;
+		arg_loop.name = "loop";
+		arg_loop.type_hint = Variant::BOOL;
+		arg_loop.required = false;
+		arg_loop.default_value = true;
+		schema.arguments.push_back(arg_loop);
+
+		ToolArgSchema arg_child_type;
+		arg_child_type.name = "child_type";
+		arg_child_type.type_hint = Variant::STRING;
+		arg_child_type.required = false;
+		arg_child_type.description = "Optional node type to add as child (e.g. Sprite2D)";
+		schema.arguments.push_back(arg_child_type);
+
+		schemas["create_path_follow_2d"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "query_raycast_2d";
+		schema.description = "Query an existing RayCast2D node for collision results";
+		schema.requires_scene = true;
+		schema.is_write_operation = false;
+		schema.supports_batching = false;
+
+		ToolArgSchema arg_path;
+		arg_path.name = "node_path";
+		arg_path.type_hint = Variant::STRING;
+		arg_path.required = true;
+		arg_path.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_path);
+
+		schemas["query_raycast_2d"] = schema;
+	}
+
+	// === UI TOOLS ===
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_button";
+		schema.description = "Create a Button UI node";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("Button");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_text;
+		arg_text.name = "text";
+		arg_text.type_hint = Variant::STRING;
+		arg_text.required = false;
+		arg_text.default_value = String("Button");
+		schema.arguments.push_back(arg_text);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_x;
+		arg_x.name = "x";
+		arg_x.type_hint = Variant::FLOAT;
+		arg_x.required = false;
+		arg_x.default_value = 0.0;
+		schema.arguments.push_back(arg_x);
+
+		ToolArgSchema arg_y;
+		arg_y.name = "y";
+		arg_y.type_hint = Variant::FLOAT;
+		arg_y.required = false;
+		arg_y.default_value = 0.0;
+		schema.arguments.push_back(arg_y);
+
+		ToolArgSchema arg_w;
+		arg_w.name = "width";
+		arg_w.type_hint = Variant::FLOAT;
+		arg_w.required = false;
+		arg_w.default_value = 100.0;
+		schema.arguments.push_back(arg_w);
+
+		ToolArgSchema arg_h;
+		arg_h.name = "height";
+		arg_h.type_hint = Variant::FLOAT;
+		arg_h.required = false;
+		arg_h.default_value = 30.0;
+		schema.arguments.push_back(arg_h);
+
+		ToolArgSchema arg_disabled;
+		arg_disabled.name = "disabled";
+		arg_disabled.type_hint = Variant::BOOL;
+		arg_disabled.required = false;
+		arg_disabled.default_value = false;
+		schema.arguments.push_back(arg_disabled);
+
+		ToolArgSchema arg_toggle;
+		arg_toggle.name = "toggle_mode";
+		arg_toggle.type_hint = Variant::BOOL;
+		arg_toggle.required = false;
+		arg_toggle.default_value = false;
+		schema.arguments.push_back(arg_toggle);
+
+		schemas["create_button"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_label";
+		schema.description = "Create a Label UI node for displaying text";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("Label");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_text;
+		arg_text.name = "text";
+		arg_text.type_hint = Variant::STRING;
+		arg_text.required = false;
+		arg_text.default_value = String("");
+		schema.arguments.push_back(arg_text);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_x;
+		arg_x.name = "x";
+		arg_x.type_hint = Variant::FLOAT;
+		arg_x.required = false;
+		arg_x.default_value = 0.0;
+		schema.arguments.push_back(arg_x);
+
+		ToolArgSchema arg_y;
+		arg_y.name = "y";
+		arg_y.type_hint = Variant::FLOAT;
+		arg_y.required = false;
+		arg_y.default_value = 0.0;
+		schema.arguments.push_back(arg_y);
+
+		ToolArgSchema arg_w;
+		arg_w.name = "width";
+		arg_w.type_hint = Variant::FLOAT;
+		arg_w.required = false;
+		arg_w.default_value = 100.0;
+		schema.arguments.push_back(arg_w);
+
+		ToolArgSchema arg_h;
+		arg_h.name = "height";
+		arg_h.type_hint = Variant::FLOAT;
+		arg_h.required = false;
+		arg_h.default_value = 30.0;
+		schema.arguments.push_back(arg_h);
+
+		ToolArgSchema arg_align;
+		arg_align.name = "align";
+		arg_align.type_hint = Variant::INT;
+		arg_align.required = false;
+		arg_align.default_value = 0;
+		arg_align.description = "0=left, 1=center, 2=right, 3=fill";
+		schema.arguments.push_back(arg_align);
+
+		ToolArgSchema arg_valign;
+		arg_valign.name = "valign";
+		arg_valign.type_hint = Variant::INT;
+		arg_valign.required = false;
+		arg_valign.default_value = 0;
+		arg_valign.description = "0=top, 1=center, 2=bottom, 3=fill";
+		schema.arguments.push_back(arg_valign);
+
+		schemas["create_label"] = schema;
+	}
+
 	initialized = true;
 	return schemas;
 }

@@ -44,6 +44,14 @@
 #include "scene/resources/2d/separation_ray_shape_2d.h"
 #include "scene/resources/2d/world_boundary_shape_2d.h"
 #include "scene/resources/texture.h"
+#include "scene/gui/button.h"
+#include "scene/gui/label.h"
+#include "scene/main/timer.h"
+#include "scene/animation/animation_player.h"
+#include "scene/resources/animation.h"
+#include "scene/resources/animation_library.h"
+#include "core/object/class_db.h"
+#include "core/variant/callable.h"
 
 Dictionary YeetAIDock::_tool_create_sprite_2d(const Dictionary &p_args) const {
 	Dictionary result;
@@ -79,6 +87,289 @@ Dictionary YeetAIDock::_tool_create_sprite_2d(const Dictionary &p_args) const {
 	_mark_unsaved();
 	result["ok"] = true;
 	result["node_path"] = String(sprite->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_timer(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "Timer");
+
+	Timer *timer = memnew(Timer);
+	timer->set_name(node_name);
+	timer->set_wait_time(_arg_float(p_args, "wait_time", 1.0));
+	timer->set_one_shot(_arg_bool(p_args, "one_shot", false));
+	timer->set_autostart(_arg_bool(p_args, "autostart", false));
+
+	Node *parent = _resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err);
+	if (parent == nullptr) {
+		parent = scene_root;
+	}
+	_add_to_scene(parent, timer, scene_root);
+
+	// Optionally connect timeout signal to a method
+	const String target_path = _arg_string(p_args, "timeout_target_path", "");
+	const String target_method = _arg_string(p_args, "timeout_method", "");
+	if (!target_path.is_empty() && !target_method.is_empty()) {
+		Node *target = _resolve_node_target(scene_root, target_path, err);
+		if (target != nullptr) {
+			timer->connect("timeout", Callable(target, target_method));
+			result["signal_connected"] = true;
+		}
+	}
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(timer->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_path_follow_2d(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "PathFollow2D");
+	const String parent_path = _arg_string(p_args, "path_2d_path", "");
+
+	Path2D *path = Object::cast_to<Path2D>(_resolve_node_target(scene_root, parent_path, err));
+	if (path == nullptr) {
+		return _make_error("Parent must be a Path2D node. Provide 'path_2d_path'.");
+	}
+
+	PathFollow2D *pf = memnew(PathFollow2D);
+	pf->set_name(node_name);
+	pf->set_progress_ratio(_arg_float(p_args, "progress_ratio", 0.0));
+	pf->set_rotation_enabled(_arg_bool(p_args, "rotates", true));
+	pf->set_loop(_arg_bool(p_args, "loop", true));
+
+	_add_to_scene(path, pf, scene_root);
+
+	// Optionally add a child node to follow the path
+	const String child_type = _arg_string(p_args, "child_type", "");
+	if (!child_type.is_empty()) {
+		Node *child = Object::cast_to<Node>(ClassDB::instantiate(child_type));
+		if (child != nullptr) {
+			child->set_name(_arg_string(p_args, "child_name", child_type));
+			_add_to_scene(pf, child, scene_root);
+			result["child_path"] = String(child->get_path());
+		}
+	}
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(pf->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_query_raycast_2d(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+
+	RayCast2D *raycast = Object::cast_to<RayCast2D>(_resolve_node_target(scene_root, _arg_string(p_args, "node_path", ""), err));
+	if (raycast == nullptr) {
+		return _make_error("RayCast2D node not found. Provide 'node_path'.");
+	}
+
+	// Force raycast update
+	raycast->force_raycast_update();
+
+	result["is_colliding"] = raycast->is_colliding();
+
+	if (raycast->is_colliding()) {
+		result["collision_point"] = raycast->get_collision_point();
+		result["collision_normal"] = raycast->get_collision_normal();
+
+		Object *collider = raycast->get_collider();
+		if (collider != nullptr) {
+			Node *collider_node = Object::cast_to<Node>(collider);
+			if (collider_node != nullptr) {
+				result["collider_path"] = String(collider_node->get_path());
+				result["collider_name"] = collider_node->get_name();
+			}
+		}
+
+		int collider_rid = raycast->get_collider_rid().get_id();
+		result["collider_rid"] = collider_rid;
+	}
+
+	result["ok"] = true;
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_button(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "Button");
+
+	Button *btn = memnew(Button);
+	btn->set_name(node_name);
+	btn->set_text(_arg_string(p_args, "text", "Button"));
+	btn->set_disabled(_arg_bool(p_args, "disabled", false));
+	btn->set_toggle_mode(_arg_bool(p_args, "toggle_mode", false));
+	btn->set_pressed(_arg_bool(p_args, "pressed", false));
+
+	// Optional icon
+	const String icon_path = _arg_string(p_args, "icon_path", "");
+	if (!icon_path.is_empty()) {
+		Ref<Texture2D> icon = ResourceLoader::load(icon_path);
+		if (icon.is_valid()) {
+			btn->set_button_icon(icon);
+		}
+	}
+
+	Node *parent = _resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err);
+	if (parent == nullptr) {
+		parent = scene_root;
+	}
+	_add_to_scene(parent, btn, scene_root);
+
+	// Position
+	btn->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
+	btn->set_size(Vector2(_arg_float(p_args, "width", 100.0), _arg_float(p_args, "height", 30.0)));
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(btn->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_label(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "Label");
+
+	Label *label = memnew(Label);
+	label->set_name(node_name);
+	label->set_text(_arg_string(p_args, "text", ""));
+	label->set_horizontal_alignment(static_cast<HorizontalAlignment>(_arg_int(p_args, "align", 0)));
+	label->set_vertical_alignment(static_cast<VerticalAlignment>(_arg_int(p_args, "valign", 0)));
+	label->set_autowrap_mode(static_cast<TextServer::AutowrapMode>(_arg_int(p_args, "autowrap", 0)));
+
+	Node *parent = _resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err);
+	if (parent == nullptr) {
+		parent = scene_root;
+	}
+	_add_to_scene(parent, label, scene_root);
+
+	// Position and size
+	label->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
+	label->set_size(Vector2(_arg_float(p_args, "width", 100.0), _arg_float(p_args, "height", 30.0)));
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(label->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_tween(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+
+	// Tween in Godot 4 is not a node — we create an AnimationPlayer with a simple tween-like animation instead.
+	const String node_name = _arg_string(p_args, "name", "TweenAnimation");
+	const String target_path = _arg_string(p_args, "target_path", "");
+	const String property = _arg_string(p_args, "property", "position");
+	const float duration = _arg_float(p_args, "duration", 1.0);
+
+	Node *target = _resolve_node_target(scene_root, target_path, err);
+	if (target == nullptr) {
+		return _make_error("Target node not found. Provide 'target_path'.");
+	}
+
+	AnimationPlayer *player = memnew(AnimationPlayer);
+	player->set_name(node_name);
+
+	Ref<Animation> anim;
+	anim.instantiate();
+	anim->set_length(duration);
+	anim->set_loop_mode(_arg_bool(p_args, "loop", false) ? Animation::LOOP_PINGPONG : Animation::LOOP_NONE);
+
+	// Determine property track type
+	Variant::Type property_type = Variant::FLOAT;
+	if (property == "position" || property == "scale" || property == "modulate") {
+		property_type = Variant::VECTOR2;
+	} else if (property == "rotation") {
+		property_type = Variant::FLOAT;
+	}
+
+	String track_path = String(target->get_path()).trim_prefix(String(scene_root->get_path())) + ":" + property;
+	if (track_path.begins_with("/")) {
+		track_path = track_path.substr(1);
+	}
+
+	int track_idx = anim->add_track(Animation::TYPE_VALUE);
+	anim->track_set_path(track_idx, track_path);
+
+	// Start value
+	Dictionary start_val_dict = _arg_dict(p_args, "from");
+	Variant start_val;
+	if (property_type == Variant::VECTOR2) {
+		start_val = Vector2(start_val_dict.get("x", 0.0), start_val_dict.get("y", 0.0));
+	} else {
+		start_val = start_val_dict.get("value", 0.0);
+	}
+	anim->track_insert_key(track_idx, 0.0, start_val);
+
+	// End value
+	Dictionary end_val_dict = _arg_dict(p_args, "to");
+	Variant end_val;
+	if (property_type == Variant::VECTOR2) {
+		end_val = Vector2(end_val_dict.get("x", 0.0), end_val_dict.get("y", 0.0));
+	} else {
+		end_val = end_val_dict.get("value", 1.0);
+	}
+	anim->track_insert_key(track_idx, duration, end_val);
+
+	// Easing
+	const String ease_type = _arg_string(p_args, "ease", "in_out");
+	Animation::InterpolationType interp = Animation::INTERPOLATION_LINEAR;
+	if (ease_type == "ease_in") interp = Animation::INTERPOLATION_CUBIC;
+	else if (ease_type == "ease_out") interp = Animation::INTERPOLATION_CUBIC;
+	else if (ease_type == "ease_in_out") interp = Animation::INTERPOLATION_CUBIC;
+	anim->track_set_interpolation_type(track_idx, interp);
+
+	Ref<AnimationLibrary> lib;
+	lib.instantiate();
+	lib->add_animation("tween", anim);
+	player->add_animation_library("", lib);
+
+	Node *parent = _resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err);
+	if (parent == nullptr) {
+		parent = scene_root;
+	}
+	_add_to_scene(parent, player, scene_root);
+
+	// Optionally autoplay
+	if (_arg_bool(p_args, "autoplay", false)) {
+		player->play("tween");
+	}
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(player->get_path());
 	return result;
 }
 

@@ -535,6 +535,12 @@ protected:
 	Dictionary _tool_create_navigation_agent_2d(const Dictionary &p_args) const;
 	Dictionary _tool_create_navigation_region_2d(const Dictionary &p_args) const;
 	Dictionary _tool_add_collision_shape_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_timer(const Dictionary &p_args) const;
+	Dictionary _tool_create_tween(const Dictionary &p_args) const;
+	Dictionary _tool_create_path_follow_2d(const Dictionary &p_args) const;
+	Dictionary _tool_query_raycast_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_button(const Dictionary &p_args) const;
+	Dictionary _tool_create_label(const Dictionary &p_args) const;
 
 	// ── C. Animation ──────────────────────────────────────────────────────────
 	Dictionary _tool_create_animation(const Dictionary &p_args) const;
