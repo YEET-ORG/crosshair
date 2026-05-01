@@ -2434,17 +2434,23 @@ void YeetAIDock::_request_model_response() {
 
 void YeetAIDock::_handle_native_tool_calls(const Dictionary &p_message) {
 	const Array tool_calls = p_message.get("tool_calls", Array());
+	const String content = p_message.get("content", "");
+
 	if (tool_calls.is_empty()) {
 		// No tool calls — treat as final answer.
-		const String content = p_message.get("content", "");
 		_handle_model_response(content);
 		return;
+	}
+
+	// Display any reasoning/content before tool calls execute.
+	if (!content.strip_edges().is_empty()) {
+		_append_message("assistant", content);
 	}
 
 	// Record the assistant message with tool_calls for conversation history.
 	Dictionary assistant_msg;
 	assistant_msg["role"] = "assistant";
-	assistant_msg["content"] = p_message.get("content", "");
+	assistant_msg["content"] = content;
 	assistant_msg["tool_calls"] = tool_calls;
 	conversation_messages.append(assistant_msg);
 
