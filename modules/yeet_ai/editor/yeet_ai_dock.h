@@ -532,6 +532,10 @@ protected:
 	Dictionary _tool_scaffold_patrol_enemy_2d(const Dictionary &p_args) const;
 	Dictionary _tool_scaffold_collectible_2d(const Dictionary &p_args) const;
 	Dictionary _tool_scaffold_moving_platform_2d(const Dictionary &p_args) const;
+	Dictionary _tool_scaffold_game_hud_2d(const Dictionary &p_args) const;
+	Dictionary _tool_scaffold_main_menu_2d(const Dictionary &p_args) const;
+	Dictionary _tool_scaffold_pause_menu_2d(const Dictionary &p_args) const;
+	Dictionary _tool_scaffold_lighting_rig_2d(const Dictionary &p_args) const;
 
 	// ── A. 3D Scene Construction ──────────────────────────────────────────────
 	Dictionary _tool_create_light(const Dictionary &p_args) const;
