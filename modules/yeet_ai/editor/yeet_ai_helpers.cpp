@@ -13,6 +13,10 @@
 #include "core/io/resource_loader.h"
 #include "core/string/string_name.h"
 #include "editor/editor_interface.h"
+#include "editor/editor_node.h"
+#include "editor/editor_undo_redo_manager.h"
+#include "editor/filesystem_dock.h"
+#include "editor/scene_tree_dock.h"
 #include "editor/settings/editor_settings.h"
 
 bool contains_string(const Vector<String> &p_values, const String &p_value) {
@@ -712,8 +716,89 @@ void YeetAIDock::_mark_unsaved() const {
 }
 
 void YeetAIDock::_add_to_scene(Node *p_parent, Node *p_child, Node *p_owner) const {
+	if (p_parent == nullptr || p_child == nullptr) {
+		return;
+	}
+
+	// If called from a tool execution, wrap in EditorUndoRedoManager.
+	if (!_current_tool_name_for_undo.is_empty()) {
+		EditorInterface *ei = EditorInterface::get_singleton();
+		if (ei != nullptr) {
+			EditorUndoRedoManager *urm = ei->get_editor_undo_redo();
+			if (urm != nullptr) {
+				String action_name = "AI: " + _current_tool_name_for_undo;
+				urm->create_action(action_name);
+				urm->add_do_method(p_parent, "add_child", p_child, true);
+				urm->add_undo_method(p_parent, "remove_child", p_child);
+				if (p_owner != nullptr) {
+					urm->add_do_method(p_child, "set_owner", p_owner);
+				}
+				urm->add_do_reference(p_child);
+				urm->commit_action();
+				_mark_unsaved();
+				return;
+			}
+		}
+	}
+
+	// Fallback: direct addition without undo.
 	p_parent->add_child(p_child, true);
 	p_child->set_owner(p_owner);
 	_set_owner_recursive(p_child, p_owner);
 	_mark_unsaved();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Editor refresh after tool execution
+// ═══════════════════════════════════════════════════════════════════════════
+
+void YeetAIDock::_refresh_editor_after_tool(const String &p_tool_name, const Dictionary &p_result) const {
+	EditorInterface *ei = EditorInterface::get_singleton();
+	if (ei == nullptr) {
+		return;
+	}
+
+	const bool is_create = p_tool_name.begins_with("create_") || p_tool_name.begins_with("add_") || p_tool_name.begins_with("instantiate_");
+	const bool is_remove = p_tool_name.begins_with("remove_") || p_tool_name.begins_with("delete_");
+	const bool is_modify = p_tool_name.begins_with("set_") || p_tool_name.begins_with("update_") || p_tool_name.begins_with("write_") || p_tool_name.begins_with("attach_") || p_tool_name.begins_with("assign_");
+	const bool is_file = p_tool_name.begins_with("create_gdscript_file") || p_tool_name.begins_with("update_gdscript_file") || p_tool_name.begins_with("write_project_file") || p_tool_name.begins_with("create_scene_file") || p_tool_name.begins_with("copy_project_file") || p_tool_name.begins_with("move_project_file") || p_tool_name.begins_with("delete_project_file");
+
+	// ── Scene tree refresh ─────────────────────────────────────────────────
+	if (is_create || is_remove) {
+		// Force scene tree dock to refresh by triggering a selection update.
+		if (p_result.has("node_path")) {
+			const String node_path = p_result["node_path"];
+			Node *scene_root = ei->get_edited_scene_root();
+			if (scene_root != nullptr) {
+				Node *node = scene_root->get_node_or_null(NodePath(node_path));
+				if (node != nullptr) {
+					ei->get_selection()->clear();
+					ei->get_selection()->add_node(node);
+					ei->edit_node(node);
+				}
+			}
+		} else {
+			ei->get_selection()->clear();
+		}
+	}
+
+	// ── Inspector refresh ──────────────────────────────────────────────────
+	if (is_modify && p_result.has("node_path")) {
+		const String node_path = p_result["node_path"];
+		Node *scene_root = ei->get_edited_scene_root();
+		if (scene_root != nullptr) {
+			Node *node = scene_root->get_node_or_null(NodePath(node_path));
+			if (node != nullptr) {
+				node->notify_property_list_changed();
+			}
+		}
+	}
+
+	// ── FileSystem refresh ─────────────────────────────────────────────────
+	if (is_file) {
+		EditorFileSystem *efs = EditorFileSystem::get_singleton();
+		if (efs != nullptr) {
+			efs->scan_changes();
+		}
+	}
 }

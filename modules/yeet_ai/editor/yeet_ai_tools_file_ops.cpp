@@ -14,9 +14,31 @@
 #include "core/object/class_db.h"
 #include "editor/file_system/editor_file_system.h"
 #include "editor/editor_interface.h"
+#include "modules/gdscript/gdscript.h"
 #include "scene/resources/packed_scene.h"
 
 constexpr int MAX_FILE_WRITE_BYTES = 512 * 1024;
+
+// Helper: validate a GDScript file by attempting to parse it.
+// Returns an empty string if valid, otherwise returns the first parse error.
+static String _validate_gdscript_file(const String &p_path) {
+	Ref<GDScript> script;
+	script.instantiate();
+	Error load_err = script->load_source_code(p_path);
+	if (load_err != OK) {
+		return vformat("Failed to load source code for validation: %d", load_err);
+	}
+	script->set_path(p_path, true);
+	script->reload(true);
+	if (!script->is_valid()) {
+		String err = script->get_script_path_invalid_error();
+		if (!err.is_empty()) {
+			return err;
+		}
+		return "Script has parse errors (unknown)";
+	}
+	return String();
+}
 
 Dictionary YeetAIDock::_tool_create_scene_file(const Dictionary &p_args) const {
 	Dictionary result;
@@ -121,8 +143,19 @@ Dictionary YeetAIDock::_tool_create_gdscript_file(const Dictionary &p_args) cons
 		editor->get_resource_filesystem()->update_file(script_path);
 	}
 
+	// Validate the written script for parse errors.
+	String parse_error = _validate_gdscript_file(script_path);
+	if (!parse_error.is_empty()) {
+		result["script_path"] = script_path;
+		result["bytes_written"] = contents.to_utf8_buffer().size();
+		result["parse_error"] = parse_error;
+		result["warning"] = "Script was written but has parse errors. Fix the error and call update_gdscript_file again.";
+		return result;
+	}
+
 	result["script_path"] = script_path;
 	result["bytes_written"] = contents.to_utf8_buffer().size();
+	result["ok"] = true;
 	return result;
 }
 
@@ -187,10 +220,23 @@ Dictionary YeetAIDock::_tool_update_gdscript_file(const Dictionary &p_args) cons
 		editor->get_resource_filesystem()->update_file(script_path);
 	}
 
+	// Validate the updated script for parse errors.
+	String parse_error = _validate_gdscript_file(script_path);
+	if (!parse_error.is_empty()) {
+		result["script_path"] = script_path;
+		result["operation"] = operation;
+		result["created"] = !exists;
+		result["bytes_written"] = final_contents.to_utf8_buffer().size();
+		result["parse_error"] = parse_error;
+		result["warning"] = "Script was updated but has parse errors. Fix the error and call update_gdscript_file again.";
+		return result;
+	}
+
 	result["script_path"] = script_path;
 	result["operation"] = operation;
 	result["created"] = !exists;
 	result["bytes_written"] = final_contents.to_utf8_buffer().size();
+	result["ok"] = true;
 	return result;
 }
 

@@ -151,6 +151,10 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 		{ "create_shape_cast_2d",                &YeetAIDock::_tool_create_shape_cast_2d },
 		{ "create_shape_cast_3d",                &YeetAIDock::_tool_create_shape_cast_3d },
 		{ "create_sky",                          &YeetAIDock::_tool_create_sky },
+		{ "scaffold_platformer_player_2d",       &YeetAIDock::_tool_scaffold_platformer_player_2d },
+		{ "scaffold_patrol_enemy_2d",            &YeetAIDock::_tool_scaffold_patrol_enemy_2d },
+		{ "scaffold_collectible_2d",             &YeetAIDock::_tool_scaffold_collectible_2d },
+		{ "scaffold_moving_platform_2d",         &YeetAIDock::_tool_scaffold_moving_platform_2d },
 		{ "create_slider",                       &YeetAIDock::_tool_create_slider },
 		{ "create_spin_box",                     &YeetAIDock::_tool_create_spin_box },
 		{ "create_sprite_2d",                    &YeetAIDock::_tool_create_sprite_2d },
@@ -437,8 +441,10 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
  		return result;
  	}
  	// Execute tool with timing.
- 	int64_t tool_start_time = Time::get_singleton()->get_ticks_msec();
- 	Dictionary payload = (this->*found->handler)(effective_args);
+	_current_tool_name_for_undo = p_tool_name;
+	int64_t tool_start_time = Time::get_singleton()->get_ticks_msec();
+	Dictionary payload = (this->*found->handler)(effective_args);
+	_current_tool_name_for_undo.clear();
  	int64_t tool_duration = Time::get_singleton()->get_ticks_msec() - tool_start_time;
 	// Check for timeout after execution.
 	if (_check_tool_call_timeout()) {
@@ -487,6 +493,9 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 	// Record successful tool execution metric
 	((YeetAIDock*)this)->_record_tool_execution(p_tool_name, tool_duration, true, false);
 
+	// Refresh editor UI (SceneTree, Inspector, FileSystem) after mutating tools.
+	((YeetAIDock*)this)->_refresh_editor_after_tool(p_tool_name, payload);
+
 	return result;
 }
 
@@ -523,7 +532,8 @@ Vector<String> yeet_ai_get_all_tool_names() {
 		"create_ray_cast_2d", "create_ray_cast_3d", "create_reference_rect", "create_rich_text_label", "create_reflection_probe", "create_remote_transform_2d",
 		"create_rigid_body_2d", "create_rigid_body_3d", "create_scene_file",
 		"create_scroll_container", "create_shader_material", "create_shape_cast_2d", "create_shape_cast_3d",
-		"create_sky", "create_slider", "create_spin_box", "create_sprite_2d", 		"create_standard_material",
+		"create_sky", "scaffold_platformer_player_2d", "scaffold_patrol_enemy_2d", "scaffold_collectible_2d", "scaffold_moving_platform_2d",
+		"create_slider", "create_spin_box", "create_sprite_2d", 		"create_standard_material",
 		"create_static_body_2d", "create_static_body_3d", "create_stylebox", "create_subviewport_container", "create_tab_container",
 		"create_texture_2d", "create_texture_progress_bar", "create_text_edit", 		"create_theme", "create_tile_map", "create_tilemap_layer", "create_tileset", "create_timer", "create_tween", "create_tree_widget",
 		"create_ui_element", "create_vehicle_body_3d", "create_v_separator",

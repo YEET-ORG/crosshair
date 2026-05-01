@@ -98,6 +98,10 @@ class YeetAIDock : public VBoxContainer {
 
 	// ── Token counter ─────────────────────────────────────────────────────────
 	Label *_token_count_label = nullptr;
+
+	// ── UndoRedo tracking ─────────────────────────────────────────────────────
+	// Set by _execute_tool so _add_to_scene can automatically wrap in undo.
+	mutable String _current_tool_name_for_undo;
 	void _update_token_counter();
 
 	// ── Tool progress bar ─────────────────────────────────────────────────────
@@ -408,6 +412,11 @@ protected:
 	void _set_owner_recursive(Node *p_node, Node *p_owner) const;
 	void _mark_unsaved() const;
 	void _add_to_scene(Node *p_parent, Node *p_child, Node *p_owner) const;
+
+	// ── Editor refresh ────────────────────────────────────────────────────────
+	// Refreshes SceneTree dock, Inspector, and FileSystem dock after mutations.
+	// tool_name is used to decide which panels need refreshing.
+	void _refresh_editor_after_tool(const String &p_tool_name, const Dictionary &p_result) const;
 	Dictionary _tool_get_project_tree(const Dictionary &p_args) const;
 	Dictionary _tool_read_project_file(const Dictionary &p_args) const;
 	Dictionary _tool_get_open_scenes(const Dictionary &p_args) const;
@@ -517,6 +526,12 @@ protected:
 	Dictionary _tool_create_game_actor_3d(const Dictionary &p_args) const;
 	Dictionary _tool_audit_game_physics(const Dictionary &p_args) const;
 	Dictionary _tool_repair_game_physics(const Dictionary &p_args) const;
+
+	// ── Composite / Scaffold tools ────────────────────────────────────────────
+	Dictionary _tool_scaffold_platformer_player_2d(const Dictionary &p_args) const;
+	Dictionary _tool_scaffold_patrol_enemy_2d(const Dictionary &p_args) const;
+	Dictionary _tool_scaffold_collectible_2d(const Dictionary &p_args) const;
+	Dictionary _tool_scaffold_moving_platform_2d(const Dictionary &p_args) const;
 
 	// ── A. 3D Scene Construction ──────────────────────────────────────────────
 	Dictionary _tool_create_light(const Dictionary &p_args) const;
