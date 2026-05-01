@@ -2914,7 +2914,38 @@ void YeetAIDock::_set_owner_recursive(Node *p_node, Node *p_owner) const {
 // _build_system_prompt is in yeet_ai_system_prompt.cpp
 
 String YeetAIDock::_escape_bbcode(const String &p_text) const {
-	return p_text.replace("[", "[lb]");
+	String escaped = p_text.replace("[", "[lb]");
+
+	// Convert markdown code blocks to BBCode code blocks.
+	// Match ```lang\ncode\n``` or ```\ncode\n```
+	int pos = 0;
+	while (true) {
+		int start = escaped.find("```", pos);
+		if (start < 0) {
+			break;
+		}
+		int end = escaped.find("```", start + 3);
+		if (end < 0) {
+			break; // Unclosed code block — leave as-is
+		}
+
+		// Extract language hint (if any) after the opening ```
+		String header = escaped.substr(start + 3, end - start - 3);
+		int nl = header.find("\n");
+		String code;
+		if (nl >= 0) {
+			code = header.substr(nl + 1);
+		} else {
+			code = header;
+		}
+
+		// Build BBCode replacement
+		String bbcode = "[code]" + code + "[/code]";
+		escaped = escaped.substr(0, start) + bbcode + escaped.substr(end + 3);
+		pos = start + bbcode.length();
+	}
+
+	return escaped;
 }
 
 String YeetAIDock::_extract_message_content(const Dictionary &p_response_json) const {
