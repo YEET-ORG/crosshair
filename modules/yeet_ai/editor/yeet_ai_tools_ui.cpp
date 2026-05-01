@@ -8,15 +8,21 @@
 #include "yeet_ai_dock.h"
 
 #include "core/io/resource_loader.h"
+#include "scene/gui/aspect_ratio_container.h"
 #include "scene/gui/button.h"
 #include "scene/gui/check_box.h"
 #include "scene/gui/color_rect.h"
+#include "scene/gui/dialogs.h"
 #include "scene/gui/label.h"
 #include "scene/gui/line_edit.h"
+#include "scene/gui/margin_container.h"
 #include "scene/gui/nine_patch_rect.h"
 #include "scene/gui/panel_container.h"
+#include "scene/gui/reference_rect.h"
 #include "scene/gui/rich_text_label.h"
+#include "scene/gui/separator.h"
 #include "scene/gui/spin_box.h"
+#include "scene/gui/subviewport_container.h"
 #include "scene/gui/text_edit.h"
 #include "scene/gui/texture_progress_bar.h"
 #include "scene/gui/texture_rect.h"
@@ -38,6 +44,38 @@ static Color _parse_color_arg(const Dictionary &p_args, const String &p_key, con
 		return Color(d.get("r", 1.0), d.get("g", 1.0), d.get("b", 1.0), d.get("a", 1.0));
 	}
 	return p_default;
+}
+
+static void _apply_anchor_preset_arg(Control *p_ctrl, const Dictionary &p_args) {
+	if (!p_ctrl || !p_args.has("anchor_preset")) {
+		return;
+	}
+	const String preset = String(p_args["anchor_preset"]).to_lower();
+	if (preset == "full_rect" || preset == "full") {
+		p_ctrl->set_anchors_preset(Control::PRESET_FULL_RECT);
+	} else if (preset == "top_left") {
+		p_ctrl->set_anchors_preset(Control::PRESET_TOP_LEFT);
+	} else if (preset == "top_right") {
+		p_ctrl->set_anchors_preset(Control::PRESET_TOP_RIGHT);
+	} else if (preset == "bottom_left") {
+		p_ctrl->set_anchors_preset(Control::PRESET_BOTTOM_LEFT);
+	} else if (preset == "bottom_right") {
+		p_ctrl->set_anchors_preset(Control::PRESET_BOTTOM_RIGHT);
+	} else if (preset == "center" || preset == "center_center") {
+		p_ctrl->set_anchors_preset(Control::PRESET_CENTER);
+	} else if (preset == "left_wide") {
+		p_ctrl->set_anchors_preset(Control::PRESET_LEFT_WIDE);
+	} else if (preset == "top_wide") {
+		p_ctrl->set_anchors_preset(Control::PRESET_TOP_WIDE);
+	} else if (preset == "right_wide") {
+		p_ctrl->set_anchors_preset(Control::PRESET_RIGHT_WIDE);
+	} else if (preset == "bottom_wide") {
+		p_ctrl->set_anchors_preset(Control::PRESET_BOTTOM_WIDE);
+	} else if (preset == "vcenter_wide") {
+		p_ctrl->set_anchors_preset(Control::PRESET_VCENTER_WIDE);
+	} else if (preset == "hcenter_wide") {
+		p_ctrl->set_anchors_preset(Control::PRESET_HCENTER_WIDE);
+	}
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -75,6 +113,7 @@ Dictionary YeetAIDock::_tool_create_texture_rect(const Dictionary &p_args) const
 	_add_to_scene(parent, tr, scene_root);
 	tr->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
 	tr->set_size(Vector2(_arg_float(p_args, "width", 64.0), _arg_float(p_args, "height", 64.0)));
+	_apply_anchor_preset_arg(tr, p_args);
 
 	_mark_unsaved();
 	result["ok"] = true;
@@ -126,6 +165,7 @@ Dictionary YeetAIDock::_tool_create_nine_patch_rect(const Dictionary &p_args) co
 	_add_to_scene(parent, npr, scene_root);
 	npr->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
 	npr->set_size(Vector2(_arg_float(p_args, "width", 64.0), _arg_float(p_args, "height", 64.0)));
+	_apply_anchor_preset_arg(npr, p_args);
 
 	_mark_unsaved();
 	result["ok"] = true;
@@ -153,6 +193,7 @@ Dictionary YeetAIDock::_tool_create_color_rect(const Dictionary &p_args) const {
 	_add_to_scene(parent, cr, scene_root);
 	cr->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
 	cr->set_size(Vector2(_arg_float(p_args, "width", 64.0), _arg_float(p_args, "height", 64.0)));
+	_apply_anchor_preset_arg(cr, p_args);
 
 	_mark_unsaved();
 	result["ok"] = true;
@@ -182,6 +223,7 @@ Dictionary YeetAIDock::_tool_create_rich_text_label(const Dictionary &p_args) co
 	_add_to_scene(parent, rtl, scene_root);
 	rtl->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
 	rtl->set_size(Vector2(_arg_float(p_args, "width", 200.0), _arg_float(p_args, "height", 100.0)));
+	_apply_anchor_preset_arg(rtl, p_args);
 
 	_mark_unsaved();
 	result["ok"] = true;
@@ -242,6 +284,7 @@ Dictionary YeetAIDock::_tool_create_texture_progress_bar(const Dictionary &p_arg
 	_add_to_scene(parent, tpb, scene_root);
 	tpb->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
 	tpb->set_size(Vector2(_arg_float(p_args, "width", 64.0), _arg_float(p_args, "height", 64.0)));
+	_apply_anchor_preset_arg(tpb, p_args);
 
 	_mark_unsaved();
 	result["ok"] = true;
@@ -278,6 +321,7 @@ Dictionary YeetAIDock::_tool_create_line_edit(const Dictionary &p_args) const {
 	_add_to_scene(parent, le, scene_root);
 	le->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
 	le->set_size(Vector2(_arg_float(p_args, "width", 150.0), _arg_float(p_args, "height", 30.0)));
+	_apply_anchor_preset_arg(le, p_args);
 
 	_mark_unsaved();
 	result["ok"] = true;
@@ -310,6 +354,7 @@ Dictionary YeetAIDock::_tool_create_text_edit(const Dictionary &p_args) const {
 	_add_to_scene(parent, te, scene_root);
 	te->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
 	te->set_size(Vector2(_arg_float(p_args, "width", 200.0), _arg_float(p_args, "height", 100.0)));
+	_apply_anchor_preset_arg(te, p_args);
 
 	_mark_unsaved();
 	result["ok"] = true;
@@ -338,6 +383,7 @@ Dictionary YeetAIDock::_tool_create_check_box(const Dictionary &p_args) const {
 	}
 	_add_to_scene(parent, cb, scene_root);
 	cb->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
+	_apply_anchor_preset_arg(cb, p_args);
 
 	_mark_unsaved();
 	result["ok"] = true;
@@ -371,6 +417,7 @@ Dictionary YeetAIDock::_tool_create_spin_box(const Dictionary &p_args) const {
 	_add_to_scene(parent, sb, scene_root);
 	sb->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
 	sb->set_size(Vector2(_arg_float(p_args, "width", 80.0), _arg_float(p_args, "height", 30.0)));
+	_apply_anchor_preset_arg(sb, p_args);
 
 	_mark_unsaved();
 	result["ok"] = true;
@@ -406,9 +453,255 @@ Dictionary YeetAIDock::_tool_create_panel_container(const Dictionary &p_args) co
 	_add_to_scene(parent, pc, scene_root);
 	pc->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
 	pc->set_size(Vector2(_arg_float(p_args, "width", 200.0), _arg_float(p_args, "height", 150.0)));
+	_apply_anchor_preset_arg(pc, p_args);
 
 	_mark_unsaved();
 	result["ok"] = true;
 	result["node_path"] = String(pc->get_path());
+	return result;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 3: Dialogs, Separators, and Advanced Containers
+// ═══════════════════════════════════════════════════════════════════════════
+
+Dictionary YeetAIDock::_tool_create_accept_dialog(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "AcceptDialog");
+
+	AcceptDialog *dlg = memnew(AcceptDialog);
+	dlg->set_name(node_name);
+	dlg->set_title(_arg_string(p_args, "title", "Alert"));
+	dlg->set_dialog_text(_arg_string(p_args, "dialog_text", ""));
+	dlg->set_ok_button_text(_arg_string(p_args, "ok_button_text", "OK"));
+
+	Node *parent = _resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err);
+	if (parent == nullptr) {
+		parent = scene_root;
+	}
+	_add_to_scene(parent, dlg, scene_root);
+	_apply_anchor_preset_arg(dlg, p_args);
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(dlg->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_confirmation_dialog(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "ConfirmationDialog");
+
+	ConfirmationDialog *dlg = memnew(ConfirmationDialog);
+	dlg->set_name(node_name);
+	dlg->set_title(_arg_string(p_args, "title", "Confirm"));
+	dlg->set_dialog_text(_arg_string(p_args, "dialog_text", ""));
+	dlg->set_ok_button_text(_arg_string(p_args, "ok_button_text", "OK"));
+	dlg->set_cancel_button_text(_arg_string(p_args, "cancel_button_text", "Cancel"));
+
+	Node *parent = _resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err);
+	if (parent == nullptr) {
+		parent = scene_root;
+	}
+	_add_to_scene(parent, dlg, scene_root);
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(dlg->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_h_separator(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "HSeparator");
+
+	HSeparator *sep = memnew(HSeparator);
+	sep->set_name(node_name);
+
+	Node *parent = _resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err);
+	if (parent == nullptr) {
+		parent = scene_root;
+	}
+	_add_to_scene(parent, sep, scene_root);
+	sep->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
+	sep->set_size(Vector2(_arg_float(p_args, "width", 100.0), _arg_float(p_args, "height", 4.0)));
+	_apply_anchor_preset_arg(sep, p_args);
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(sep->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_v_separator(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "VSeparator");
+
+	VSeparator *sep = memnew(VSeparator);
+	sep->set_name(node_name);
+
+	Node *parent = _resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err);
+	if (parent == nullptr) {
+		parent = scene_root;
+	}
+	_add_to_scene(parent, sep, scene_root);
+	sep->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
+	sep->set_size(Vector2(_arg_float(p_args, "width", 4.0), _arg_float(p_args, "height", 100.0)));
+	_apply_anchor_preset_arg(sep, p_args);
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(sep->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_aspect_ratio_container(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "AspectRatioContainer");
+
+	AspectRatioContainer *arc = memnew(AspectRatioContainer);
+	arc->set_name(node_name);
+	arc->set_ratio(_arg_float(p_args, "ratio", 1.0));
+	// Stretch mode: 0=width_controls_height, 1=height_controls_width, 2=fit
+	const int stretch_mode = _arg_int(p_args, "stretch_mode", 2);
+	arc->set_stretch_mode(static_cast<AspectRatioContainer::StretchMode>(stretch_mode));
+	// Alignment horizontal: 0=left, 1=center, 2=right
+	const int align_h = _arg_int(p_args, "alignment_horizontal", 1);
+	arc->set_alignment_horizontal(static_cast<AspectRatioContainer::AlignmentMode>(align_h));
+	// Alignment vertical: 0=top, 1=center, 2=bottom
+	const int align_v = _arg_int(p_args, "alignment_vertical", 1);
+	arc->set_alignment_vertical(static_cast<AspectRatioContainer::AlignmentMode>(align_v));
+
+	Node *parent = _resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err);
+	if (parent == nullptr) {
+		parent = scene_root;
+	}
+	_add_to_scene(parent, arc, scene_root);
+	arc->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
+	arc->set_size(Vector2(_arg_float(p_args, "width", 200.0), _arg_float(p_args, "height", 200.0)));
+	_apply_anchor_preset_arg(arc, p_args);
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(arc->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_subviewport_container(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "SubViewportContainer");
+
+	SubViewportContainer *svc = memnew(SubViewportContainer);
+	svc->set_name(node_name);
+	svc->set_stretch(_arg_bool(p_args, "stretch", true));
+	svc->set_stretch_shrink(_arg_int(p_args, "stretch_shrink", 1));
+
+	Node *parent = _resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err);
+	if (parent == nullptr) {
+		parent = scene_root;
+	}
+	_add_to_scene(parent, svc, scene_root);
+	svc->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
+	svc->set_size(Vector2(_arg_float(p_args, "width", 200.0), _arg_float(p_args, "height", 200.0)));
+	_apply_anchor_preset_arg(svc, p_args);
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(svc->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_margin_container(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "MarginContainer");
+
+	MarginContainer *mc = memnew(MarginContainer);
+	mc->set_name(node_name);
+
+	Dictionary margins = _arg_dict(p_args, "margin");
+	if (!margins.is_empty()) {
+		mc->add_theme_constant_override("margin_left", margins.get("left", 0));
+		mc->add_theme_constant_override("margin_top", margins.get("top", 0));
+		mc->add_theme_constant_override("margin_right", margins.get("right", 0));
+		mc->add_theme_constant_override("margin_bottom", margins.get("bottom", 0));
+	}
+
+	Node *parent = _resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err);
+	if (parent == nullptr) {
+		parent = scene_root;
+	}
+	_add_to_scene(parent, mc, scene_root);
+	mc->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
+	mc->set_size(Vector2(_arg_float(p_args, "width", 200.0), _arg_float(p_args, "height", 150.0)));
+	_apply_anchor_preset_arg(mc, p_args);
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(mc->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_reference_rect(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "ReferenceRect");
+
+	ReferenceRect *rr = memnew(ReferenceRect);
+	rr->set_name(node_name);
+	rr->set_border_color(_parse_color_arg(p_args, "border_color", Color(1, 1, 1)));
+	rr->set_border_width(_arg_float(p_args, "border_width", 1.0));
+	rr->set_editor_only(_arg_bool(p_args, "editor_only", true));
+
+	Node *parent = _resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err);
+	if (parent == nullptr) {
+		parent = scene_root;
+	}
+	_add_to_scene(parent, rr, scene_root);
+	rr->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
+	rr->set_size(Vector2(_arg_float(p_args, "width", 100.0), _arg_float(p_args, "height", 100.0)));
+	_apply_anchor_preset_arg(rr, p_args);
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(rr->get_path());
 	return result;
 }

@@ -92,6 +92,22 @@ static String yeet_describe_http_client_status(HTTPClient::Status p_s) {
 
 // ── Streaming methods ────────────────────────────────────────────────────────
 
+static bool yeet_get_non_empty_string_field(const Dictionary &p_dict, const String &p_key, String &r_value) {
+	if (!p_dict.has(p_key)) {
+		return false;
+	}
+	const Variant value = p_dict.get(p_key, Variant());
+	if (value.get_type() != Variant::STRING && value.get_type() != Variant::STRING_NAME) {
+		return false;
+	}
+	const String text = String(value).strip_edges();
+	if (text.is_empty() || text == "<null>") {
+		return false;
+	}
+	r_value = text;
+	return true;
+}
+
 void YeetAIDock::_stream_thread_trampoline(void *p_user) {
 	static_cast<YeetAIDock *>(p_user)->_stream_thread_body();
 }
@@ -360,21 +376,24 @@ void YeetAIDock::_stream_thread_body() {
 						_stream_tool_call_accumulator.append(Dictionary());
 					}
 					Dictionary accumulated = _stream_tool_call_accumulator[tc_idx];
-					if (tc_delta.has("id")) {
-						accumulated["id"] = tc_delta["id"];
+					String text_field;
+					if (yeet_get_non_empty_string_field(tc_delta, "id", text_field)) {
+						accumulated["id"] = text_field;
 					}
-					if (tc_delta.has("type")) {
-						accumulated["type"] = tc_delta["type"];
+					if (yeet_get_non_empty_string_field(tc_delta, "type", text_field)) {
+						accumulated["type"] = text_field;
 					}
-					if (tc_delta.has("function")) {
-						const Dictionary fn_delta = tc_delta["function"];
+					const Variant fn_delta_variant = tc_delta.get("function", Variant());
+					if (fn_delta_variant.get_type() == Variant::DICTIONARY) {
+						const Dictionary fn_delta = fn_delta_variant;
 						Dictionary fn = accumulated.get("function", Dictionary());
-						if (fn_delta.has("name")) {
-							fn["name"] = fn_delta["name"];
+						if (yeet_get_non_empty_string_field(fn_delta, "name", text_field)) {
+							fn["name"] = text_field;
 						}
-						if (fn_delta.has("arguments")) {
-							String args = fn.get("arguments", "");
-							args += String(fn_delta["arguments"]);
+						const Variant arguments_delta = fn_delta.get("arguments", Variant());
+						if (arguments_delta.get_type() == Variant::STRING) {
+							String args = String(fn.get("arguments", ""));
+							args += String(arguments_delta);
 							fn["arguments"] = args;
 						}
 						accumulated["function"] = fn;
@@ -384,7 +403,11 @@ void YeetAIDock::_stream_thread_body() {
 			}
 
 			// ── Stream text content ──────────────────────────────────────────
-			String content_chunk = delta.get("content", "");
+			String content_chunk;
+			const Variant content_variant = delta.get("content", Variant());
+			if (content_variant.get_type() == Variant::STRING) {
+				content_chunk = String(content_variant);
+			}
 			if (!content_chunk.is_empty()) {
 				// Strip non-ASCII prefix artifacts (e.g., UTF-8 keep-alive bytes like 0xC4 0x81 = "ā").
 				{
@@ -498,18 +521,26 @@ void YeetAIDock::_finalize_stream() {
 				tc["type"] = "function";
 			}
 			// Validate that function name and arguments are present.
-			if (!tc.has("function")) {
+			const Variant fn_variant = tc.get("function", Variant());
+			if (fn_variant.get_type() != Variant::DICTIONARY) {
 				all_valid = false;
 				break;
 			}
-			Dictionary fn = tc["function"];
-			if (!fn.has("name") || String(fn["name"]).is_empty()) {
+			Dictionary fn = fn_variant;
+			String function_name;
+			if (!yeet_get_non_empty_string_field(fn, "name", function_name)) {
 				all_valid = false;
 				break;
 			}
+			fn["name"] = function_name;
 			// Validate arguments JSON if present.
 			if (fn.has("arguments")) {
-				String args_str = fn["arguments"];
+				const Variant args_variant = fn["arguments"];
+				if (args_variant.get_type() != Variant::STRING) {
+					all_valid = false;
+					break;
+				}
+				String args_str = args_variant;
 				if (!args_str.is_empty()) {
 					Ref<JSON> j;
 					j.instantiate();
@@ -519,16 +550,12 @@ void YeetAIDock::_finalize_stream() {
 					}
 				}
 			}
+			tc["function"] = fn;
 			tool_calls.append(tc);
 		}
 
 		if (all_valid) {
 			message["tool_calls"] = tool_calls;
-			// If the model streamed reasoning text before the tool calls,
-			// preserve it in the chat log so the user can see the reasoning.
-			if (!accumulated.strip_edges().is_empty()) {
-				_append_message("assistant", accumulated);
-			}
 			_handle_native_tool_calls(message);
 			return;
 		}

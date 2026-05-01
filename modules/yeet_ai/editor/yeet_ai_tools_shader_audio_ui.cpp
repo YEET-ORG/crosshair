@@ -507,6 +507,35 @@ Dictionary YeetAIDock::_tool_create_control_node(const Dictionary &p_args) const
 	}
 	_add_to_scene(parent, ctrl, scene_root);
 
+	const String anchor_preset = _arg_string(p_args, "anchor_preset", "").to_lower();
+	if (!anchor_preset.is_empty()) {
+		if (anchor_preset == "full_rect" || anchor_preset == "full") {
+			ctrl->set_anchors_preset(Control::PRESET_FULL_RECT);
+		} else if (anchor_preset == "top_left") {
+			ctrl->set_anchors_preset(Control::PRESET_TOP_LEFT);
+		} else if (anchor_preset == "top_right") {
+			ctrl->set_anchors_preset(Control::PRESET_TOP_RIGHT);
+		} else if (anchor_preset == "bottom_left") {
+			ctrl->set_anchors_preset(Control::PRESET_BOTTOM_LEFT);
+		} else if (anchor_preset == "bottom_right") {
+			ctrl->set_anchors_preset(Control::PRESET_BOTTOM_RIGHT);
+		} else if (anchor_preset == "center" || anchor_preset == "center_center") {
+			ctrl->set_anchors_preset(Control::PRESET_CENTER);
+		} else if (anchor_preset == "left_wide") {
+			ctrl->set_anchors_preset(Control::PRESET_LEFT_WIDE);
+		} else if (anchor_preset == "top_wide") {
+			ctrl->set_anchors_preset(Control::PRESET_TOP_WIDE);
+		} else if (anchor_preset == "right_wide") {
+			ctrl->set_anchors_preset(Control::PRESET_RIGHT_WIDE);
+		} else if (anchor_preset == "bottom_wide") {
+			ctrl->set_anchors_preset(Control::PRESET_BOTTOM_WIDE);
+		} else if (anchor_preset == "vcenter_wide") {
+			ctrl->set_anchors_preset(Control::PRESET_VCENTER_WIDE);
+		} else if (anchor_preset == "hcenter_wide") {
+			ctrl->set_anchors_preset(Control::PRESET_HCENTER_WIDE);
+		}
+	}
+
 	Dictionary result;
 	result["node_path"] = String(ctrl->get_path());
 	result["control_type"] = control_type;

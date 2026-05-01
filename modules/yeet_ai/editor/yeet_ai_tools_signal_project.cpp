@@ -329,3 +329,138 @@ Dictionary YeetAIDock::_tool_edit_script(const Dictionary &p_args) const {
 	result["line"] = line;
 	return result;
 }
+
+Dictionary YeetAIDock::_tool_connect_ui_signal(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	Node *source;
+	if (!_resolve_scene_and_node(p_args, "source_node_path", &scene_root, &source, err)) {
+		return _make_error(err);
+	}
+
+	const String ui_event = _arg_string(p_args, "ui_event", "").to_lower();
+	if (ui_event.is_empty()) {
+		return _make_error("ui_event is required (e.g., pressed, toggled, text_changed, value_changed).");
+	}
+
+	// Map ui_event to Godot signal name based on source node type.
+	String signal_name;
+	Button *btn = Object::cast_to<Button>(source);
+	CheckBox *cb = Object::cast_to<CheckBox>(source);
+	LineEdit *le = Object::cast_to<LineEdit>(source);
+	TextEdit *te = Object::cast_to<TextEdit>(source);
+	SpinBox *sb = Object::cast_to<SpinBox>(source);
+	Slider *slider = Object::cast_to<Slider>(source);
+	ProgressBar *pb = Object::cast_to<ProgressBar>(source);
+	TextureProgressBar *tpb = Object::cast_to<TextureProgressBar>(source);
+	ItemList *il = Object::cast_to<ItemList>(source);
+	OptionButton *ob = Object::cast_to<OptionButton>(source);
+	TabContainer *tc = Object::cast_to<TabContainer>(source);
+	Tree *tree = Object::cast_to<Tree>(source);
+
+	if (ui_event == "pressed") {
+		if (btn || cb) {
+			signal_name = "pressed";
+		}
+	} else if (ui_event == "toggled") {
+		if (btn || cb) {
+			signal_name = "toggled";
+		}
+	} else if (ui_event == "text_changed") {
+		if (le) {
+			signal_name = "text_changed";
+		} else if (te) {
+			signal_name = "text_changed";
+		}
+	} else if (ui_event == "text_submitted") {
+		if (le) {
+			signal_name = "text_submitted";
+		}
+	} else if (ui_event == "value_changed") {
+		if (sb || slider || pb || tpb) {
+			signal_name = "value_changed";
+		}
+	} else if (ui_event == "item_selected") {
+		if (il || ob) {
+			signal_name = "item_selected";
+		} else if (tree) {
+			signal_name = "item_selected";
+		}
+	} else if (ui_event == "tab_changed") {
+		if (tc) {
+			signal_name = "tab_changed";
+		}
+	} else if (ui_event == "gui_input") {
+		signal_name = "gui_input";
+	} else if (ui_event == "focus_entered") {
+		signal_name = "focus_entered";
+	} else if (ui_event == "focus_exited") {
+		signal_name = "focus_exited";
+	} else if (ui_event == "mouse_entered") {
+		signal_name = "mouse_entered";
+	} else if (ui_event == "mouse_exited") {
+		signal_name = "mouse_exited";
+	}
+
+	if (signal_name.is_empty()) {
+		return _make_error(vformat("ui_event '%s' is not supported for node type '%s'. Use connect_signal with an explicit signal_name instead.", ui_event, source->get_class()));
+	}
+
+	if (!source->has_signal(signal_name)) {
+		return _make_error(vformat("Source node does not expose signal '%s'.", signal_name));
+	}
+
+	Node *target = nullptr;
+	if (p_args.has("target_node_path")) {
+		target = _resolve_node_target(scene_root, _arg_string(p_args, "target_node_path", ""), err);
+		if (target == nullptr) {
+			return _make_error(err);
+		}
+	}
+
+	String method_name = _arg_string(p_args, "method_name", "");
+	if (method_name.is_empty()) {
+		if (target == nullptr) {
+			return _make_error("method_name is required when target_node_path is omitted.");
+		}
+		// Auto-generate method name: _on_<source_name>_<signal_name>
+		String src_name = source->get_name().to_lower().replace(" ", "_").replace("-", "_");
+		method_name = "_on_" + src_name + "_" + signal_name;
+	}
+
+	Callable callable;
+	if (target != nullptr) {
+		callable = Callable(target, method_name);
+	} else {
+		// If no target, assume method is on the source itself (self-connect)
+		callable = Callable(source, method_name);
+	}
+
+	if (source->is_connected(signal_name, callable)) {
+		result["already_connected"] = true;
+		result["signal_name"] = signal_name;
+		result["method_name"] = method_name;
+		result["source_node_path"] = String(source->get_path());
+		if (target) {
+			result["target_node_path"] = String(target->get_path());
+		}
+		return result;
+	}
+
+	const uint32_t flags = uint32_t(_arg_int(p_args, "flags", Object::CONNECT_PERSIST));
+	const Error connect_err = source->connect(signal_name, callable, flags);
+	if (connect_err != OK) {
+		return _make_error(vformat("Failed to connect signal: error %d", connect_err));
+	}
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["signal_name"] = signal_name;
+	result["method_name"] = method_name;
+	result["source_node_path"] = String(source->get_path());
+	if (target) {
+		result["target_node_path"] = String(target->get_path());
+	}
+	return result;
+}

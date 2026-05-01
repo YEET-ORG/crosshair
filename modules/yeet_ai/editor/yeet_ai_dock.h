@@ -412,6 +412,7 @@ protected:
 	Dictionary _tool_create_standard_material(const Dictionary &p_args) const;
 	Dictionary _tool_assign_resource_to_property(const Dictionary &p_args) const;
 	Dictionary _tool_connect_signal(const Dictionary &p_args) const;
+	Dictionary _tool_connect_ui_signal(const Dictionary &p_args) const;
 	Dictionary _tool_create_input_action(const Dictionary &p_args) const;
 	Dictionary _tool_set_main_scene(const Dictionary &p_args) const;
 	Dictionary _tool_play_current_scene(const Dictionary &p_args) const;
@@ -551,6 +552,14 @@ protected:
 	Dictionary _tool_create_check_box(const Dictionary &p_args) const;
 	Dictionary _tool_create_spin_box(const Dictionary &p_args) const;
 	Dictionary _tool_create_panel_container(const Dictionary &p_args) const;
+	Dictionary _tool_create_accept_dialog(const Dictionary &p_args) const;
+	Dictionary _tool_create_confirmation_dialog(const Dictionary &p_args) const;
+	Dictionary _tool_create_h_separator(const Dictionary &p_args) const;
+	Dictionary _tool_create_v_separator(const Dictionary &p_args) const;
+	Dictionary _tool_create_aspect_ratio_container(const Dictionary &p_args) const;
+	Dictionary _tool_create_subviewport_container(const Dictionary &p_args) const;
+	Dictionary _tool_create_margin_container(const Dictionary &p_args) const;
+	Dictionary _tool_create_reference_rect(const Dictionary &p_args) const;
 
 	// ── C. Animation ──────────────────────────────────────────────────────────
 	Dictionary _tool_create_animation(const Dictionary &p_args) const;
