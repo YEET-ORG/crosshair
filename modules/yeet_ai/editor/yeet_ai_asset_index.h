@@ -92,8 +92,18 @@ private:
 	void _update_path_index(const String &p_old_path, const String &p_new_path);
 	void _mark_missing(const String &p_path);
 
-	// Vision integration (placeholder for v1 — returns error if no vision configured)
+	// Vision integration
 	Dictionary _call_vision_model(const String &p_path, const Dictionary &p_deterministic_facts);
+	String _build_vision_prompt(const Dictionary &p_deterministic_facts) const;
+	String _encode_image_for_vision(const String &p_path) const;
+
+	struct ParsedURL {
+		String host;
+		int port = 80;
+		bool use_tls = false;
+		String path = "/";
+	};
+	static ParsedURL _parse_url(const String &p_url);
 
 	YeetAIAssetIndex() = default;
 	~YeetAIAssetIndex() = default;

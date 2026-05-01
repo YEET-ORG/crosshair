@@ -7,12 +7,18 @@
 
 #include "yeet_ai_asset_index.h"
 
+#include "core/crypto/crypto_core.h"
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
+#include "core/io/http_client.h"
 #include "core/io/image_loader.h"
 #include "core/io/json.h"
+#include "core/io/tls_options.h"
+#include "core/os/os.h"
 #include "core/os/time.h"
 #include "core/variant/variant.h"
+
+#include "editor/settings/editor_settings.h"
 
 // Scene includes for resource generation
 #include "scene/2d/animated_sprite_2d.h"
@@ -27,6 +33,11 @@ void YeetAIAssetIndex::initialize() {
 	if (singleton == nullptr) {
 		singleton = memnew(YeetAIAssetIndex);
 		singleton->_load_project_index_file();
+
+		EditorSettings *settings = EditorSettings::get_singleton();
+		if (settings != nullptr) {
+			singleton->_deep_index_enabled = bool(settings->get_setting("yeet_ai/asset_index/deep_index_enabled", false));
+		}
 	}
 }
 
@@ -691,10 +702,398 @@ Dictionary YeetAIAssetIndex::run_deep_index(const String &p_path) {
 	return _scan_single_asset(p_path, true, true);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// URL parsing helper
+// ═══════════════════════════════════════════════════════════════════════════
+
+YeetAIAssetIndex::ParsedURL YeetAIAssetIndex::_parse_url(const String &p_url) {
+	ParsedURL result;
+	String url = p_url;
+
+	if (url.begins_with("https://")) {
+		result.use_tls = true;
+		result.port = 443;
+		url = url.substr(8);
+	} else if (url.begins_with("http://")) {
+		result.use_tls = false;
+		result.port = 80;
+		url = url.substr(7);
+	}
+
+	int slash = url.find("/");
+	if (slash >= 0) {
+		result.path = url.substr(slash);
+		url = url.substr(0, slash);
+	} else {
+		result.path = "/";
+	}
+
+	int colon = url.find(":");
+	if (colon >= 0) {
+		result.port = url.substr(colon + 1).to_int();
+		url = url.substr(0, colon);
+	}
+
+	result.host = url;
+	return result;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Image encoding for vision
+// ═══════════════════════════════════════════════════════════════════════════
+
+String YeetAIAssetIndex::_encode_image_for_vision(const String &p_path) const {
+	Ref<Image> img = ImageLoader::load_image(p_path);
+	if (img.is_null()) {
+		return String();
+	}
+
+	// Scale down if too large (max 1024px on longest dimension)
+	static constexpr int MAX_DIM = 1024;
+	int w = img->get_width();
+	int h = img->get_height();
+	if (w > MAX_DIM || h > MAX_DIM) {
+		float scale = float(MAX_DIM) / MAX(w, h);
+		img->resize(int(w * scale), int(h * scale), Image::INTERPOLATE_LANCZOS);
+	}
+
+	// Convert to PNG buffer
+	PackedByteArray png_buffer = img->save_png_to_buffer();
+	if (png_buffer.is_empty()) {
+		return String();
+	}
+
+	// Base64 encode
+	int len = 0;
+	int buf_len = ((png_buffer.size() + 2) / 3) * 4 + 1;
+	char *buf = (char *)memalloc(buf_len);
+	CryptoCore::b64_encode((unsigned char *)buf, &len, png_buffer.ptr(), png_buffer.size());
+	String encoded = String::utf8(buf, len);
+	memfree(buf);
+	return encoded;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Vision prompt builder
+// ═══════════════════════════════════════════════════════════════════════════
+
+String YeetAIAssetIndex::_build_vision_prompt(const Dictionary &p_deterministic_facts) const {
+	String prompt =
+		"Analyze this game asset image for Godot 4. Return ONLY a JSON object. No markdown, no explanation text.\n\n";
+
+	prompt += "Image facts:\n";
+	prompt += "- Dimensions: " + String::num_int64(int(p_deterministic_facts.get("width", 0))) + "x" + String::num_int64(int(p_deterministic_facts.get("height", 0))) + "\n";
+	prompt += "- Has alpha: " + String(bool(p_deterministic_facts.get("has_alpha", false)) ? "yes" : "no") + "\n";
+
+	Array candidates = p_deterministic_facts.get("grid_candidates", Array());
+	if (!candidates.is_empty()) {
+		prompt += "- Detected grid candidates:\n";
+		for (int i = 0; i < MIN(candidates.size(), 3); i++) {
+			Dictionary c = candidates[i];
+			prompt += "  * " + String::num_int64(int(c.get("frame_width", 0))) + "x" + String::num_int64(int(c.get("frame_height", 0)));
+			prompt += " (" + String::num_int64(int(c.get("columns", 0))) + "x" + String::num_int64(int(c.get("rows", 0))) + ")";
+			prompt += " confidence=" + String::num(float(c.get("confidence", 0.0f))) + "\n";
+		}
+	} else {
+		prompt += "- No grid detected\n";
+	}
+
+	Dictionary alpha = p_deterministic_facts.get("alpha_analysis", Dictionary());
+	if (!alpha.is_empty()) {
+		prompt += "- Alpha ratio: " + String::num(float(alpha.get("alpha_ratio", 0.0f))) + "\n";
+		if (bool(alpha.get("has_transparent_gutters", false))) {
+			prompt += "- Has transparent gutters (padding)\n";
+		}
+	}
+
+	prompt +=
+		"\nReturn JSON matching this schema:\n"
+		"{\n"
+		"  \"asset_type\": \"sprite_sheet\" | \"tileset\" | \"single_sprite\" | \"ui_image\" | \"background\" | \"portrait\" | \"vfx_sheet\" | \"texture\",\n"
+		"  \"tags\": [\"tag1\", \"tag2\", ...],\n";
+
+	prompt +=
+		"  \"sprite_sheet\": {\n"
+		"    \"grid\": {\"frame_width\": N, \"frame_height\": N, \"columns\": N, \"rows\": N},\n"
+		"    \"animations\": {\"idle\": {\"frames\": [0,1,2,3], \"fps\": 8, \"loop\": true}, ...},\n"
+		"    \"pivot\": [x, y],\n"
+		"    \"collision\": {\"x\": N, \"y\": N, \"w\": N, \"h\": N}\n"
+		"  },\n";
+
+	prompt +=
+		"  \"tileset\": {\n"
+		"    \"tile_size\": N,\n"
+		"    \"columns\": N,\n"
+		"    \"rows\": N,\n"
+		"    \"tiles\": [{\"id\": 0, \"tags\": [\"solid\"], \"collision_type\": \"full|half|slope\", \"terrain\": 0}]\n"
+		"  }\n"
+		"}\n";
+
+	prompt +=
+		"\nRules:\n"
+		"- Only include sprite_sheet OR tileset, not both.\n"
+		"- Frame/tile indices are 0-based, left-to-right, top-to-bottom.\n"
+		"- Count carefully. Verify against the provided grid candidates.\n"
+		"- For tilesets, describe each tile's semantic meaning (solid, platform, hazard, decorative, etc.).\n"
+		"- If single sprite with no grid, omit sprite_sheet and tileset.\n"
+		"- Animation names should be descriptive (idle, run, jump, attack, die, etc.).\n"
+		"- fps values: idle=4-8, run=10-16, jump=8-12, attack=10-20.\n"
+		"- pivot should be near bottom-center for characters (e.g., [frame_w/2, frame_h]).\n"
+		"- collision rect should match the visible body, not the whole frame.\n";
+
+	return prompt;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Vision model call
+// ═══════════════════════════════════════════════════════════════════════════
+
 Dictionary YeetAIAssetIndex::_call_vision_model(const String &p_path, const Dictionary &p_deterministic_facts) {
 	Dictionary result;
 	result["ok"] = false;
-	result["error"] = "Deep indexing (AI vision) is not yet implemented in v1. Configure a vision-capable model and re-enable.";
+
+	if (!_deep_index_enabled) {
+		result["error"] = "Deep indexing is disabled. Enable yeet_ai/asset_index/deep_index_enabled in Editor Settings.";
+		return result;
+	}
+
+	// 1. Encode image
+	String base64_image = _encode_image_for_vision(p_path);
+	if (base64_image.is_empty()) {
+		result["error"] = "Failed to encode image for vision analysis.";
+		return result;
+	}
+
+	// 2. Read API settings
+	EditorSettings *settings = EditorSettings::get_singleton();
+	if (settings == nullptr) {
+		result["error"] = "EditorSettings not available.";
+		return result;
+	}
+
+	int provider = int(settings->get_setting("yeet_ai/chat/provider", 0));
+	String url;
+	String api_key;
+	String model = String(settings->get_setting("yeet_ai/chat/model", "gpt-4o"));
+	float temperature = float(settings->get_setting("yeet_ai/chat/temperature", 0.2));
+
+	if (provider == 4) {
+		// Azure OpenAI
+		url = String(settings->get_setting("yeet_ai/chat/azure_endpoint", ""));
+		String deployment = String(settings->get_setting("yeet_ai/chat/azure_deployment", ""));
+		String api_version = String(settings->get_setting("yeet_ai/chat/azure_api_version", "2024-06-01"));
+		api_key = String(settings->get_setting("yeet_ai/chat/azure_api_key", ""));
+		if (!url.is_empty() && !deployment.is_empty()) {
+			url = url.path_join("openai/deployments/" + deployment + "/chat/completions?api-version=" + api_version);
+		}
+	} else {
+		url = String(settings->get_setting("yeet_ai/chat/completions_url", ""));
+		api_key = String(settings->get_setting("yeet_ai/chat/api_key", ""));
+	}
+
+	if (url.is_empty()) {
+		result["error"] = "Vision model URL not configured. Set yeet_ai/chat/completions_url or Azure endpoint in Editor Settings.";
+		return result;
+	}
+	if (api_key.is_empty()) {
+		result["error"] = "Vision API key not configured. Set yeet_ai/chat/api_key or Azure API key in Editor Settings.";
+		return result;
+	}
+
+	// 3. Build prompt and request body
+	String prompt = _build_vision_prompt(p_deterministic_facts);
+
+	Dictionary body;
+	body["model"] = model;
+	body["temperature"] = temperature;
+	body["max_tokens"] = 4096;
+
+	Array messages;
+	Dictionary user_msg;
+	user_msg["role"] = "user";
+
+	Array content;
+	Dictionary text_part;
+	text_part["type"] = "text";
+	text_part["text"] = prompt;
+	content.push_back(text_part);
+
+	Dictionary image_part;
+	image_part["type"] = "image_url";
+	Dictionary image_url;
+	image_url["url"] = "data:image/png;base64," + base64_image;
+	image_part["image_url"] = image_url;
+	content.push_back(image_part);
+
+	user_msg["content"] = content;
+	messages.push_back(user_msg);
+	body["messages"] = messages;
+
+	String json_body = JSON::stringify(body);
+
+	// 4. Parse URL and connect
+	ParsedURL parsed = _parse_url(url);
+
+	HTTPClient client;
+	Ref<TLSOptions> tls;
+	if (parsed.use_tls) {
+		tls = TLSOptions::client();
+	}
+
+	Error err = client.connect_to_host(parsed.host, parsed.port, tls);
+	if (err != OK) {
+		result["error"] = vformat("Failed to connect to vision API host: %s", parsed.host);
+		return result;
+	}
+
+	// Poll until connected (or TLS handshake complete)
+	int elapsed = 0;
+	static constexpr int CONNECT_TIMEOUT_MS = 10000;
+	while (elapsed < CONNECT_TIMEOUT_MS) {
+		client.poll();
+		HTTPClient::Status status = client.get_status();
+		if (status == HTTPClient::STATUS_CONNECTED) {
+			break;
+		}
+		if (status == HTTPClient::STATUS_DISCONNECTED || status == HTTPClient::STATUS_CONNECTION_ERROR) {
+			result["error"] = "Vision API connection failed.";
+			return result;
+		}
+		OS::get_singleton()->delay_usec(5000);
+		elapsed += 5;
+	}
+
+	if (client.get_status() != HTTPClient::STATUS_CONNECTED) {
+		result["error"] = "Vision API connection timed out.";
+		return result;
+	}
+
+	// 5. Send request
+	Vector<String> headers;
+	headers.push_back("Content-Type: application/json");
+	headers.push_back("Authorization: Bearer " + api_key);
+
+	err = client.request(HTTPClient::METHOD_POST, parsed.path, headers, json_body);
+	if (err != OK) {
+		result["error"] = "Failed to send vision request.";
+		return result;
+	}
+
+	// 6. Poll for response
+	elapsed = 0;
+	static constexpr int REQUEST_TIMEOUT_MS = 60000;
+	while (elapsed < REQUEST_TIMEOUT_MS) {
+		client.poll();
+		HTTPClient::Status status = client.get_status();
+		if (status == HTTPClient::STATUS_BODY) {
+			break;
+		}
+		if (status == HTTPClient::STATUS_CONNECTED) {
+			// Empty response
+			break;
+		}
+		if (status == HTTPClient::STATUS_DISCONNECTED || status == HTTPClient::STATUS_CONNECTION_ERROR) {
+			result["error"] = "Vision API disconnected during request.";
+			return result;
+		}
+		OS::get_singleton()->delay_usec(5000);
+		elapsed += 5;
+	}
+
+	// 7. Read response body
+	String response_body;
+	while (client.get_status() == HTTPClient::STATUS_BODY) {
+		client.poll();
+		PackedByteArray chunk = client.read_response_body_chunk();
+		if (chunk.size() > 0) {
+			response_body += String::utf8((const char *)chunk.ptr(), chunk.size());
+		}
+		OS::get_singleton()->delay_usec(2000);
+		elapsed += 2;
+		if (elapsed > REQUEST_TIMEOUT_MS) {
+			result["error"] = "Vision API response read timed out.";
+			client.close();
+			return result;
+		}
+	}
+
+	client.close();
+
+	// Check HTTP status
+	int response_code = client.get_response_code();
+	if (response_code != 200) {
+		result["error"] = vformat("Vision API returned HTTP %d", response_code);
+		result["raw_response"] = response_body.substr(0, 500);
+		return result;
+	}
+
+	// 8. Parse JSON response
+	JSON json;
+	err = json.parse(response_body);
+	if (err != OK) {
+		result["error"] = "Failed to parse vision API response as JSON.";
+		result["raw_response"] = response_body.substr(0, 500);
+		return result;
+	}
+
+	Dictionary response = json.get_data();
+	if (response.has("error")) {
+		Dictionary error = response["error"];
+		result["error"] = error.get("message", "Vision API returned an error.");
+		return result;
+	}
+
+	Array choices = response.get("choices", Array());
+	if (choices.is_empty()) {
+		result["error"] = "No choices in vision API response.";
+		return result;
+	}
+
+	Dictionary choice = choices[0];
+	Dictionary message = choice.get("message", Dictionary());
+	String content_str = message.get("content", "");
+
+	if (content_str.is_empty()) {
+		result["error"] = "Empty content in vision response.";
+		return result;
+	}
+
+	// 9. Extract JSON from content (might be wrapped in markdown)
+	String json_str = content_str;
+	if (json_str.contains("```json")) {
+		int start = json_str.find("```json") + 7;
+		int end = json_str.find("```", start);
+		if (end > start) {
+			json_str = json_str.substr(start, end - start).strip_edges();
+		}
+	} else if (json_str.contains("```")) {
+		int start = json_str.find("```") + 3;
+		int end = json_str.find("```", start);
+		if (end > start) {
+			json_str = json_str.substr(start, end - start).strip_edges();
+		}
+	}
+
+	JSON json2;
+	err = json2.parse(json_str);
+	if (err != OK) {
+		result["error"] = "Failed to parse vision content as JSON manifest.";
+		result["raw_content"] = content_str.substr(0, 500);
+		return result;
+	}
+
+	Dictionary ai_manifest = json2.get_data();
+
+	// 10. Validate
+	Array validation_errors = YeetAIAssetManifest::validate_manifest(ai_manifest);
+	if (!validation_errors.is_empty()) {
+		result["error"] = "Vision response failed validation: " + String(validation_errors[0]);
+		result["validation_errors"] = validation_errors;
+		return result;
+	}
+
+	result["ok"] = true;
+	result["manifest"] = ai_manifest;
 	return result;
 }
 

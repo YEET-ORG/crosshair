@@ -66,6 +66,7 @@ void YeetAIEditorPlugin::_register_crosshair_editor_setting_hints() {
 	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/tools/allow_resource_save", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/tools/allow_replace_in_files", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/chat/debug_mode", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/asset_index/deep_index_enabled", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
 }
 
 void YeetAIEditorPlugin::_bind_methods() {
@@ -282,6 +283,10 @@ void YeetAIEditorPlugin::_ensure_editor_settings() {
 	if (!settings->has_setting("yeet_ai/tools/allow_replace_in_files")) {
 		settings->set_initial_value("yeet_ai/tools/allow_replace_in_files", false, true);
 		settings->set_setting("yeet_ai/tools/allow_replace_in_files", false);
+	}
+	if (!settings->has_setting("yeet_ai/asset_index/deep_index_enabled")) {
+		settings->set_initial_value("yeet_ai/asset_index/deep_index_enabled", false, true);
+		settings->set_setting("yeet_ai/asset_index/deep_index_enabled", false);
 	}
 }
 
