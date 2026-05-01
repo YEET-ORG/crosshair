@@ -784,6 +784,10 @@ protected:
 	float _get_editor_setting_float(const String &p_setting, float p_default) const;
 	bool _get_editor_setting_bool(const String &p_setting, bool p_default) const;
 	Dictionary _make_user_message_with_optional_vision(const String &p_tool_name, const Dictionary &p_tool_payload) const;
+
+	// ── GDScript auto-fix ─────────────────────────────────────────────────────
+	String _auto_fix_gdscript(const String &p_code, const String &p_error) const;
+	bool _attempt_gdscript_auto_fix(const String &p_script_path, const String &p_error, String &r_fixed_contents) const;
 	String _build_system_prompt() const;
 	String _build_compact_system_prompt() const;
 	String _escape_bbcode(const String &p_text) const;

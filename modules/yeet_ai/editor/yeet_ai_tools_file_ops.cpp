@@ -146,10 +146,35 @@ Dictionary YeetAIDock::_tool_create_gdscript_file(const Dictionary &p_args) cons
 	// Validate the written script for parse errors.
 	String parse_error = _validate_gdscript_file(script_path);
 	if (!parse_error.is_empty()) {
+		// Attempt auto-fix up to 3 times.
+		static constexpr int MAX_AUTO_FIX_ATTEMPTS = 3;
+		bool fixed = false;
+		String fixed_contents;
+		for (int attempt = 0; attempt < MAX_AUTO_FIX_ATTEMPTS; attempt++) {
+			if (!_attempt_gdscript_auto_fix(script_path, parse_error, fixed_contents)) {
+				break; // No heuristic fix applied
+			}
+			String new_error = _validate_gdscript_file(script_path);
+			if (new_error.is_empty()) {
+				fixed = true;
+				break;
+			}
+			parse_error = new_error;
+		}
+
+		if (fixed) {
+			result["script_path"] = script_path;
+			result["bytes_written"] = fixed_contents.to_utf8_buffer().size();
+			result["auto_fixed"] = true;
+			result["auto_fix_attempts"] = MAX_AUTO_FIX_ATTEMPTS;
+			result["ok"] = true;
+			return result;
+		}
+
 		result["script_path"] = script_path;
 		result["bytes_written"] = contents.to_utf8_buffer().size();
 		result["parse_error"] = parse_error;
-		result["warning"] = "Script was written but has parse errors. Fix the error and call update_gdscript_file again.";
+		result["warning"] = "Script was written but has parse errors. Auto-fix was attempted but could not resolve all issues. Fix the error and call update_gdscript_file again.";
 		return result;
 	}
 
@@ -223,12 +248,39 @@ Dictionary YeetAIDock::_tool_update_gdscript_file(const Dictionary &p_args) cons
 	// Validate the updated script for parse errors.
 	String parse_error = _validate_gdscript_file(script_path);
 	if (!parse_error.is_empty()) {
+		// Attempt auto-fix up to 3 times.
+		static constexpr int MAX_AUTO_FIX_ATTEMPTS = 3;
+		bool fixed = false;
+		String fixed_contents;
+		for (int attempt = 0; attempt < MAX_AUTO_FIX_ATTEMPTS; attempt++) {
+			if (!_attempt_gdscript_auto_fix(script_path, parse_error, fixed_contents)) {
+				break; // No heuristic fix applied
+			}
+			String new_error = _validate_gdscript_file(script_path);
+			if (new_error.is_empty()) {
+				fixed = true;
+				break;
+			}
+			parse_error = new_error;
+		}
+
+		if (fixed) {
+			result["script_path"] = script_path;
+			result["operation"] = operation;
+			result["created"] = !exists;
+			result["bytes_written"] = fixed_contents.to_utf8_buffer().size();
+			result["auto_fixed"] = true;
+			result["auto_fix_attempts"] = MAX_AUTO_FIX_ATTEMPTS;
+			result["ok"] = true;
+			return result;
+		}
+
 		result["script_path"] = script_path;
 		result["operation"] = operation;
 		result["created"] = !exists;
 		result["bytes_written"] = final_contents.to_utf8_buffer().size();
 		result["parse_error"] = parse_error;
-		result["warning"] = "Script was updated but has parse errors. Fix the error and call update_gdscript_file again.";
+		result["warning"] = "Script was updated but has parse errors. Auto-fix was attempted but could not resolve all issues. Fix the error and call update_gdscript_file again.";
 		return result;
 	}
 
