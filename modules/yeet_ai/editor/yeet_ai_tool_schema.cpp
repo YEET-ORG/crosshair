@@ -1794,6 +1794,416 @@ const HashMap<String, ToolSchema> &YeetAIToolSchemaRegistry::get_all_schemas() {
 		schemas["get_network_state"] = schema;
 	}
 
+	// === 2D SCENE TOOLS ===
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_camera_2d";
+		schema.description = "Create a Camera2D node for 2D camera control";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("Camera2D");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_pos;
+		arg_pos.name = "position";
+		arg_pos.type_hint = Variant::VECTOR2;
+		arg_pos.required = false;
+		schema.arguments.push_back(arg_pos);
+
+		ToolArgSchema arg_zoom;
+		arg_zoom.name = "zoom";
+		arg_zoom.type_hint = Variant::VECTOR2;
+		arg_zoom.required = false;
+		arg_zoom.default_value = Vector2(1, 1);
+		schema.arguments.push_back(arg_zoom);
+
+		ToolArgSchema arg_current;
+		arg_current.name = "make_current";
+		arg_current.type_hint = Variant::BOOL;
+		arg_current.required = false;
+		arg_current.default_value = false;
+		schema.arguments.push_back(arg_current);
+
+		schemas["create_camera_2d"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_character_body_2d";
+		schema.description = "Create a CharacterBody2D node for 2D character physics";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("CharacterBody2D");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_pos;
+		arg_pos.name = "position";
+		arg_pos.type_hint = Variant::VECTOR2;
+		arg_pos.required = false;
+		schema.arguments.push_back(arg_pos);
+
+		schemas["create_character_body_2d"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_area_2d";
+		schema.description = "Create an Area2D node for 2D collision detection without physics response";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("Area2D");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_pos;
+		arg_pos.name = "position";
+		arg_pos.type_hint = Variant::VECTOR2;
+		arg_pos.required = false;
+		schema.arguments.push_back(arg_pos);
+
+		schemas["create_area_2d"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "add_collision_shape_2d";
+		schema.description = "Add a CollisionShape2D to a 2D physics body with a shape resource";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = true;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_shape;
+		arg_shape.name = "shape_type";
+		arg_shape.type_hint = Variant::STRING;
+		arg_shape.required = true;
+		arg_shape.description = "Shape type: rectangle, circle, capsule, or segment";
+		schema.arguments.push_back(arg_shape);
+
+		ToolArgSchema arg_size;
+		arg_size.name = "size";
+		arg_size.type_hint = Variant::VECTOR2;
+		arg_size.required = false;
+		arg_size.default_value = Vector2(32, 32);
+		schema.arguments.push_back(arg_size);
+
+		ToolArgSchema arg_radius;
+		arg_radius.name = "radius";
+		arg_radius.type_hint = Variant::FLOAT;
+		arg_radius.required = false;
+		arg_radius.default_value = 16.0;
+		schema.arguments.push_back(arg_radius);
+
+		ToolArgSchema arg_pos;
+		arg_pos.name = "position";
+		arg_pos.type_hint = Variant::VECTOR2;
+		arg_pos.required = false;
+		schema.arguments.push_back(arg_pos);
+
+		schemas["add_collision_shape_2d"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_tilemap";
+		schema.description = "Create a TileMap node for 2D tile-based maps";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("TileMap");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_pos;
+		arg_pos.name = "position";
+		arg_pos.type_hint = Variant::VECTOR2;
+		arg_pos.required = false;
+		schema.arguments.push_back(arg_pos);
+
+		ToolArgSchema arg_tileset;
+		arg_tileset.name = "tileset_path";
+		arg_tileset.type_hint = Variant::STRING;
+		arg_tileset.required = false;
+		schema.arguments.push_back(arg_tileset);
+
+		schemas["create_tilemap"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_marker_2d";
+		schema.description = "Create a Marker2D node for positional markers and spawn points";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("Marker2D");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_pos;
+		arg_pos.name = "position";
+		arg_pos.type_hint = Variant::VECTOR2;
+		arg_pos.required = false;
+		schema.arguments.push_back(arg_pos);
+
+		schemas["create_marker_2d"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_cpu_particles_2d";
+		schema.description = "Create a CPUParticles2D node for 2D particle effects";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("CPUParticles2D");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_pos;
+		arg_pos.name = "position";
+		arg_pos.type_hint = Variant::VECTOR2;
+		arg_pos.required = false;
+		schema.arguments.push_back(arg_pos);
+
+		schemas["create_cpu_particles_2d"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_gpu_particles_2d";
+		schema.description = "Create a GPUParticles2D node for GPU-accelerated 2D particles";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("GPUParticles2D");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_pos;
+		arg_pos.name = "position";
+		arg_pos.type_hint = Variant::VECTOR2;
+		arg_pos.required = false;
+		schema.arguments.push_back(arg_pos);
+
+		schemas["create_gpu_particles_2d"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_canvas_layer";
+		schema.description = "Create a CanvasLayer for UI overlay rendering";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("CanvasLayer");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_layer;
+		arg_layer.name = "layer";
+		arg_layer.type_hint = Variant::INT;
+		arg_layer.required = false;
+		arg_layer.default_value = 1;
+		schema.arguments.push_back(arg_layer);
+
+		ToolArgSchema arg_visible;
+		arg_visible.name = "visible";
+		arg_visible.type_hint = Variant::BOOL;
+		arg_visible.required = false;
+		arg_visible.default_value = true;
+		schema.arguments.push_back(arg_visible);
+
+		schemas["create_canvas_layer"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_parallax_background";
+		schema.description = "Create a ParallaxBackground node for 2D parallax scrolling";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("ParallaxBackground");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_add_layer;
+		arg_add_layer.name = "add_layer";
+		arg_add_layer.type_hint = Variant::BOOL;
+		arg_add_layer.required = false;
+		arg_add_layer.default_value = true;
+		schema.arguments.push_back(arg_add_layer);
+
+		schemas["create_parallax_background"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_navigation_region_2d";
+		schema.description = "Create a NavigationRegion2D for 2D pathfinding";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("NavigationRegion2D");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_pos;
+		arg_pos.name = "position";
+		arg_pos.type_hint = Variant::VECTOR2;
+		arg_pos.required = false;
+		schema.arguments.push_back(arg_pos);
+
+		ToolArgSchema arg_bake;
+		arg_bake.name = "bake";
+		arg_bake.type_hint = Variant::BOOL;
+		arg_bake.required = false;
+		arg_bake.default_value = false;
+		schema.arguments.push_back(arg_bake);
+
+		schemas["create_navigation_region_2d"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_animatable_body_2d";
+		schema.description = "Create an AnimatableBody2D for kinematic 2D platforms";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("AnimatableBody2D");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_pos;
+		arg_pos.name = "position";
+		arg_pos.type_hint = Variant::VECTOR2;
+		arg_pos.required = false;
+		schema.arguments.push_back(arg_pos);
+
+		schemas["create_animatable_body_2d"] = schema;
+	}
+
 	initialized = true;
 	return schemas;
 }
