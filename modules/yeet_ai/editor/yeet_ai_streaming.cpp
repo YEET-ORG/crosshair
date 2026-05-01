@@ -483,6 +483,7 @@ void YeetAIDock::_finalize_stream() {
 		message["content"] = accumulated;
 
 		Array tool_calls;
+		bool all_valid = true;
 		for (int i = 0; i < _stream_tool_call_accumulator.size(); i++) {
 			Dictionary tc = _stream_tool_call_accumulator[i];
 			// Ensure required fields exist.
@@ -492,11 +493,38 @@ void YeetAIDock::_finalize_stream() {
 			if (!tc.has("type")) {
 				tc["type"] = "function";
 			}
+			// Validate that function name and arguments are present.
+			if (!tc.has("function")) {
+				all_valid = false;
+				break;
+			}
+			Dictionary fn = tc["function"];
+			if (!fn.has("name") || String(fn["name"]).is_empty()) {
+				all_valid = false;
+				break;
+			}
+			// Validate arguments JSON if present.
+			if (fn.has("arguments")) {
+				String args_str = fn["arguments"];
+				if (!args_str.is_empty()) {
+					Ref<JSON> j;
+					j.instantiate();
+					if (j->parse(args_str) != OK) {
+						all_valid = false;
+						break;
+					}
+				}
+			}
 			tool_calls.append(tc);
 		}
-		message["tool_calls"] = tool_calls;
-		_handle_native_tool_calls(message);
-		return;
+
+		if (all_valid) {
+			message["tool_calls"] = tool_calls;
+			_handle_native_tool_calls(message);
+			return;
+		}
+		// If validation failed, append a note and fall through to text handling.
+		accumulated += "\n\n[Note: model attempted tool calls but they were incomplete or malformed.]";
 	}
 
 	// Clean artifacts and check for empty response before processing.
