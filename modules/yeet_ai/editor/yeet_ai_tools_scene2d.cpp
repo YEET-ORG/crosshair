@@ -20,6 +20,7 @@
 #include "scene/2d/light_occluder_2d.h"
 #include "scene/2d/line_2d.h"
 #include "scene/2d/marker_2d.h"
+#include "scene/2d/mesh_instance_2d.h"
 #include "scene/2d/multimesh_instance_2d.h"
 #include "scene/2d/parallax_background.h"
 #include "scene/2d/parallax_layer.h"
@@ -1596,14 +1597,14 @@ Dictionary YeetAIDock::_tool_create_bone_2d(const Dictionary &p_args) const {
 
 	Bone2D *bone = memnew(Bone2D);
 	bone->set_name(node_name);
-	bone->set_rest_length(_arg_float(p_args, "rest_length", 16.0));
 
 	// Optional auto-calculate length
 	if (_arg_bool(p_args, "auto_calculate_length", true)) {
-		bone->set_auto_calculate_length_and_angle(true);
+		bone->set_autocalculate_length_and_angle(true);
 	} else {
-		bone->set_auto_calculate_length_and_angle(false);
+		bone->set_autocalculate_length_and_angle(false);
 		bone->set_length(_arg_float(p_args, "length", 16.0));
+		bone->set_bone_angle(_arg_float(p_args, "bone_angle", 0.0));
 	}
 
 	Node2D *parent = Object::cast_to<Node2D>(_resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err));
