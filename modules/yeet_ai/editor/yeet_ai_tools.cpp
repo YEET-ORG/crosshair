@@ -250,6 +250,12 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 		{ "instantiate_scene",                   &YeetAIDock::_tool_instantiate_scene },
 		{ "lint_gdscript",                       &YeetAIDock::_tool_lint_gdscript },
 		{ "list_directory",                      &YeetAIDock::_tool_list_directory },
+		{ "memory_record_entity",                &YeetAIDock::_tool_memory_record_entity },
+		{ "memory_query_entities",               &YeetAIDock::_tool_memory_query_entities },
+		{ "memory_get_entity",                   &YeetAIDock::_tool_memory_get_entity },
+		{ "memory_update_entity",                &YeetAIDock::_tool_memory_update_entity },
+		{ "memory_delete_entity",                &YeetAIDock::_tool_memory_delete_entity },
+		{ "memory_get_summary",                  &YeetAIDock::_tool_memory_get_summary },
 		{ "manage_autoloads",                    &YeetAIDock::_tool_manage_autoloads },
 		{ "manage_editor_plugins",               &YeetAIDock::_tool_manage_editor_plugins },
 		{ "manage_export_presets",                &YeetAIDock::_tool_manage_export_presets },
@@ -497,6 +503,9 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 	// Record successful tool execution metric
 	((YeetAIDock*)this)->_record_tool_execution(p_tool_name, tool_duration, true, false);
 
+	// Auto-record to project memory for context persistence across sessions.
+	((YeetAIDock*)this)->_auto_record_tool_result(p_tool_name, effective_args, payload);
+
 	// Refresh editor UI (SceneTree, Inspector, FileSystem) after mutating tools.
 	((YeetAIDock*)this)->_refresh_editor_after_tool(p_tool_name, payload);
 
@@ -563,8 +572,10 @@ Vector<String> yeet_ai_get_all_tool_names() {
 		"get_tileset_sources", "get_translation_overview", "get_unsaved_scenes",
 		"get_world_environment", "git_branch", "git_diff_file", "git_log",
 		"git_status", "grep_project_files", "import_asset", "inspect_runtime_node",
-		"inspect_runtime_variable", "instantiate_scene", "lint_gdscript",
+		"inspect_runtime_variable", "instantiate_scene", 		"lint_gdscript",
 		"list_directory", "manage_autoloads", "manage_editor_plugins",
+		"memory_record_entity", "memory_query_entities", "memory_get_entity",
+		"memory_update_entity", "memory_delete_entity", "memory_get_summary",
 		"manage_export_presets", "merge_scenes", "monitor_runtime_performance",
 		"move_child", "move_project_file", "open_scene", "paint_terrain",
 		"patch_editor_settings", "patch_project_settings", "play_animation",

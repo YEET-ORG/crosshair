@@ -537,6 +537,14 @@ protected:
 	Dictionary _tool_scaffold_pause_menu_2d(const Dictionary &p_args) const;
 	Dictionary _tool_scaffold_lighting_rig_2d(const Dictionary &p_args) const;
 
+	// ── S. Project Memory ─────────────────────────────────────────────────────
+	Dictionary _tool_memory_record_entity(const Dictionary &p_args) const;
+	Dictionary _tool_memory_query_entities(const Dictionary &p_args) const;
+	Dictionary _tool_memory_get_entity(const Dictionary &p_args) const;
+	Dictionary _tool_memory_update_entity(const Dictionary &p_args) const;
+	Dictionary _tool_memory_delete_entity(const Dictionary &p_args) const;
+	Dictionary _tool_memory_get_summary(const Dictionary &p_args) const;
+
 	// ── A. 3D Scene Construction ──────────────────────────────────────────────
 	Dictionary _tool_create_light(const Dictionary &p_args) const;
 	Dictionary _tool_create_camera_3d(const Dictionary &p_args) const;
@@ -748,6 +756,15 @@ protected:
 	Dictionary _tool_create_fog_volume(const Dictionary &p_args) const;
 	Dictionary _tool_create_reflection_probe(const Dictionary &p_args) const;
 	Dictionary _tool_create_gi_probe(const Dictionary &p_args) const;
+
+	// ── Project Memory ────────────────────────────────────────────────────────
+	mutable Dictionary _project_memory;
+	mutable bool _project_memory_loaded = false;
+	String _get_memory_file_path() const;
+	void _load_project_memory() const;
+	void _save_project_memory() const;
+	void _auto_record_tool_result(const String &p_tool_name, const Dictionary &p_args, const Dictionary &p_result) const;
+	Dictionary _query_memory_entities(const Dictionary &p_query) const;
 
 	// ── Tool helpers — reduce per-tool boilerplate ──────────────────────────
 	static Dictionary _make_error(const String &p_message);
