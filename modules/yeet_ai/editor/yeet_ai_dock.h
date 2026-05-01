@@ -541,6 +541,16 @@ protected:
 	Dictionary _tool_query_raycast_2d(const Dictionary &p_args) const;
 	Dictionary _tool_create_button(const Dictionary &p_args) const;
 	Dictionary _tool_create_label(const Dictionary &p_args) const;
+	Dictionary _tool_create_texture_rect(const Dictionary &p_args) const;
+	Dictionary _tool_create_nine_patch_rect(const Dictionary &p_args) const;
+	Dictionary _tool_create_color_rect(const Dictionary &p_args) const;
+	Dictionary _tool_create_rich_text_label(const Dictionary &p_args) const;
+	Dictionary _tool_create_texture_progress_bar(const Dictionary &p_args) const;
+	Dictionary _tool_create_line_edit(const Dictionary &p_args) const;
+	Dictionary _tool_create_text_edit(const Dictionary &p_args) const;
+	Dictionary _tool_create_check_box(const Dictionary &p_args) const;
+	Dictionary _tool_create_spin_box(const Dictionary &p_args) const;
+	Dictionary _tool_create_panel_container(const Dictionary &p_args) const;
 
 	// ── C. Animation ──────────────────────────────────────────────────────────
 	Dictionary _tool_create_animation(const Dictionary &p_args) const;

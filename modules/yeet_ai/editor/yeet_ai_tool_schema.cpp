@@ -2591,6 +2591,768 @@ const HashMap<String, ToolSchema> &YeetAIToolSchemaRegistry::get_all_schemas() {
 		schemas["create_label"] = schema;
 	}
 
+	// === UI TOOLS ===
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_texture_rect";
+		schema.description = "Create a TextureRect to display an image/texture in the UI";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("TextureRect");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_tex;
+		arg_tex.name = "texture_path";
+		arg_tex.type_hint = Variant::STRING;
+		arg_tex.required = false;
+		schema.arguments.push_back(arg_tex);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_x;
+		arg_x.name = "x";
+		arg_x.type_hint = Variant::FLOAT;
+		arg_x.required = false;
+		arg_x.default_value = 0.0;
+		schema.arguments.push_back(arg_x);
+
+		ToolArgSchema arg_y;
+		arg_y.name = "y";
+		arg_y.type_hint = Variant::FLOAT;
+		arg_y.required = false;
+		arg_y.default_value = 0.0;
+		schema.arguments.push_back(arg_y);
+
+		ToolArgSchema arg_w;
+		arg_w.name = "width";
+		arg_w.type_hint = Variant::FLOAT;
+		arg_w.required = false;
+		arg_w.default_value = 64.0;
+		schema.arguments.push_back(arg_w);
+
+		ToolArgSchema arg_h;
+		arg_h.name = "height";
+		arg_h.type_hint = Variant::FLOAT;
+		arg_h.required = false;
+		arg_h.default_value = 64.0;
+		schema.arguments.push_back(arg_h);
+
+		ToolArgSchema arg_stretch;
+		arg_stretch.name = "stretch_mode";
+		arg_stretch.type_hint = Variant::INT;
+		arg_stretch.required = false;
+		arg_stretch.default_value = 0;
+		arg_stretch.description = "0=scale, 1=tile, 2=keep, 3=keep_centered, 4=keep_aspect, 5=keep_aspect_centered, 6=keep_aspect_covered";
+		schema.arguments.push_back(arg_stretch);
+
+		schemas["create_texture_rect"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_nine_patch_rect";
+		schema.description = "Create a NinePatchRect for scalable UI frames using 9-slice scaling";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("NinePatchRect");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_tex;
+		arg_tex.name = "texture_path";
+		arg_tex.type_hint = Variant::STRING;
+		arg_tex.required = false;
+		schema.arguments.push_back(arg_tex);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_x;
+		arg_x.name = "x";
+		arg_x.type_hint = Variant::FLOAT;
+		arg_x.required = false;
+		arg_x.default_value = 0.0;
+		schema.arguments.push_back(arg_x);
+
+		ToolArgSchema arg_y;
+		arg_y.name = "y";
+		arg_y.type_hint = Variant::FLOAT;
+		arg_y.required = false;
+		arg_y.default_value = 0.0;
+		schema.arguments.push_back(arg_y);
+
+		ToolArgSchema arg_w;
+		arg_w.name = "width";
+		arg_w.type_hint = Variant::FLOAT;
+		arg_w.required = false;
+		arg_w.default_value = 64.0;
+		schema.arguments.push_back(arg_w);
+
+		ToolArgSchema arg_h;
+		arg_h.name = "height";
+		arg_h.type_hint = Variant::FLOAT;
+		arg_h.required = false;
+		arg_h.default_value = 64.0;
+		schema.arguments.push_back(arg_h);
+
+		ToolArgSchema arg_region;
+		arg_region.name = "region_rect";
+		arg_region.type_hint = Variant::DICTIONARY;
+		arg_region.required = false;
+		arg_region.description = "{x, y, w, h} region of the texture to use";
+		schema.arguments.push_back(arg_region);
+
+		ToolArgSchema arg_margins;
+		arg_margins.name = "patch_margin";
+		arg_margins.type_hint = Variant::DICTIONARY;
+		arg_margins.required = false;
+		arg_margins.description = "{left, top, right, bottom} margins for 9-slice scaling";
+		schema.arguments.push_back(arg_margins);
+
+		schemas["create_nine_patch_rect"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_color_rect";
+		schema.description = "Create a ColorRect for solid color backgrounds and overlays";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("ColorRect");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_color;
+		arg_color.name = "color";
+		arg_color.type_hint = Variant::DICTIONARY;
+		arg_color.required = false;
+		arg_color.default_value = Dictionary();
+		arg_color.description = "Color as {r, g, b} or hex string (e.g., '#FF5733')";
+		schema.arguments.push_back(arg_color);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_x;
+		arg_x.name = "x";
+		arg_x.type_hint = Variant::FLOAT;
+		arg_x.required = false;
+		arg_x.default_value = 0.0;
+		schema.arguments.push_back(arg_x);
+
+		ToolArgSchema arg_y;
+		arg_y.name = "y";
+		arg_y.type_hint = Variant::FLOAT;
+		arg_y.required = false;
+		arg_y.default_value = 0.0;
+		schema.arguments.push_back(arg_y);
+
+		ToolArgSchema arg_w;
+		arg_w.name = "width";
+		arg_w.type_hint = Variant::FLOAT;
+		arg_w.required = false;
+		arg_w.default_value = 64.0;
+		schema.arguments.push_back(arg_w);
+
+		ToolArgSchema arg_h;
+		arg_h.name = "height";
+		arg_h.type_hint = Variant::FLOAT;
+		arg_h.required = false;
+		arg_h.default_value = 64.0;
+		schema.arguments.push_back(arg_h);
+
+		schemas["create_color_rect"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_rich_text_label";
+		schema.description = "Create a RichTextLabel for formatted text with BBCode support";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("RichTextLabel");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_text;
+		arg_text.name = "text";
+		arg_text.type_hint = Variant::STRING;
+		arg_text.required = false;
+		arg_text.default_value = String("");
+		schema.arguments.push_back(arg_text);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_x;
+		arg_x.name = "x";
+		arg_x.type_hint = Variant::FLOAT;
+		arg_x.required = false;
+		arg_x.default_value = 0.0;
+		schema.arguments.push_back(arg_x);
+
+		ToolArgSchema arg_y;
+		arg_y.name = "y";
+		arg_y.type_hint = Variant::FLOAT;
+		arg_y.required = false;
+		arg_y.default_value = 0.0;
+		schema.arguments.push_back(arg_y);
+
+		ToolArgSchema arg_w;
+		arg_w.name = "width";
+		arg_w.type_hint = Variant::FLOAT;
+		arg_w.required = false;
+		arg_w.default_value = 200.0;
+		schema.arguments.push_back(arg_w);
+
+		ToolArgSchema arg_h;
+		arg_h.name = "height";
+		arg_h.type_hint = Variant::FLOAT;
+		arg_h.required = false;
+		arg_h.default_value = 100.0;
+		schema.arguments.push_back(arg_h);
+
+		ToolArgSchema arg_fit;
+		arg_fit.name = "fit_content";
+		arg_fit.type_hint = Variant::BOOL;
+		arg_fit.required = false;
+		arg_fit.default_value = false;
+		schema.arguments.push_back(arg_fit);
+
+		schemas["create_rich_text_label"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_texture_progress_bar";
+		schema.description = "Create a TextureProgressBar for stylized progress bars (health, mana, cooldown)";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("TextureProgressBar");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_under;
+		arg_under.name = "texture_under";
+		arg_under.type_hint = Variant::STRING;
+		arg_under.required = false;
+		schema.arguments.push_back(arg_under);
+
+		ToolArgSchema arg_over;
+		arg_over.name = "texture_over";
+		arg_over.type_hint = Variant::STRING;
+		arg_over.required = false;
+		schema.arguments.push_back(arg_over);
+
+		ToolArgSchema arg_progress;
+		arg_progress.name = "texture_progress";
+		arg_progress.type_hint = Variant::STRING;
+		arg_progress.required = false;
+		schema.arguments.push_back(arg_progress);
+
+		ToolArgSchema arg_value;
+		arg_value.name = "value";
+		arg_value.type_hint = Variant::FLOAT;
+		arg_value.required = false;
+		arg_value.default_value = 0.0;
+		schema.arguments.push_back(arg_value);
+
+		ToolArgSchema arg_min;
+		arg_min.name = "min";
+		arg_min.type_hint = Variant::FLOAT;
+		arg_min.required = false;
+		arg_min.default_value = 0.0;
+		schema.arguments.push_back(arg_min);
+
+		ToolArgSchema arg_max;
+		arg_max.name = "max";
+		arg_max.type_hint = Variant::FLOAT;
+		arg_max.required = false;
+		arg_max.default_value = 100.0;
+		schema.arguments.push_back(arg_max);
+
+		ToolArgSchema arg_fill;
+		arg_fill.name = "fill_mode";
+		arg_fill.type_hint = Variant::INT;
+		arg_fill.required = false;
+		arg_fill.default_value = 0;
+		arg_fill.description = "0=left-right, 1=right-left, 2=top-bottom, 3=bottom-top, 4=clockwise, 5=counter-clockwise";
+		schema.arguments.push_back(arg_fill);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_x;
+		arg_x.name = "x";
+		arg_x.type_hint = Variant::FLOAT;
+		arg_x.required = false;
+		arg_x.default_value = 0.0;
+		schema.arguments.push_back(arg_x);
+
+		ToolArgSchema arg_y;
+		arg_y.name = "y";
+		arg_y.type_hint = Variant::FLOAT;
+		arg_y.required = false;
+		arg_y.default_value = 0.0;
+		schema.arguments.push_back(arg_y);
+
+		ToolArgSchema arg_w;
+		arg_w.name = "width";
+		arg_w.type_hint = Variant::FLOAT;
+		arg_w.required = false;
+		arg_w.default_value = 64.0;
+		schema.arguments.push_back(arg_w);
+
+		ToolArgSchema arg_h;
+		arg_h.name = "height";
+		arg_h.type_hint = Variant::FLOAT;
+		arg_h.required = false;
+		arg_h.default_value = 64.0;
+		schema.arguments.push_back(arg_h);
+
+		schemas["create_texture_progress_bar"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_line_edit";
+		schema.description = "Create a LineEdit for single-line text input";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("LineEdit");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_text;
+		arg_text.name = "text";
+		arg_text.type_hint = Variant::STRING;
+		arg_text.required = false;
+		arg_text.default_value = String("");
+		schema.arguments.push_back(arg_text);
+
+		ToolArgSchema arg_placeholder;
+		arg_placeholder.name = "placeholder_text";
+		arg_placeholder.type_hint = Variant::STRING;
+		arg_placeholder.required = false;
+		arg_placeholder.default_value = String("");
+		schema.arguments.push_back(arg_placeholder);
+
+		ToolArgSchema arg_editable;
+		arg_editable.name = "editable";
+		arg_editable.type_hint = Variant::BOOL;
+		arg_editable.required = false;
+		arg_editable.default_value = true;
+		schema.arguments.push_back(arg_editable);
+
+		ToolArgSchema arg_secret;
+		arg_secret.name = "secret";
+		arg_secret.type_hint = Variant::BOOL;
+		arg_secret.required = false;
+		arg_secret.default_value = false;
+		schema.arguments.push_back(arg_secret);
+
+		ToolArgSchema arg_max;
+		arg_max.name = "max_length";
+		arg_max.type_hint = Variant::INT;
+		arg_max.required = false;
+		arg_max.default_value = 0;
+		schema.arguments.push_back(arg_max);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_x;
+		arg_x.name = "x";
+		arg_x.type_hint = Variant::FLOAT;
+		arg_x.required = false;
+		arg_x.default_value = 0.0;
+		schema.arguments.push_back(arg_x);
+
+		ToolArgSchema arg_y;
+		arg_y.name = "y";
+		arg_y.type_hint = Variant::FLOAT;
+		arg_y.required = false;
+		arg_y.default_value = 0.0;
+		schema.arguments.push_back(arg_y);
+
+		ToolArgSchema arg_w;
+		arg_w.name = "width";
+		arg_w.type_hint = Variant::FLOAT;
+		arg_w.required = false;
+		arg_w.default_value = 150.0;
+		schema.arguments.push_back(arg_w);
+
+		ToolArgSchema arg_h;
+		arg_h.name = "height";
+		arg_h.type_hint = Variant::FLOAT;
+		arg_h.required = false;
+		arg_h.default_value = 30.0;
+		schema.arguments.push_back(arg_h);
+
+		schemas["create_line_edit"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_text_edit";
+		schema.description = "Create a TextEdit for multi-line text editing";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("TextEdit");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_text;
+		arg_text.name = "text";
+		arg_text.type_hint = Variant::STRING;
+		arg_text.required = false;
+		arg_text.default_value = String("");
+		schema.arguments.push_back(arg_text);
+
+		ToolArgSchema arg_placeholder;
+		arg_placeholder.name = "placeholder_text";
+		arg_placeholder.type_hint = Variant::STRING;
+		arg_placeholder.required = false;
+		arg_placeholder.default_value = String("");
+		schema.arguments.push_back(arg_placeholder);
+
+		ToolArgSchema arg_editable;
+		arg_editable.name = "editable";
+		arg_editable.type_hint = Variant::BOOL;
+		arg_editable.required = false;
+		arg_editable.default_value = true;
+		schema.arguments.push_back(arg_editable);
+
+		ToolArgSchema arg_wrap;
+		arg_wrap.name = "wrap_mode";
+		arg_wrap.type_hint = Variant::INT;
+		arg_wrap.required = false;
+		arg_wrap.default_value = 0;
+		arg_wrap.description = "0=off, 1=boundary, 2=char";
+		schema.arguments.push_back(arg_wrap);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_x;
+		arg_x.name = "x";
+		arg_x.type_hint = Variant::FLOAT;
+		arg_x.required = false;
+		arg_x.default_value = 0.0;
+		schema.arguments.push_back(arg_x);
+
+		ToolArgSchema arg_y;
+		arg_y.name = "y";
+		arg_y.type_hint = Variant::FLOAT;
+		arg_y.required = false;
+		arg_y.default_value = 0.0;
+		schema.arguments.push_back(arg_y);
+
+		ToolArgSchema arg_w;
+		arg_w.name = "width";
+		arg_w.type_hint = Variant::FLOAT;
+		arg_w.required = false;
+		arg_w.default_value = 200.0;
+		schema.arguments.push_back(arg_w);
+
+		ToolArgSchema arg_h;
+		arg_h.name = "height";
+		arg_h.type_hint = Variant::FLOAT;
+		arg_h.required = false;
+		arg_h.default_value = 100.0;
+		schema.arguments.push_back(arg_h);
+
+		schemas["create_text_edit"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_check_box";
+		schema.description = "Create a CheckBox for boolean toggles";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("CheckBox");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_text;
+		arg_text.name = "text";
+		arg_text.type_hint = Variant::STRING;
+		arg_text.required = false;
+		arg_text.default_value = String("");
+		schema.arguments.push_back(arg_text);
+
+		ToolArgSchema arg_pressed;
+		arg_pressed.name = "pressed";
+		arg_pressed.type_hint = Variant::BOOL;
+		arg_pressed.required = false;
+		arg_pressed.default_value = false;
+		schema.arguments.push_back(arg_pressed);
+
+		ToolArgSchema arg_disabled;
+		arg_disabled.name = "disabled";
+		arg_disabled.type_hint = Variant::BOOL;
+		arg_disabled.required = false;
+		arg_disabled.default_value = false;
+		schema.arguments.push_back(arg_disabled);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_x;
+		arg_x.name = "x";
+		arg_x.type_hint = Variant::FLOAT;
+		arg_x.required = false;
+		arg_x.default_value = 0.0;
+		schema.arguments.push_back(arg_x);
+
+		ToolArgSchema arg_y;
+		arg_y.name = "y";
+		arg_y.type_hint = Variant::FLOAT;
+		arg_y.required = false;
+		arg_y.default_value = 0.0;
+		schema.arguments.push_back(arg_y);
+
+		schemas["create_check_box"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_spin_box";
+		schema.description = "Create a SpinBox for numeric input with min/max/step";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("SpinBox");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_min;
+		arg_min.name = "min";
+		arg_min.type_hint = Variant::FLOAT;
+		arg_min.required = false;
+		arg_min.default_value = 0.0;
+		schema.arguments.push_back(arg_min);
+
+		ToolArgSchema arg_max;
+		arg_max.name = "max";
+		arg_max.type_hint = Variant::FLOAT;
+		arg_max.required = false;
+		arg_max.default_value = 100.0;
+		schema.arguments.push_back(arg_max);
+
+		ToolArgSchema arg_step;
+		arg_step.name = "step";
+		arg_step.type_hint = Variant::FLOAT;
+		arg_step.required = false;
+		arg_step.default_value = 1.0;
+		schema.arguments.push_back(arg_step);
+
+		ToolArgSchema arg_value;
+		arg_value.name = "value";
+		arg_value.type_hint = Variant::FLOAT;
+		arg_value.required = false;
+		arg_value.default_value = 0.0;
+		schema.arguments.push_back(arg_value);
+
+		ToolArgSchema arg_prefix;
+		arg_prefix.name = "prefix";
+		arg_prefix.type_hint = Variant::STRING;
+		arg_prefix.required = false;
+		arg_prefix.default_value = String("");
+		schema.arguments.push_back(arg_prefix);
+
+		ToolArgSchema arg_suffix;
+		arg_suffix.name = "suffix";
+		arg_suffix.type_hint = Variant::STRING;
+		arg_suffix.required = false;
+		arg_suffix.default_value = String("");
+		schema.arguments.push_back(arg_suffix);
+
+		ToolArgSchema arg_editable;
+		arg_editable.name = "editable";
+		arg_editable.type_hint = Variant::BOOL;
+		arg_editable.required = false;
+		arg_editable.default_value = true;
+		schema.arguments.push_back(arg_editable);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_x;
+		arg_x.name = "x";
+		arg_x.type_hint = Variant::FLOAT;
+		arg_x.required = false;
+		arg_x.default_value = 0.0;
+		schema.arguments.push_back(arg_x);
+
+		ToolArgSchema arg_y;
+		arg_y.name = "y";
+		arg_y.type_hint = Variant::FLOAT;
+		arg_y.required = false;
+		arg_y.default_value = 0.0;
+		schema.arguments.push_back(arg_y);
+
+		ToolArgSchema arg_w;
+		arg_w.name = "width";
+		arg_w.type_hint = Variant::FLOAT;
+		arg_w.required = false;
+		arg_w.default_value = 80.0;
+		schema.arguments.push_back(arg_w);
+
+		ToolArgSchema arg_h;
+		arg_h.name = "height";
+		arg_h.type_hint = Variant::FLOAT;
+		arg_h.required = false;
+		arg_h.default_value = 30.0;
+		schema.arguments.push_back(arg_h);
+
+		schemas["create_spin_box"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_panel_container";
+		schema.description = "Create a PanelContainer for grouped UI sections with optional custom stylebox";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("PanelContainer");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_x;
+		arg_x.name = "x";
+		arg_x.type_hint = Variant::FLOAT;
+		arg_x.required = false;
+		arg_x.default_value = 0.0;
+		schema.arguments.push_back(arg_x);
+
+		ToolArgSchema arg_y;
+		arg_y.name = "y";
+		arg_y.type_hint = Variant::FLOAT;
+		arg_y.required = false;
+		arg_y.default_value = 0.0;
+		schema.arguments.push_back(arg_y);
+
+		ToolArgSchema arg_w;
+		arg_w.name = "width";
+		arg_w.type_hint = Variant::FLOAT;
+		arg_w.required = false;
+		arg_w.default_value = 200.0;
+		schema.arguments.push_back(arg_w);
+
+		ToolArgSchema arg_h;
+		arg_h.name = "height";
+		arg_h.type_hint = Variant::FLOAT;
+		arg_h.required = false;
+		arg_h.default_value = 150.0;
+		schema.arguments.push_back(arg_h);
+
+		ToolArgSchema arg_style;
+		arg_style.name = "stylebox_path";
+		arg_style.type_hint = Variant::STRING;
+		arg_style.required = false;
+		arg_style.description = "Optional path to a StyleBox resource for custom panel appearance";
+		schema.arguments.push_back(arg_style);
+
+		schemas["create_panel_container"] = schema;
+	}
+
 	initialized = true;
 	return schemas;
 }
