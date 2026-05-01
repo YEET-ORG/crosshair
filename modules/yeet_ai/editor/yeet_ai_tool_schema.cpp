@@ -322,10 +322,20 @@ static ToolSchema _infer_schema(const String &p_tool_name) {
 			schema.arguments.push_back(arg_type);
 		}
 
-		if (s.contains("camera_3d") || s.contains("light") || s.contains("rigid") || s.contains("static") || s.contains("character") || s.contains("area_3d") || s.contains("ray_cast_3d") || s.contains("shape_cast_3d") || s.contains("path_3d") || s.contains("vehicle") || s.contains("fog_volume") || s.contains("reflection_probe") || s.contains("gi_probe") || s.contains("particle_emitter")) {
+		// 3D position
+		if (s.contains("camera_3d") || s.contains("light") || s.contains("rigid") || s.contains("static") || s.contains("character") || s.contains("area_3d") || s.contains("ray_cast_3d") || s.contains("shape_cast_3d") || s.contains("path_3d") || s.contains("vehicle") || s.contains("fog_volume") || s.contains("reflection_probe") || s.contains("gi_probe") || s.contains("particle_emitter") || s.contains("marker_3d") || s.contains("remote_transform_3d") || s.contains("visible_on_screen_notifier_3d") || s.contains("navigation_agent_3d") || s.contains("navigation_region_3d")) {
 			ToolArgSchema arg_pos;
 			arg_pos.name = "position";
 			arg_pos.type_hint = Variant::VECTOR3;
+			arg_pos.required = false;
+			schema.arguments.push_back(arg_pos);
+		}
+
+		// 2D position
+		if (s.contains("sprite_2d") || s.contains("animated_sprite_2d") || s.contains("rigid_body_2d") || s.contains("static_body_2d") || s.contains("character_body_2d") || s.contains("area_2d") || s.contains("ray_cast_2d") || s.contains("shape_cast_2d") || s.contains("path_2d") || s.contains("marker_2d") || s.contains("remote_transform_2d") || s.contains("visible_on_screen_notifier_2d") || s.contains("navigation_agent_2d") || s.contains("navigation_region_2d") || s.contains("collision_polygon_2d") || s.contains("audio_stream_player_2d") || s.contains("animatable_body_2d") || s.contains("parallax_layer") || s.contains("polygon_2d") || s.contains("line_2d") || s.contains("light_2d") || s.contains("cpu_particles_2d") || s.contains("gpu_particles_2d")) {
+			ToolArgSchema arg_pos;
+			arg_pos.name = "position";
+			arg_pos.type_hint = Variant::VECTOR2;
 			arg_pos.required = false;
 			schema.arguments.push_back(arg_pos);
 		}
@@ -336,6 +346,22 @@ static ToolSchema _infer_schema(const String &p_tool_name) {
 			arg_rot.type_hint = Variant::FLOAT;
 			arg_rot.required = false;
 			schema.arguments.push_back(arg_rot);
+		}
+
+		if (s.contains("camera_2d")) {
+			ToolArgSchema arg_zoom;
+			arg_zoom.name = "zoom";
+			arg_zoom.type_hint = Variant::VECTOR2;
+			arg_zoom.required = false;
+			arg_zoom.default_value = Vector2(1, 1);
+			schema.arguments.push_back(arg_zoom);
+
+			ToolArgSchema arg_current;
+			arg_current.name = "make_current";
+			arg_current.type_hint = Variant::BOOL;
+			arg_current.required = false;
+			arg_current.default_value = false;
+			schema.arguments.push_back(arg_current);
 		}
 
 		if (s.contains("light") && !s.contains("light_2d")) {
