@@ -520,6 +520,11 @@ void YeetAIDock::_finalize_stream() {
 
 		if (all_valid) {
 			message["tool_calls"] = tool_calls;
+			// If the model streamed reasoning text before the tool calls,
+			// preserve it in the chat log so the user can see the reasoning.
+			if (!accumulated.strip_edges().is_empty()) {
+				_append_message("assistant", accumulated);
+			}
 			_handle_native_tool_calls(message);
 			return;
 		}
