@@ -11,6 +11,7 @@
 #include "core/io/file_access.h"
 #include "core/io/dir_access.h"
 #include "core/io/resource_loader.h"
+#include "core/string/string_name.h"
 #include "editor/editor_interface.h"
 #include "editor/settings/editor_settings.h"
 
@@ -65,6 +66,25 @@ Dictionary coerce_json_dictionary_from_variant(const Variant &p_v) {
 		}
 	}
 	return Dictionary();
+}
+
+static String _clean_tool_string_field(const Variant &p_value) {
+	if (p_value.get_type() != Variant::STRING && p_value.get_type() != Variant::STRING_NAME) {
+		return String();
+	}
+	const String value = String(p_value).strip_edges();
+	const String lower = value.to_lower();
+	if (value.is_empty() || lower == "<null>" || lower == "null") {
+		return String();
+	}
+	return value;
+}
+
+static String _clean_tool_string_field(const Dictionary &p_dict, const StringName &p_key) {
+	if (!p_dict.has(p_key)) {
+		return String();
+	}
+	return _clean_tool_string_field(p_dict[p_key]);
 }
 
 static constexpr int MAX_PROJECT_TREE_ENTRIES = 200;
@@ -636,16 +656,16 @@ Dictionary YeetAIDock::_parse_one_batch_call(const Variant &p_call_var, int p_in
 		return out;
 	}
 
-	String tool_name = String(call.get("tool", "")).strip_edges();
+	String tool_name = _clean_tool_string_field(call, SNAME("tool"));
 	if (tool_name.is_empty()) {
-		tool_name = String(call.get("name", "")).strip_edges();
+		tool_name = _clean_tool_string_field(call, SNAME("name"));
 	}
 	if (tool_name.is_empty()) {
-		tool_name = String(call.get("method", "")).strip_edges();
+		tool_name = _clean_tool_string_field(call, SNAME("method"));
 	}
 	if (tool_name.is_empty()) {
 		const Dictionary fn = call.get("function", Dictionary());
-		tool_name = String(fn.get("name", "")).strip_edges();
+		tool_name = _clean_tool_string_field(fn, SNAME("name"));
 	}
 	if (tool_name.is_empty()) {
 		out["error"] = "Each batch call needs a tool name (`tool`, `name`, `method`, or `function.name`).";

@@ -48,8 +48,24 @@ String YeetAIToolSchemaRegistry::auto_resolve_node_path(
 		return p_node_path;
 	}
 
+	String candidate_path = p_node_path;
+	const String root_name = String(p_scene_root->get_name());
+	if (!root_name.is_empty()) {
+		if (candidate_path == root_name) {
+			return String(p_scene_root->get_path());
+		}
+		if (candidate_path.begins_with(root_name + "/")) {
+			candidate_path = candidate_path.substr(root_name.length() + 1);
+		} else {
+			const int root_pos = candidate_path.find("/" + root_name + "/");
+			if (root_pos >= 0) {
+				candidate_path = candidate_path.substr(root_pos + root_name.length() + 2);
+			}
+		}
+	}
+
 	// Try exact name match first
-	Node *found = p_scene_root->get_node(p_node_path);
+	Node *found = p_scene_root->get_node_or_null(candidate_path);
 	if (found != nullptr) {
 		return String(found->get_path());
 	}
@@ -72,7 +88,7 @@ String YeetAIToolSchemaRegistry::auto_resolve_node_path(
 
 		if (current == p_scene_root) continue;
 
-		if (current->get_name() == p_node_path) {
+		if (String(current->get_name()) == p_node_path || String(current->get_name()) == candidate_path) {
 			return String(current->get_path());
 		}
 

@@ -40,6 +40,7 @@ class Resource;
 class RichTextLabel;
 class ScrollContainer;
 class TextEdit;
+class TextureRect;
 
 class Image;
 class EditorInterface;
@@ -84,6 +85,7 @@ class YeetAIDock : public VBoxContainer {
 	Button *send_button = nullptr;
 	Button *stop_button = nullptr;
 	Button *clear_button = nullptr;
+	TextureRect *_header_icon_rect = nullptr;
 
 	PanelContainer *header_panel = nullptr;
 	PanelContainer *chat_panel = nullptr;

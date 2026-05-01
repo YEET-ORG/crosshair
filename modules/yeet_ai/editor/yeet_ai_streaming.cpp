@@ -161,294 +161,329 @@ void YeetAIDock::_stream_thread_body() {
 		return;
 	}
 
-	HTTPClient *client = HTTPClient::create();
-	client->set_blocking_mode(false);
+	// ── Retry loop for transient errors ──────────────────────────────────────
+	// Retry up to 3 times on 429 (rate limit), 502/503/504 (gateway errors).
+	static constexpr int MAX_RETRIES = 3;
+	String last_err_body;
+	int last_resp_code = 0;
 
-	Ref<TLSOptions> tls_opts;
-	if (use_tls) {
-		if (yeet_stream_host_prefers_insecure_tls(host)) {
-			tls_opts = TLSOptions::client_unsafe(Ref<X509Certificate>());
-		} else {
-			tls_opts = TLSOptions::client();
-		}
-	}
-
-	Error conn_err = client->connect_to_host(host, port, tls_opts);
-	if (conn_err != OK) {
-		memdelete(client);
-		MutexLock lock(_stream_mutex);
-		_stream_error_flag = true;
-		_stream_error_msg = vformat("connect_to_host failed (err %d)", (int)conn_err);
-		_stream_done_flag = true;
-		return;
-	}
-
-	// Poll until connected
-	while (true) {
+	for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
 		if (_stream_should_stop) {
-			memdelete(client);
 			MutexLock lock(_stream_mutex);
 			_stream_done_flag = true;
 			return;
 		}
-		HTTPClient::Status s = client->get_status();
-		if (s == HTTPClient::STATUS_CONNECTED) {
-			break;
-		}
-		if (s == HTTPClient::STATUS_CONNECTING || s == HTTPClient::STATUS_RESOLVING) {
-			client->poll();
-			OS::get_singleton()->delay_usec(5000);
-			continue;
-		}
-		memdelete(client);
-		MutexLock lock(_stream_mutex);
-		_stream_error_flag = true;
-		_stream_error_msg = vformat(TTR("Connection failed (status %d): %s"), (int)s, yeet_describe_http_client_status(s));
-		_stream_done_flag = true;
-		return;
-	}
 
-	// Send the HTTP POST request
-	const CharString body_utf8 = _stream_req_body.utf8();
-	Error req_err = client->request(
-			HTTPClient::METHOD_POST,
-			path,
-			_stream_req_headers,
-			reinterpret_cast<const uint8_t *>(body_utf8.get_data()),
-			body_utf8.length());
-
-	if (req_err != OK) {
-		memdelete(client);
-		MutexLock lock(_stream_mutex);
-		_stream_error_flag = true;
-		_stream_error_msg = vformat("Request send failed (err %d)", (int)req_err);
-		_stream_done_flag = true;
-		return;
-	}
-
-	// Poll until the server starts responding
-	while (true) {
-		if (_stream_should_stop) {
-			memdelete(client);
-			MutexLock lock(_stream_mutex);
-			_stream_done_flag = true;
-			return;
-		}
-		HTTPClient::Status s = client->get_status();
-		if (s == HTTPClient::STATUS_BODY || s == HTTPClient::STATUS_CONNECTED) {
-			break;
-		}
-		if (s == HTTPClient::STATUS_REQUESTING) {
-			client->poll();
-			OS::get_singleton()->delay_usec(5000);
-			continue;
-		}
-		memdelete(client);
-		MutexLock lock(_stream_mutex);
-		_stream_error_flag = true;
-		_stream_error_msg = vformat(TTR("Waiting for response failed (status %d): %s"), (int)s, yeet_describe_http_client_status(s));
-		_stream_done_flag = true;
-		return;
-	}
-
-	if (!client->has_response()) {
-		memdelete(client);
-		MutexLock lock(_stream_mutex);
-		_stream_error_flag = true;
-		_stream_error_msg = "No response from server.";
-		_stream_done_flag = true;
-		return;
-	}
-
-	const int resp_code = client->get_response_code();
-	if (resp_code < 200 || resp_code >= 300) {
-		String err_body;
-		while (client->get_status() == HTTPClient::STATUS_BODY && !_stream_should_stop) {
-			client->poll();
-			PackedByteArray chunk = client->read_response_body_chunk();
-			if (!chunk.is_empty()) {
-				err_body += String::utf8(reinterpret_cast<const char *>(chunk.ptr()), chunk.size());
+		if (attempt > 0) {
+			// Exponential backoff: 1s, 2s, 4s
+			const int delay_ms = 1000 << (attempt - 1);
+			OS::get_singleton()->delay_msec(delay_ms);
+			if (_stream_should_stop) {
+				MutexLock lock(_stream_mutex);
+				_stream_done_flag = true;
+				return;
 			}
-			OS::get_singleton()->delay_usec(1000);
 		}
-		memdelete(client);
-		MutexLock lock(_stream_mutex);
-		_stream_error_flag = true;
-		_stream_error_msg = vformat("HTTP %d: %s", resp_code, err_body.substr(0, 400));
-		_stream_done_flag = true;
-		return;
-	}
 
-	// ── Read response body ─────────────────────────────────────────────────────
-	if (!_stream_expects_sse) {
-		// Non-streaming response: read the entire body as a single JSON object.
-		String response_body;
-		while (client->get_status() == HTTPClient::STATUS_BODY && !_stream_should_stop) {
+		HTTPClient *client = HTTPClient::create();
+		client->set_blocking_mode(false);
+
+		Ref<TLSOptions> tls_opts;
+		if (use_tls) {
+			if (yeet_stream_host_prefers_insecure_tls(host)) {
+				tls_opts = TLSOptions::client_unsafe(Ref<X509Certificate>());
+			} else {
+				tls_opts = TLSOptions::client();
+			}
+		}
+
+		Error conn_err = client->connect_to_host(host, port, tls_opts);
+		if (conn_err != OK) {
+			memdelete(client);
+			MutexLock lock(_stream_mutex);
+			_stream_error_flag = true;
+			_stream_error_msg = vformat("connect_to_host failed (err %d)", (int)conn_err);
+			_stream_done_flag = true;
+			return;
+		}
+
+		// Poll until connected
+		while (true) {
+			if (_stream_should_stop) {
+				memdelete(client);
+				MutexLock lock(_stream_mutex);
+				_stream_done_flag = true;
+				return;
+			}
+			HTTPClient::Status s = client->get_status();
+			if (s == HTTPClient::STATUS_CONNECTED) {
+				break;
+			}
+			if (s == HTTPClient::STATUS_CONNECTING || s == HTTPClient::STATUS_RESOLVING) {
+				client->poll();
+				OS::get_singleton()->delay_usec(5000);
+				continue;
+			}
+			memdelete(client);
+			MutexLock lock(_stream_mutex);
+			_stream_error_flag = true;
+			_stream_error_msg = vformat(TTR("Connection failed (status %d): %s"), (int)s, yeet_describe_http_client_status(s));
+			_stream_done_flag = true;
+			return;
+		}
+
+		// Send the HTTP POST request
+		const CharString body_utf8 = _stream_req_body.utf8();
+		Error req_err = client->request(
+				HTTPClient::METHOD_POST,
+				path,
+				_stream_req_headers,
+				reinterpret_cast<const uint8_t *>(body_utf8.get_data()),
+				body_utf8.length());
+
+		if (req_err != OK) {
+			memdelete(client);
+			MutexLock lock(_stream_mutex);
+			_stream_error_flag = true;
+			_stream_error_msg = vformat("Request send failed (err %d)", (int)req_err);
+			_stream_done_flag = true;
+			return;
+		}
+
+		// Poll until the server starts responding
+		while (true) {
+			if (_stream_should_stop) {
+				memdelete(client);
+				MutexLock lock(_stream_mutex);
+				_stream_done_flag = true;
+				return;
+			}
+			HTTPClient::Status s = client->get_status();
+			if (s == HTTPClient::STATUS_BODY || s == HTTPClient::STATUS_CONNECTED) {
+				break;
+			}
+			if (s == HTTPClient::STATUS_REQUESTING) {
+				client->poll();
+				OS::get_singleton()->delay_usec(5000);
+				continue;
+			}
+			memdelete(client);
+			MutexLock lock(_stream_mutex);
+			_stream_error_flag = true;
+			_stream_error_msg = vformat(TTR("Waiting for response failed (status %d): %s"), (int)s, yeet_describe_http_client_status(s));
+			_stream_done_flag = true;
+			return;
+		}
+
+		if (!client->has_response()) {
+			memdelete(client);
+			MutexLock lock(_stream_mutex);
+			_stream_error_flag = true;
+			_stream_error_msg = "No response from server.";
+			_stream_done_flag = true;
+			return;
+		}
+
+		const int resp_code = client->get_response_code();
+		if (resp_code < 200 || resp_code >= 300) {
+			String err_body;
+			while (client->get_status() == HTTPClient::STATUS_BODY && !_stream_should_stop) {
+				client->poll();
+				PackedByteArray chunk = client->read_response_body_chunk();
+				if (!chunk.is_empty()) {
+					err_body += String::utf8(reinterpret_cast<const char *>(chunk.ptr()), chunk.size());
+				}
+				OS::get_singleton()->delay_usec(1000);
+			}
+			memdelete(client);
+
+			// Decide whether to retry.
+			const bool is_retryable = (resp_code == 429 || resp_code == 502 || resp_code == 503 || resp_code == 504);
+			if (is_retryable && attempt < MAX_RETRIES) {
+				last_err_body = err_body;
+				last_resp_code = resp_code;
+				continue; // Retry with backoff
+			}
+
+			MutexLock lock(_stream_mutex);
+			_stream_error_flag = true;
+			_stream_error_msg = vformat("HTTP %d: %s", resp_code, err_body.substr(0, 400));
+			_stream_done_flag = true;
+			return;
+		}
+
+		// ── Success: read response body ──────────────────────────────────────
+		if (!_stream_expects_sse) {
+			// Non-streaming response: read the entire body as a single JSON object.
+			String response_body;
+			while (client->get_status() == HTTPClient::STATUS_BODY && !_stream_should_stop) {
+				client->poll();
+				PackedByteArray raw = client->read_response_body_chunk();
+				if (!raw.is_empty()) {
+					response_body += String::utf8(reinterpret_cast<const char *>(raw.ptr()), raw.size());
+				}
+				OS::get_singleton()->delay_usec(1000);
+			}
+			memdelete(client);
+			MutexLock lock(_stream_mutex);
+			// Store the full response body as a single "chunk" so _finalize_stream can parse it.
+			if (!response_body.strip_edges().is_empty()) {
+				_pending_chunks.push_back(response_body);
+			}
+			_stream_done_flag = true;
+			return;
+		}
+
+		// ── Read SSE body ────────────────────────────────────────────────────
+		String sse_buf;
+		bool sse_done = false;
+
+		while (!sse_done && client->get_status() == HTTPClient::STATUS_BODY) {
+			if (_stream_should_stop) {
+				break;
+			}
 			client->poll();
 			PackedByteArray raw = client->read_response_body_chunk();
-			if (!raw.is_empty()) {
-				response_body += String::utf8(reinterpret_cast<const char *>(raw.ptr()), raw.size());
+			if (raw.is_empty()) {
+				OS::get_singleton()->delay_usec(1000);
+				continue;
 			}
-			OS::get_singleton()->delay_usec(1000);
+			sse_buf += String::utf8(reinterpret_cast<const char *>(raw.ptr()), raw.size());
+
+			// Process all complete lines in the buffer
+			while (!sse_done) {
+				int nl = sse_buf.find("\n");
+				if (nl < 0) {
+					break;
+				}
+				String line = sse_buf.substr(0, nl).strip_edges();
+				sse_buf = sse_buf.substr(nl + 1);
+
+				if (!line.begins_with("data:")) {
+					continue;
+				}
+				const String sse_payload = line.substr(5).strip_edges();
+				if (sse_payload == "[DONE]") {
+					sse_done = true;
+					break;
+				}
+
+				// Parse delta JSON
+				Ref<JSON> jobj;
+				jobj.instantiate();
+				if (jobj->parse(sse_payload) != OK) {
+					continue;
+				}
+				const Variant parsed = jobj->get_data();
+				if (parsed.get_type() != Variant::DICTIONARY) {
+					continue;
+				}
+				const Dictionary d = parsed;
+				const Array choices = d.get("choices", Array());
+				if (choices.is_empty()) {
+					continue;
+				}
+				const Variant c0v = choices[0];
+				if (c0v.get_type() != Variant::DICTIONARY) {
+					continue;
+				}
+				const Dictionary c0 = c0v;
+				const Variant dv = c0.get("delta", Variant());
+				if (dv.get_type() != Variant::DICTIONARY) {
+					continue;
+				}
+				const Dictionary delta = dv;
+
+				// ── Accumulate streaming tool calls ──────────────────────────────
+				const Array delta_tool_calls = delta.get("tool_calls", Array());
+				if (!delta_tool_calls.is_empty()) {
+					MutexLock lock(_stream_mutex);
+					_stream_has_tool_calls = true;
+					for (int ti = 0; ti < delta_tool_calls.size(); ti++) {
+						if (delta_tool_calls[ti].get_type() != Variant::DICTIONARY) {
+							continue;
+						}
+						const Dictionary tc_delta = delta_tool_calls[ti];
+						int tc_idx = tc_delta.get("index", 0);
+						while (_stream_tool_call_accumulator.size() <= tc_idx) {
+							_stream_tool_call_accumulator.append(Dictionary());
+						}
+						Dictionary accumulated = _stream_tool_call_accumulator[tc_idx];
+						String text_field;
+						if (yeet_get_non_empty_string_field(tc_delta, "id", text_field)) {
+							accumulated["id"] = text_field;
+						}
+						if (yeet_get_non_empty_string_field(tc_delta, "type", text_field)) {
+							accumulated["type"] = text_field;
+						}
+						const Variant fn_delta_variant = tc_delta.get("function", Variant());
+						if (fn_delta_variant.get_type() == Variant::DICTIONARY) {
+							const Dictionary fn_delta = fn_delta_variant;
+							Dictionary fn = accumulated.get("function", Dictionary());
+							if (yeet_get_non_empty_string_field(fn_delta, "name", text_field)) {
+								fn["name"] = text_field;
+							}
+							const Variant arguments_delta = fn_delta.get("arguments", Variant());
+							if (arguments_delta.get_type() == Variant::STRING) {
+								String args = String(fn.get("arguments", ""));
+								args += String(arguments_delta);
+								fn["arguments"] = args;
+							}
+							accumulated["function"] = fn;
+						}
+						_stream_tool_call_accumulator[tc_idx] = accumulated;
+					}
+				}
+
+				// ── Stream text content ──────────────────────────────────────────
+				String content_chunk;
+				const Variant content_variant = delta.get("content", Variant());
+				if (content_variant.get_type() == Variant::STRING) {
+					content_chunk = String(content_variant);
+				}
+				if (!content_chunk.is_empty()) {
+					// Strip non-ASCII prefix artifacts (e.g., UTF-8 keep-alive bytes like 0xC4 0x81 = "ā").
+					{
+						int start = 0;
+						while (start < content_chunk.length()) {
+							const char32_t c = content_chunk[start];
+							if (c < 32 || c > 126) {
+								start++;
+							} else {
+								break;
+							}
+						}
+						content_chunk = content_chunk.substr(start);
+					}
+					// Strip trailing null-byte artifacts and other non-printing suffixes.
+					{
+						int end = content_chunk.length();
+						while (end > 0) {
+							const char32_t c = content_chunk[end - 1];
+							if (c < 32 || c > 126) {
+								end--;
+							} else {
+								break;
+							}
+						}
+						content_chunk = content_chunk.substr(0, end);
+					}
+					if (!content_chunk.is_empty()) {
+						MutexLock lock(_stream_mutex);
+						_pending_chunks.push_back(content_chunk);
+					}
+				}
+
+				// (If the chunk had neither content nor tool calls, we simply fall through
+				// to the next SSE line — no action needed.)
+			}
 		}
+
 		memdelete(client);
 		MutexLock lock(_stream_mutex);
-		// Store the full response body as a single "chunk" so _finalize_stream can parse it.
-		if (!response_body.strip_edges().is_empty()) {
-			_pending_chunks.push_back(response_body);
-		}
 		_stream_done_flag = true;
 		return;
 	}
-
-	// ── Read SSE body ──────────────────────────────────────────────────────────
-	String sse_buf;
-	bool sse_done = false;
-
-	while (!sse_done && client->get_status() == HTTPClient::STATUS_BODY) {
-		if (_stream_should_stop) {
-			break;
-		}
-		client->poll();
-		PackedByteArray raw = client->read_response_body_chunk();
-		if (raw.is_empty()) {
-			OS::get_singleton()->delay_usec(1000);
-			continue;
-		}
-		sse_buf += String::utf8(reinterpret_cast<const char *>(raw.ptr()), raw.size());
-
-		// Process all complete lines in the buffer
-		while (!sse_done) {
-			int nl = sse_buf.find("\n");
-			if (nl < 0) {
-				break;
-			}
-			String line = sse_buf.substr(0, nl).strip_edges();
-			sse_buf = sse_buf.substr(nl + 1);
-
-			if (!line.begins_with("data:")) {
-				continue;
-			}
-			const String sse_payload = line.substr(5).strip_edges();
-			if (sse_payload == "[DONE]") {
-				sse_done = true;
-				break;
-			}
-
-			// Parse delta JSON
-			Ref<JSON> jobj;
-			jobj.instantiate();
-			if (jobj->parse(sse_payload) != OK) {
-				continue;
-			}
-			const Variant parsed = jobj->get_data();
-			if (parsed.get_type() != Variant::DICTIONARY) {
-				continue;
-			}
-			const Dictionary d = parsed;
-			const Array choices = d.get("choices", Array());
-			if (choices.is_empty()) {
-				continue;
-			}
-			const Variant c0v = choices[0];
-			if (c0v.get_type() != Variant::DICTIONARY) {
-				continue;
-			}
-			const Dictionary c0 = c0v;
-			const Variant dv = c0.get("delta", Variant());
-			if (dv.get_type() != Variant::DICTIONARY) {
-				continue;
-			}
-			const Dictionary delta = dv;
-
-			// ── Accumulate streaming tool calls ──────────────────────────────
-			const Array delta_tool_calls = delta.get("tool_calls", Array());
-			if (!delta_tool_calls.is_empty()) {
-				MutexLock lock(_stream_mutex);
-				_stream_has_tool_calls = true;
-				for (int ti = 0; ti < delta_tool_calls.size(); ti++) {
-					if (delta_tool_calls[ti].get_type() != Variant::DICTIONARY) {
-						continue;
-					}
-					const Dictionary tc_delta = delta_tool_calls[ti];
-					int tc_idx = tc_delta.get("index", 0);
-					while (_stream_tool_call_accumulator.size() <= tc_idx) {
-						_stream_tool_call_accumulator.append(Dictionary());
-					}
-					Dictionary accumulated = _stream_tool_call_accumulator[tc_idx];
-					String text_field;
-					if (yeet_get_non_empty_string_field(tc_delta, "id", text_field)) {
-						accumulated["id"] = text_field;
-					}
-					if (yeet_get_non_empty_string_field(tc_delta, "type", text_field)) {
-						accumulated["type"] = text_field;
-					}
-					const Variant fn_delta_variant = tc_delta.get("function", Variant());
-					if (fn_delta_variant.get_type() == Variant::DICTIONARY) {
-						const Dictionary fn_delta = fn_delta_variant;
-						Dictionary fn = accumulated.get("function", Dictionary());
-						if (yeet_get_non_empty_string_field(fn_delta, "name", text_field)) {
-							fn["name"] = text_field;
-						}
-						const Variant arguments_delta = fn_delta.get("arguments", Variant());
-						if (arguments_delta.get_type() == Variant::STRING) {
-							String args = String(fn.get("arguments", ""));
-							args += String(arguments_delta);
-							fn["arguments"] = args;
-						}
-						accumulated["function"] = fn;
-					}
-					_stream_tool_call_accumulator[tc_idx] = accumulated;
-				}
-			}
-
-			// ── Stream text content ──────────────────────────────────────────
-			String content_chunk;
-			const Variant content_variant = delta.get("content", Variant());
-			if (content_variant.get_type() == Variant::STRING) {
-				content_chunk = String(content_variant);
-			}
-			if (!content_chunk.is_empty()) {
-				// Strip non-ASCII prefix artifacts (e.g., UTF-8 keep-alive bytes like 0xC4 0x81 = "ā").
-				{
-					int start = 0;
-					while (start < content_chunk.length()) {
-						const char32_t c = content_chunk[start];
-						if (c < 32 || c > 126) {
-							start++;
-						} else {
-							break;
-						}
-					}
-					content_chunk = content_chunk.substr(start);
-				}
-				// Strip trailing null-byte artifacts and other non-printing suffixes.
-				{
-					int end = content_chunk.length();
-					while (end > 0) {
-						const char32_t c = content_chunk[end - 1];
-						if (c < 32 || c > 126) {
-							end--;
-						} else {
-							break;
-						}
-					}
-					content_chunk = content_chunk.substr(0, end);
-				}
-				if (!content_chunk.is_empty()) {
-					MutexLock lock(_stream_mutex);
-					_pending_chunks.push_back(content_chunk);
-				}
-			}
-
-			// (If the chunk had neither content nor tool calls, we simply fall through
-			// to the next SSE line — no action needed.)
-		}
-	}
-
-	memdelete(client);
-	MutexLock lock(_stream_mutex);
-	_stream_done_flag = true;
 }
 
 void YeetAIDock::_drain_stream_queue() {

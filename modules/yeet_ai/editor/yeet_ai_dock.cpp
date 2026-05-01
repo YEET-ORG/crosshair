@@ -106,6 +106,25 @@ bool is_batch_tool_name_alias(const String &p_name) {
 	return s == "batch_tool_calls" || s == "batch_tools" || s == "batch_tool_call" || s == "batch";
 }
 
+static String _clean_json_string_field(const Variant &p_value) {
+	if (p_value.get_type() != Variant::STRING && p_value.get_type() != Variant::STRING_NAME) {
+		return String();
+	}
+	const String value = String(p_value).strip_edges();
+	const String lower = value.to_lower();
+	if (value.is_empty() || lower == "<null>" || lower == "null") {
+		return String();
+	}
+	return value;
+}
+
+static String _clean_json_string_field(const Dictionary &p_dict, const StringName &p_key) {
+	if (!p_dict.has(p_key)) {
+		return String();
+	}
+	return _clean_json_string_field(p_dict[p_key]);
+}
+
 // Strip non-ASCII / non-printable artifacts from LLM keep-alive and streaming noise.
 // Keeps ASCII printable (32-126), tabs, and newlines only.
 static String _clean_content_artifacts(String p_text) {
@@ -166,11 +185,11 @@ int find_json_object_end(const String &p_s, int p_start) {
 
 // Some models emit two JSON objects: {"arguments":{...}}, {"tool":"x","type":"tool_call"} — invalid as one value but recoverable.
 static String _json_frag_effective_tool_name(const Dictionary &d) {
-	String t = String(d.get("tool", "")).strip_edges();
+	String t = _clean_json_string_field(d, SNAME("tool"));
 	if (!t.is_empty()) {
 		return t;
 	}
-	return String(d.get("name", "")).strip_edges();
+	return _clean_json_string_field(d, SNAME("name"));
 }
 
 static bool _json_frag_type_is_allowed_on_args_fragment(const String &p_typ) {
@@ -189,7 +208,7 @@ static bool _json_frag_is_arguments_only(const Dictionary &d) {
 	if (!_json_frag_effective_tool_name(d).is_empty()) {
 		return false;
 	}
-	const String typ = String(d.get("type", "")).strip_edges();
+	const String typ = _clean_json_string_field(d, SNAME("type"));
 	return _json_frag_type_is_allowed_on_args_fragment(typ);
 }
 
@@ -198,7 +217,7 @@ static bool _json_frag_is_tool_header(const Dictionary &d) {
 	if (tool.is_empty()) {
 		return false;
 	}
-	const String typ = String(d.get("type", "")).strip_edges();
+	const String typ = _clean_json_string_field(d, SNAME("type"));
 	if (typ.to_lower() == "final") {
 		return false;
 	}
@@ -227,8 +246,11 @@ static bool _merge_tool_call_json_pair(const Dictionary &a, const Dictionary &b,
 }
 
 static bool _envelope_normalized_is_dispatchable(const Dictionary &p_norm) {
-	const String t = String(p_norm.get("type", "")).strip_edges();
-	return t == "tool_call" || t == "final";
+	const String t = _clean_json_string_field(p_norm, SNAME("type"));
+	if (t == "final") {
+		return true;
+	}
+	return t == "tool_call" && !_clean_json_string_field(p_norm, SNAME("tool")).is_empty();
 }
 
 // Lift batch_tool_calls top-level keys ("calls", "tool_calls", "shared_arguments",
@@ -522,9 +544,7 @@ void YeetAIDock::_bind_methods() {
 		}
 	}
 
-	const int font_size = has_theme_font_size(SNAME("font_size"), EditorStringName(Editor))
-			? get_theme_font_size(SNAME("font_size"), EditorStringName(Editor))
-			: 14;
+	const int font_size = get_theme_font_size(SNAME("main_size"), EditorStringName(EditorFonts));
 	const Color font_color = get_theme_color(SNAME("font_color"), EditorStringName(Editor));
 	const Color accent = get_theme_color(SNAME("accent_color"), EditorStringName(Editor));
 	const Color font_muted = get_theme_color(SNAME("font_disabled_color"), EditorStringName(Editor));
@@ -617,16 +637,11 @@ YeetAIDock::YeetAIDock() {
 	title_row->add_theme_constant_override("separation", int(8.0f * EDSCALE));
 	header_mc->add_child(title_row);
 
-	// Title icon
-	Ref<Texture2D> header_icon = get_editor_theme_icon("Code");
-	if (header_icon.is_valid()) {
-		TextureRect *icon_rect = memnew(TextureRect);
-		icon_rect->set_texture(header_icon);
-		icon_rect->set_custom_minimum_size(Size2(18, 18) * EDSCALE);
-		icon_rect->set_v_size_flags(Control::SIZE_SHRINK_CENTER);
-		icon_rect->set_stretch_mode(TextureRect::STRETCH_KEEP_ASPECT_CENTERED);
-		title_row->add_child(icon_rect);
-	}
+	_header_icon_rect = memnew(TextureRect);
+	_header_icon_rect->set_custom_minimum_size(Size2(18, 18) * EDSCALE);
+	_header_icon_rect->set_v_size_flags(Control::SIZE_SHRINK_CENTER);
+	_header_icon_rect->set_stretch_mode(TextureRect::STRETCH_KEEP_ASPECT_CENTERED);
+	title_row->add_child(_header_icon_rect);
 
 	// Title label
 	Label *title_label = memnew(Label);
@@ -1455,6 +1470,9 @@ void YeetAIDock::_notification(int p_what) {
 			intro_message_added = true;
 			_append_message("assistant", TTR("Crosshair AI is ready. I can inspect the project, scenes, selected nodes, and perform scene and script edits."));
 		}
+		if (_header_icon_rect) {
+			_header_icon_rect->set_texture(get_editor_theme_icon(SNAME("Code")));
+		}
 		send_button->set_button_icon(get_editor_theme_icon(SNAME("Play")));
 		stop_button->set_button_icon(get_editor_theme_icon(SNAME("Stop")));
 		clear_button->set_button_icon(get_editor_theme_icon(SNAME("Clear")));
@@ -1627,9 +1645,7 @@ void YeetAIDock::_append_status_row(const String &p_text) {
 	const bool tree_ready = is_inside_tree();
 	const Color accent = tree_ready ? get_theme_color(SNAME("accent_color"), EditorStringName(Editor)) : Color(0.3f, 0.5f, 0.9f);
 	const Color font_dim = tree_ready ? get_theme_color(SNAME("font_disabled_color"), EditorStringName(Editor)) : Color(0.5f, 0.5f, 0.5f);
-	const int base_fs = tree_ready && has_theme_font_size(SNAME("font_size"), EditorStringName(Editor))
-			? get_theme_font_size(SNAME("font_size"), EditorStringName(Editor))
-			: 0;
+	const int base_fs = tree_ready ? get_theme_font_size(SNAME("main_size"), EditorStringName(EditorFonts)) : 0;
 
 	if (base_fs > 0) {
 		chat_log->push_font_size(MAX(10, int(base_fs * 0.82f)));
@@ -1799,9 +1815,7 @@ void YeetAIDock::_append_message(const String &p_role, const String &p_text) {
 
 	const Color label_color = (p_role == "user") ? accent : ((p_role == "assistant") ? success : ((p_role == "tool") ? warning : dim));
 	const Color bar_color = (p_role == "user") ? Color(accent.r, accent.g, accent.b, 0.6f) : Color(success.r, success.g, success.b, 0.4f);
-	const int base_fs = tree_ready && has_theme_font_size(SNAME("font_size"), EditorStringName(Editor))
-			? get_theme_font_size(SNAME("font_size"), EditorStringName(Editor))
-			: 14;
+	const int base_fs = tree_ready ? get_theme_font_size(SNAME("main_size"), EditorStringName(EditorFonts)) : 14;
 	const int label_fs = MAX(10, int(base_fs * 0.88f));
 	const int caption_fs = MAX(10, int(base_fs * 0.86f));
 
@@ -1868,9 +1882,7 @@ void YeetAIDock::_append_tool_running(const String &p_tool_name, const Dictionar
 	const Color font_dim = tree_ready ? get_theme_color(SNAME("font_disabled_color"), EditorStringName(Editor)) : Color(0.5f, 0.5f, 0.5f);
 	const Color font_base = tree_ready ? get_theme_color(SNAME("font_color"), EditorStringName(Editor)) : Color(0.9f, 0.9f, 0.9f);
 
-	const int base_fs = tree_ready && has_theme_font_size(SNAME("font_size"), EditorStringName(Editor))
-			? get_theme_font_size(SNAME("font_size"), EditorStringName(Editor))
-			: 14;
+	const int base_fs = tree_ready ? get_theme_font_size(SNAME("main_size"), EditorStringName(EditorFonts)) : 14;
 	const int caption_fs = MAX(10, int(base_fs * 0.82f));
 	const int small_fs = MAX(9, int(base_fs * 0.76f));
 
@@ -1957,9 +1969,7 @@ void YeetAIDock::_append_tool_result(const String &p_tool_name, const Dictionary
 	const Color warning = tree_ready ? get_theme_color(SNAME("warning_color"), EditorStringName(Editor)) : Color(0.8f, 0.6f, 0.2f);
 	const Color error = tree_ready ? get_theme_color(SNAME("error_color"), EditorStringName(Editor)) : Color(0.9f, 0.3f, 0.3f);
 
-	const int base_fs = tree_ready && has_theme_font_size(SNAME("font_size"), EditorStringName(Editor))
-			? get_theme_font_size(SNAME("font_size"), EditorStringName(Editor))
-			: 14;
+	const int base_fs = tree_ready ? get_theme_font_size(SNAME("main_size"), EditorStringName(EditorFonts)) : 14;
 	const int caption_fs = MAX(10, int(base_fs * 0.82f));
 	const int small_fs = MAX(9, int(base_fs * 0.76f));
 
@@ -2307,7 +2317,7 @@ void YeetAIDock::_request_model_response() {
 	}
 
 	const int max_tokens = _get_editor_setting_int("yeet_ai/chat/max_tokens", 32768);
-	if (max_tokens < 4096) {
+	if (max_tokens > 0 && max_tokens < 4096) {
 		static bool low_max_tokens_warned = false;
 		if (!low_max_tokens_warned) {
 			low_max_tokens_warned = true;
@@ -2315,7 +2325,8 @@ void YeetAIDock::_request_model_response() {
 		}
 	}
 	if (_get_editor_setting_bool("yeet_ai/chat/debug_mode", false)) {
-		WARN_PRINT(vformat("[YeetAI Debug] max_tokens=%d, model=%s, endpoint=%s", max_tokens, model.utf8().get_data(), endpoint.utf8().get_data()));
+		const String max_tokens_str = max_tokens > 0 ? itos(max_tokens) : String("server default");
+		WARN_PRINT(vformat("[YeetAI Debug] max_tokens=%s, model=%s, endpoint=%s", max_tokens_str, model.utf8().get_data(), endpoint.utf8().get_data()));
 	}
 	const float temperature = _get_editor_setting_float("yeet_ai/chat/temperature", 0.25f);
 
@@ -2326,7 +2337,9 @@ void YeetAIDock::_request_model_response() {
 
 	Dictionary payload;
 	payload["model"] = model;
-	payload["max_tokens"] = max_tokens;
+	if (max_tokens > 0) {
+		payload["max_tokens"] = max_tokens;
+	}
 	// temperature < 0 omits the field (use server default). Otherwise prefer ~0.2–0.35 for structured JSON (Qwen, etc.).
 	if (temperature >= 0.0f) {
 		payload["temperature"] = temperature;
@@ -2476,11 +2489,9 @@ void YeetAIDock::_handle_native_tool_calls(const Dictionary &p_message) {
 		const Dictionary tc = tool_calls[i];
 		String call_id = vformat("call_%d", i);
 		const Variant call_id_variant = tc.get("id", Variant());
-		if (call_id_variant.get_type() == Variant::STRING || call_id_variant.get_type() == Variant::STRING_NAME) {
-			const String parsed_call_id = String(call_id_variant).strip_edges();
-			if (!parsed_call_id.is_empty() && parsed_call_id != "<null>") {
-				call_id = parsed_call_id;
-			}
+		const String parsed_call_id = _clean_json_string_field(call_id_variant);
+		if (!parsed_call_id.is_empty()) {
+			call_id = parsed_call_id;
 		}
 		const Variant function_variant = tc.get("function", Variant());
 		if (function_variant.get_type() != Variant::DICTIONARY) {
@@ -2491,8 +2502,8 @@ void YeetAIDock::_handle_native_tool_calls(const Dictionary &p_message) {
 		if (tool_name_variant.get_type() != Variant::STRING && tool_name_variant.get_type() != Variant::STRING_NAME) {
 			continue;
 		}
-		const String tool_name = String(tool_name_variant).strip_edges();
-		if (tool_name.is_empty() || tool_name == "<null>") {
+		const String tool_name = _clean_json_string_field(tool_name_variant);
+		if (tool_name.is_empty()) {
 			continue;
 		}
 		String arguments_str;
@@ -2560,7 +2571,7 @@ void YeetAIDock::_handle_native_tool_calls(const Dictionary &p_message) {
 
 void YeetAIDock::_handle_model_response(const String &p_content) {
 	Dictionary envelope = _extract_response_envelope(p_content);
-	const String type = envelope.get("type", "");
+	const String type = _clean_json_string_field(envelope, SNAME("type"));
 
 	if (type == "tool_call") {
 		const int max_round_trips = _get_editor_setting_int("yeet_ai/chat/max_tool_round_trips", 100);
@@ -2570,7 +2581,12 @@ void YeetAIDock::_handle_model_response(const String &p_content) {
 			return;
 		}
 
-		const String tool_name = envelope.get("tool", "");
+		const String tool_name = _clean_json_string_field(envelope, SNAME("tool"));
+		if (tool_name.is_empty()) {
+			_set_waiting(false, TTR("Ready"));
+			_append_message("assistant", TTR("The model emitted a tool call without a valid tool name."));
+			return;
+		}
 		const Dictionary args = envelope.get("arguments", Dictionary());
 		_set_waiting(true, vformat(TTR("Running: %s"), _humanize_tool_name(tool_name)));
 		_append_tool_running(tool_name, args);
@@ -3104,8 +3120,8 @@ String YeetAIDock::_extract_message_content(const Dictionary &p_response_json) c
 		if (fn_name_variant.get_type() != Variant::STRING && fn_name_variant.get_type() != Variant::STRING_NAME) {
 			return text;
 		}
-		const String fn_name = String(fn_name_variant).strip_edges();
-		if (!fn_name.is_empty() && fn_name != "<null>") {
+		const String fn_name = _clean_json_string_field(fn_name_variant);
+		if (!fn_name.is_empty()) {
 			Dictionary envelope;
 			envelope["type"] = "tool_call";
 			const String canonical_tool = is_batch_tool_name_alias(fn_name) ? String("batch_tool_calls") : fn_name;
@@ -3490,16 +3506,16 @@ Dictionary YeetAIDock::_normalize_batch_tool_arguments(const Dictionary &p_args)
 			normalized.push_back(call_var);
 			continue;
 		}
-		String tn = String(call.get("tool", "")).strip_edges();
+		String tn = _clean_json_string_field(call, SNAME("tool"));
 		if (tn.is_empty()) {
-			tn = String(call.get("name", "")).strip_edges();
+			tn = _clean_json_string_field(call, SNAME("name"));
 		}
 		if (tn.is_empty()) {
-			tn = String(call.get("method", "")).strip_edges();
+			tn = _clean_json_string_field(call, SNAME("method"));
 		}
 		if (tn.is_empty()) {
 			const Dictionary fn = call.get("function", Dictionary());
-			tn = String(fn.get("name", "")).strip_edges();
+			tn = _clean_json_string_field(fn, SNAME("name"));
 		}
 		if (!tn.is_empty()) {
 			call["tool"] = tn;
@@ -3522,8 +3538,8 @@ Dictionary YeetAIDock::_normalize_batch_tool_arguments(const Dictionary &p_args)
 }
 
 Dictionary YeetAIDock::_normalize_envelope(const Dictionary &p_envelope) const {
-	const String type = p_envelope.get("type", "");
-	const String tool = p_envelope.get("tool", "");
+	const String type = _clean_json_string_field(p_envelope, SNAME("type"));
+	const String tool = _clean_json_string_field(p_envelope, SNAME("tool"));
 
 	if (type == "final") {
 		return p_envelope;
@@ -3538,7 +3554,7 @@ Dictionary YeetAIDock::_normalize_envelope(const Dictionary &p_envelope) const {
 				out["arguments"] = parsed;
 			}
 		}
-		String t = String(out.get("tool", "")).strip_edges();
+		String t = _clean_json_string_field(out, SNAME("tool"));
 		if (is_batch_tool_name_alias(t)) {
 			out["tool"] = "batch_tool_calls";
 			t = "batch_tool_calls";
@@ -4238,9 +4254,7 @@ void YeetAIDock::_update_files_modified_label() {
 	const bool tree_ready = is_inside_tree();
 	const Color accent = tree_ready ? get_theme_color(SNAME("accent_color"), EditorStringName(Editor)) : Color(0.3f, 0.5f, 0.9f);
 	const Color font_dim = tree_ready ? get_theme_color(SNAME("font_disabled_color"), EditorStringName(Editor)) : Color(0.5f, 0.5f, 0.5f);
-	const int base_fs = tree_ready && has_theme_font_size(SNAME("font_size"), EditorStringName(Editor))
-			? get_theme_font_size(SNAME("font_size"), EditorStringName(Editor))
-			: 14;
+	const int base_fs = tree_ready ? get_theme_font_size(SNAME("main_size"), EditorStringName(EditorFonts)) : 14;
 	const int small_fs = MAX(9, int(base_fs * 0.8f));
 
 	Ref<Texture2D> file_icon = get_editor_theme_icon("File");
@@ -4538,7 +4552,7 @@ String YeetAIDock::_generate_cache_key(const String &tool_name, const Dictionary
 		hash = hash * 33 + key[i];
 	}
 
-	return vformat("%s_%u", tool_name, hash);
+	return tool_name + "_" + String::num_uint64(hash);
 }
 
 void YeetAIDock::_cache_result(const String &cache_key, const Dictionary &result) {

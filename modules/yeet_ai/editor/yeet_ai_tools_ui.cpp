@@ -477,7 +477,7 @@ Dictionary YeetAIDock::_tool_create_accept_dialog(const Dictionary &p_args) cons
 	AcceptDialog *dlg = memnew(AcceptDialog);
 	dlg->set_name(node_name);
 	dlg->set_title(_arg_string(p_args, "title", "Alert"));
-	dlg->set_dialog_text(_arg_string(p_args, "dialog_text", ""));
+	dlg->set_text(_arg_string(p_args, "dialog_text", ""));
 	dlg->set_ok_button_text(_arg_string(p_args, "ok_button_text", "OK"));
 
 	Node *parent = _resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err);
@@ -485,7 +485,6 @@ Dictionary YeetAIDock::_tool_create_accept_dialog(const Dictionary &p_args) cons
 		parent = scene_root;
 	}
 	_add_to_scene(parent, dlg, scene_root);
-	_apply_anchor_preset_arg(dlg, p_args);
 
 	_mark_unsaved();
 	result["ok"] = true;
@@ -505,7 +504,7 @@ Dictionary YeetAIDock::_tool_create_confirmation_dialog(const Dictionary &p_args
 	ConfirmationDialog *dlg = memnew(ConfirmationDialog);
 	dlg->set_name(node_name);
 	dlg->set_title(_arg_string(p_args, "title", "Confirm"));
-	dlg->set_dialog_text(_arg_string(p_args, "dialog_text", ""));
+	dlg->set_text(_arg_string(p_args, "dialog_text", ""));
 	dlg->set_ok_button_text(_arg_string(p_args, "ok_button_text", "OK"));
 	dlg->set_cancel_button_text(_arg_string(p_args, "cancel_button_text", "Cancel"));
 

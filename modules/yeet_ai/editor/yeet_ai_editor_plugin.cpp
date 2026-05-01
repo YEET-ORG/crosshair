@@ -41,7 +41,7 @@ void YeetAIEditorPlugin::_register_crosshair_editor_setting_hints() {
 	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/azure_deployment", PROPERTY_HINT_PLACEHOLDER_TEXT, "gpt-4o", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/azure_api_version", PROPERTY_HINT_PLACEHOLDER_TEXT, "2024-06-01", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/azure_api_key", PROPERTY_HINT_PASSWORD, "", PROPERTY_USAGE_DEFAULT));
-	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/max_tokens", PROPERTY_HINT_RANGE, "256,262144,1", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/max_tokens", PROPERTY_HINT_RANGE, "0,262144,1", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/max_tool_round_trips", PROPERTY_HINT_RANGE, "1,500,1", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/chat/vision_enabled", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/max_base64_chars", PROPERTY_HINT_RANGE, "10000,10000000,1000", PROPERTY_USAGE_DEFAULT));
@@ -164,11 +164,12 @@ void YeetAIEditorPlugin::_ensure_editor_settings() {
 		settings->set_setting("yeet_ai/chat/max_tokens_legacy_bump_v2", true);
 	}
 	// Catch-all: bump any remaining low values (e.g., 786, 1024, 4096) to 32k.
+	// Preserve 0 as a special value meaning "use server default".
 	if (!settings->has_setting("yeet_ai/chat/max_tokens_legacy_bump_v3")) {
 		settings->set_initial_value("yeet_ai/chat/max_tokens_legacy_bump_v3", true, true);
 		if (settings->has_setting("yeet_ai/chat/max_tokens")) {
 			const int v = int(settings->get_setting("yeet_ai/chat/max_tokens"));
-			if (v < 16384) {
+			if (v > 0 && v < 16384) {
 				settings->set_setting("yeet_ai/chat/max_tokens", 32768);
 			}
 		}

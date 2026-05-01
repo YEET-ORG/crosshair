@@ -13,6 +13,16 @@
 #include "core/io/file_access.h"
 #include "core/io/resource_loader.h"
 #include "editor/editor_interface.h"
+#include "scene/gui/check_box.h"
+#include "scene/gui/item_list.h"
+#include "scene/gui/option_button.h"
+#include "scene/gui/progress_bar.h"
+#include "scene/gui/slider.h"
+#include "scene/gui/spin_box.h"
+#include "scene/gui/tab_container.h"
+#include "scene/gui/text_edit.h"
+#include "scene/gui/texture_progress_bar.h"
+#include "scene/gui/tree.h"
 
 // Forward declarations for helpers defined in yeet_ai_dock.cpp.
 bool is_valid_input_action_name(const String &p_name);
@@ -425,7 +435,7 @@ Dictionary YeetAIDock::_tool_connect_ui_signal(const Dictionary &p_args) const {
 			return _make_error("method_name is required when target_node_path is omitted.");
 		}
 		// Auto-generate method name: _on_<source_name>_<signal_name>
-		String src_name = source->get_name().to_lower().replace(" ", "_").replace("-", "_");
+		String src_name = String(source->get_name()).to_lower().replace(" ", "_").replace("-", "_");
 		method_name = "_on_" + src_name + "_" + signal_name;
 	}
 
