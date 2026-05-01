@@ -314,7 +314,11 @@ class YeetAIDock : public VBoxContainer {
 	String _stream_endpoint;
 	Vector<String> _stream_req_headers;
 	String _stream_req_body;
-	bool _stream_expects_sse = true; // false for non-streaming (native tool calls)
+	bool _stream_expects_sse = true;
+
+	// Streaming tool call accumulation (delta.tool_calls SSE parsing)
+	Array _stream_tool_call_accumulator; // Accumulates partial tool_calls by index
+	bool _stream_has_tool_calls = false;
 
 	void _start_streaming();
 	void _cancel_streaming();

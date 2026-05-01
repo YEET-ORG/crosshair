@@ -2320,9 +2320,6 @@ void YeetAIDock::_request_model_response() {
 			payload["tools"] = tools;
 			payload["tool_choice"] = "auto";
 			payload["parallel_tool_calls"] = true;
-			// Native tool calling is more reliable with non-streaming responses
-			// because tool_calls arrive as structured JSON, not SSE deltas.
-			_stream_expects_sse = false;
 		}
 	}
 

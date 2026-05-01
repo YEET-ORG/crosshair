@@ -103,6 +103,8 @@ void YeetAIDock::_start_streaming() {
 	_stream_error_msg = "";
 	_stream_should_stop = false;
 	_stream_active = true;
+	_stream_tool_call_accumulator.clear();
+	_stream_has_tool_calls = false;
 
 	stream_label->clear();
 	stream_label->set_visible(true);
@@ -124,6 +126,8 @@ void YeetAIDock::_cancel_streaming() {
 		_pending_chunks.clear();
 		_stream_done_flag = false;
 		_stream_error_flag = false;
+		_stream_tool_call_accumulator.clear();
+		_stream_has_tool_calls = false;
 	}
 }
 
@@ -340,41 +344,82 @@ void YeetAIDock::_stream_thread_body() {
 				continue;
 			}
 			const Dictionary delta = dv;
+
+			// ── Accumulate streaming tool calls ──────────────────────────────
+			const Array delta_tool_calls = delta.get("tool_calls", Array());
+			if (!delta_tool_calls.is_empty()) {
+				MutexLock lock(_stream_mutex);
+				_stream_has_tool_calls = true;
+				for (int ti = 0; ti < delta_tool_calls.size(); ti++) {
+					if (delta_tool_calls[ti].get_type() != Variant::DICTIONARY) {
+						continue;
+					}
+					const Dictionary tc_delta = delta_tool_calls[ti];
+					int tc_idx = tc_delta.get("index", 0);
+					while (_stream_tool_call_accumulator.size() <= tc_idx) {
+						_stream_tool_call_accumulator.append(Dictionary());
+					}
+					Dictionary accumulated = _stream_tool_call_accumulator[tc_idx];
+					if (tc_delta.has("id")) {
+						accumulated["id"] = tc_delta["id"];
+					}
+					if (tc_delta.has("type")) {
+						accumulated["type"] = tc_delta["type"];
+					}
+					if (tc_delta.has("function")) {
+						const Dictionary fn_delta = tc_delta["function"];
+						Dictionary fn = accumulated.get("function", Dictionary());
+						if (fn_delta.has("name")) {
+							fn["name"] = fn_delta["name"];
+						}
+						if (fn_delta.has("arguments")) {
+							String args = fn.get("arguments", "");
+							args += String(fn_delta["arguments"]);
+							fn["arguments"] = args;
+						}
+						accumulated["function"] = fn;
+					}
+					_stream_tool_call_accumulator[tc_idx] = accumulated;
+				}
+			}
+
+			// ── Stream text content ──────────────────────────────────────────
 			String content_chunk = delta.get("content", "");
-			if (content_chunk.is_empty()) {
-				continue;
-			}
-			// Strip non-ASCII prefix artifacts (e.g., UTF-8 keep-alive bytes like 0xC4 0x81 = "ā").
-			{
-				int start = 0;
-				while (start < content_chunk.length()) {
-					const char32_t c = content_chunk[start];
-					if (c < 32 || c > 126) {
-						start++;
-					} else {
-						break;
+			if (!content_chunk.is_empty()) {
+				// Strip non-ASCII prefix artifacts (e.g., UTF-8 keep-alive bytes like 0xC4 0x81 = "ā").
+				{
+					int start = 0;
+					while (start < content_chunk.length()) {
+						const char32_t c = content_chunk[start];
+						if (c < 32 || c > 126) {
+							start++;
+						} else {
+							break;
+						}
 					}
+					content_chunk = content_chunk.substr(start);
 				}
-				content_chunk = content_chunk.substr(start);
-			}
-			// Strip trailing null-byte artifacts and other non-printing suffixes.
-			{
-				int end = content_chunk.length();
-				while (end > 0) {
-					const char32_t c = content_chunk[end - 1];
-					if (c < 32 || c > 126) {
-						end--;
-					} else {
-						break;
+				// Strip trailing null-byte artifacts and other non-printing suffixes.
+				{
+					int end = content_chunk.length();
+					while (end > 0) {
+						const char32_t c = content_chunk[end - 1];
+						if (c < 32 || c > 126) {
+							end--;
+						} else {
+							break;
+						}
 					}
+					content_chunk = content_chunk.substr(0, end);
 				}
-				content_chunk = content_chunk.substr(0, end);
+				if (!content_chunk.is_empty()) {
+					MutexLock lock(_stream_mutex);
+					_pending_chunks.push_back(content_chunk);
+				}
 			}
-			if (content_chunk.is_empty()) {
-				continue;
-			}
-			MutexLock lock(_stream_mutex);
-			_pending_chunks.push_back(content_chunk);
+
+			// (If the chunk had neither content nor tool calls, we simply fall through
+			// to the next SSE line — no action needed.)
 		}
 	}
 
@@ -430,6 +475,30 @@ void YeetAIDock::_drain_stream_queue() {
 
 void YeetAIDock::_finalize_stream() {
 	String accumulated = _stream_accumulated;
+
+	// Check for accumulated streaming tool calls first.
+	if (_stream_has_tool_calls && !_stream_tool_call_accumulator.is_empty()) {
+		Dictionary message;
+		message["role"] = "assistant";
+		message["content"] = accumulated;
+
+		Array tool_calls;
+		for (int i = 0; i < _stream_tool_call_accumulator.size(); i++) {
+			Dictionary tc = _stream_tool_call_accumulator[i];
+			// Ensure required fields exist.
+			if (!tc.has("id")) {
+				tc["id"] = "call_stream_" + itos(i);
+			}
+			if (!tc.has("type")) {
+				tc["type"] = "function";
+			}
+			tool_calls.append(tc);
+		}
+		message["tool_calls"] = tool_calls;
+		_handle_native_tool_calls(message);
+		return;
+	}
+
 	// Clean artifacts and check for empty response before processing.
 	if (accumulated.strip_edges().is_empty()) {
 		_set_waiting(false, TTR("Ready"));
@@ -442,9 +511,9 @@ void YeetAIDock::_finalize_stream() {
 		Ref<JSON> json;
 		json.instantiate();
 		if (json->parse(accumulated) == OK) {
-			const Variant data = json->get_data();
-			if (data.get_type() == Variant::DICTIONARY) {
-				const Dictionary response = data;
+			const Variant parsed_data = json->get_data();
+			if (parsed_data.get_type() == Variant::DICTIONARY) {
+				const Dictionary response = parsed_data;
 				const Array choices = response.get("choices", Array());
 				if (!choices.is_empty() && choices[0].get_type() == Variant::DICTIONARY) {
 					const Dictionary choice = choices[0];
