@@ -487,7 +487,7 @@ void YeetAIDock::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("_trim_to_fit", "new_message_tokens"), &YeetAIDock::_trim_to_fit);
 	ClassDB::bind_method(D_METHOD("_get_windowed_messages_count"), &YeetAIDock::_get_windowed_messages_count);
 
-	ClassDB::bind_method(D_METHOD("_record_tool_execution", "tool_name", "duration_ms", "success", "was_retry"), &YeetAIDock::_record_tool_execution);
+	ClassDB::bind_method(D_METHOD("_record_tool_execution", "tool_name", "duration_ms", "success", "was_retry", "was_cached"), &YeetAIDock::_record_tool_execution);
 	ClassDB::bind_method(D_METHOD("_export_metrics_summary"), &YeetAIDock::_export_metrics_summary);
 	ClassDB::bind_method(D_METHOD("_reset_metrics"), &YeetAIDock::_reset_metrics);
 
@@ -1198,7 +1198,7 @@ void YeetAIDock::_sync_active_chat_state() {
 
 // ── Metrics Collector ──────────────────────────────────────────────────────
 
-void YeetAIDock::_record_tool_execution(const String &tool_name, int64_t duration_ms, bool success, bool was_retry) {
+void YeetAIDock::_record_tool_execution(const String &tool_name, int64_t duration_ms, bool success, bool was_retry, bool was_cached) {
 	ToolMetrics &metrics = _tool_metrics[tool_name];
 	metrics.calls++;
 	if (!success) {
@@ -1206,6 +1206,9 @@ void YeetAIDock::_record_tool_execution(const String &tool_name, int64_t duratio
 	}
 	if (was_retry) {
 		metrics.retries++;
+	}
+	if (was_cached) {
+		metrics.cache_hits++;
 	}
 	metrics.total_time_ms += duration_ms;
 	if (metrics.calls > 0) {
@@ -1388,6 +1391,32 @@ void YeetAIDock::_execute_batch_as_single_call(const Vector<BatchOpportunity> &o
 	_current_batch_execution.error_count = 0;
 	_current_batch_execution.stop_on_error = false;
 
+	// Pre-filter: if all ops are read-only and cached, skip execution entirely
+	bool all_cached = true;
+	for (int i = 0; i < ops.size(); i++) {
+		bool is_read_only = ops[i].tool_name.begins_with("get_") || ops[i].tool_name.begins_with("validate_");
+		if (!is_read_only) {
+			all_cached = false;
+			break;
+		}
+		String cache_key = _generate_cache_key(ops[i].tool_name, ops[i].args);
+		Dictionary cached = _get_cached_result(cache_key);
+		if (cached.is_empty()) {
+			all_cached = false;
+			break;
+		}
+	}
+
+	if (all_cached) {
+		// All results are cached - no need to execute batch
+		_current_batch_execution.completed_count = ops.size();
+		_current_batch_execution.is_executing = false;
+		for (int i = 0; i < ops.size(); i++) {
+			_record_tool_execution(ops[i].tool_name, 0, true, true); // cached = true
+		}
+		return;
+	}
+
 	// Create a single batch tool call with all operations
 	Dictionary batch_call;
 	batch_call["tool_calls"] = Array();
@@ -1421,20 +1450,46 @@ void YeetAIDock::_execute_batch_as_single_call(const Vector<BatchOpportunity> &o
 }
 
 bool YeetAIDock::_can_optimize_to_batch(const String &tool_name, const Dictionary &args) const {
- 	// Check if this tool can be batched with others
- 	const Vector<String> batchable_tools = {
- 		"set_node_property",
- 		"add_node",
- 		"set_node_collision_layers"
- 	};
+	// Check if this tool can be batched with others.
+	// Read-only tools are always batchable (safe to deduplicate).
+	if (tool_name.begins_with("get_") || tool_name.begins_with("validate_")) {
+		return true;
+	}
 
- 	for (const String &bt : batchable_tools) {
- 		if (tool_name == bt) {
- 			return true;
- 		}
- 	}
- 	return false;
- }
+	// Check schema registry for batching support
+	const ToolSchema *schema = YeetAIToolSchemaRegistry::get_schema(tool_name);
+	if (schema != nullptr && schema->supports_batching) {
+		return true;
+	}
+
+	// Fallback: Scene construction and property mutation tools are batchable when
+	// they operate on independent nodes.
+	static const char *batchable_tools[] = {
+		"set_node_property",
+		"add_node",
+		"set_node_collision_layers",
+		"add_collision_shape",
+		"add_collision_shape_2d",
+		"add_primitive_mesh",
+		"connect_signal",
+		"attach_script",
+		"create_standard_material",
+		"assign_resource_to_property",
+		"set_control_layout",
+		"set_control_theme_override",
+		"set_node_meta",
+		"move_child",
+		"duplicate_node",
+		nullptr
+	};
+
+	for (int i = 0; batchable_tools[i] != nullptr; i++) {
+		if (tool_name == batchable_tools[i]) {
+			return true;
+		}
+	}
+	return false;
+}
 
 // ── Tool Call Timeout Handling ────────────────────────────────────────────
 
@@ -3993,7 +4048,27 @@ void YeetAIDock::_build_agent_presets() {
 	AgentPreset game_builder;
 	game_builder.id = "game_builder";
 	game_builder.name = TTR("Game");
-	game_builder.system_suffix = "\nYou are in game-building mode. Treat requests as playable slices, not decorative scenes. Build complete actors with input, scripts, camera/viewport context, visuals, collision layers/masks, and direct CollisionShape children sized to match visuals. Prefer create_game_actor_2d/create_game_actor_3d for gameplay entities. Required loop before final: save, audit_game_physics, repair/fix and audit again, play, capture_game_viewport, get_runtime_debugger_state, stop_playing_scene.";
+	game_builder.system_suffix = "\nYou are in game-building mode. Treat requests as PLAYABLE GAMES, not art scenes. Every game MUST have:\n"
+		"1. CLEAR OBJECTIVE: player must know what to do (collect X, reach Y, survive Z seconds)\n"
+		"2. WIN/LOSE STATES: detect victory/loss conditions and show appropriate screens/messages\n"
+		"3. INPUT HANDLING: movement, actions, UI navigation — test that every input works\n"
+		"4. CAMERA: follows player, stays in level bounds, never shows void\n"
+		"5. COLLISION: every interactive object has collision. Zero invisible walls or missing floors\n"
+		"6. SPRITES: use hframes/vframes for sprite sheets. NEVER load a sprite sheet as a plain texture\n"
+		"7. TILEMAPS: use create_tile_map → create_tilemap_layer → fill_tilemap_rect workflow\n"
+		"8. POLISH: particles on collect, screen flash on damage, score display, health/hearts UI\n"
+		"9. SOUND: placeholder AudioStreamPlayer nodes where sounds should go (even if no files yet)\n"
+		"10. PERFORMANCE: reasonable texture sizes, no 4K sprites for 16px games\n"
+		"\n"
+		"Before final answer, you MUST:\n"
+		"- Save all scenes\n"
+		"- Run audit_game_physics and fix ALL issues\n"
+		"- Play the scene with play_current_scene\n"
+		"- Capture viewport with capture_game_viewport\n"
+		"- Check debugger with get_runtime_debugger_state — ZERO errors allowed\n"
+		"- Stop with stop_playing_scene\n"
+		"\n"
+		"If ANY step fails, fix it. Do not deliver broken games.";
 	_agent_presets.push_back(game_builder);
 
 	AgentPreset architect;
@@ -4924,7 +4999,7 @@ void YeetAIDock::_analyze_batch_opportunity(const String &tool_name, const Dicti
 		return;
 	}
 
-	// Determine dependency group
+	// Determine dependency group for smarter batching
 	String dep_group;
 	if (tool_name.contains("create_") || tool_name.contains("add_")) {
 		dep_group = "scene_construction";
@@ -4932,12 +5007,34 @@ void YeetAIDock::_analyze_batch_opportunity(const String &tool_name, const Dicti
 		dep_group = "property_setting";
 	} else if (tool_name == "connect_signal") {
 		dep_group = "signal_connection";
+	} else if (tool_name.begins_with("get_") || tool_name.begins_with("validate_")) {
+		dep_group = "read_only";
+	} else if (tool_name.contains("collision") || tool_name.contains("physics")) {
+		dep_group = "physics";
 	} else {
 		dep_group = "other";
 	}
 
 	// Check if we can batch with previous operation
-	if (!_pending_batch_ops.is_empty() && _can_batch_with_previous(_pending_batch_ops[_pending_batch_ops.size() - 1].tool_name, tool_name)) {
+	bool can_batch = !_pending_batch_ops.is_empty() && 
+		_can_batch_with_previous(_pending_batch_ops[_pending_batch_ops.size() - 1].tool_name, tool_name);
+	
+	// Also check dependency group compatibility
+	if (can_batch && !_pending_batch_ops.is_empty()) {
+		const String &prev_group = _pending_batch_ops[_pending_batch_ops.size() - 1].dependency_group;
+		// read_only can mix with anything safely, otherwise groups should match
+		if (prev_group != "read_only" && dep_group != "read_only" && prev_group != dep_group) {
+			can_batch = false;
+		}
+	}
+
+	// Flush if batch is getting too large (max 32 ops for efficiency)
+	const int MAX_BATCH_SIZE = 32;
+	if (can_batch && _pending_batch_ops.size() >= MAX_BATCH_SIZE) {
+		can_batch = false;
+	}
+
+	if (can_batch) {
 		// Can batch - add to pending
 		BatchOpportunity op;
 		op.tool_name = tool_name;
@@ -4965,6 +5062,13 @@ bool YeetAIDock::_can_batch_with_previous(const String &current_tool, const Stri
 		return false;
 	}
 
+	// Read-only tools can always be batched together
+	bool prev_is_readonly = prev_tool.begins_with("get_") || prev_tool.begins_with("validate_");
+	bool curr_is_readonly = current_tool.begins_with("get_") || current_tool.begins_with("validate_");
+	if (prev_is_readonly && curr_is_readonly) {
+		return true;
+	}
+
 	// Script operations must not be mixed with scene operations
 	bool prev_is_script = prev_tool.contains("gdscript") || prev_tool.contains("script");
 	bool curr_is_script = current_tool.contains("gdscript") || current_tool.contains("script");
@@ -4981,6 +5085,18 @@ bool YeetAIDock::_can_batch_with_previous(const String &current_tool, const Stri
 
 	// Property setting operations can be batched
 	if (prev_tool == "set_node_property" && current_tool == "set_node_property") {
+		return true;
+	}
+
+	// Collision and physics setup operations can be batched
+	if ((prev_tool == "add_collision_shape" || prev_tool == "add_collision_shape_2d") &&
+		(current_tool == "add_collision_shape" || current_tool == "add_collision_shape_2d")) {
+		return true;
+	}
+
+	// Material and resource assignment can be batched
+	if ((prev_tool == "create_standard_material" || prev_tool == "assign_resource_to_property") &&
+		(current_tool == "create_standard_material" || current_tool == "assign_resource_to_property")) {
 		return true;
 	}
 

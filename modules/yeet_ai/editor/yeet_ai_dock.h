@@ -202,6 +202,7 @@ class YeetAIDock : public VBoxContainer {
 		int calls = 0;
 		int errors = 0;
 		int retries = 0;
+		int cache_hits = 0;
 		int64_t total_time_ms = 0;
 		double avg_time_ms = 0.0;
 	};
@@ -218,7 +219,7 @@ class YeetAIDock : public VBoxContainer {
 	mutable HashMap<String, ToolMetrics> _tool_metrics;
 	mutable SessionMetrics _session_metrics;
 	
-	void _record_tool_execution(const String &tool_name, int64_t duration_ms, bool success, bool was_retry);
+	void _record_tool_execution(const String &tool_name, int64_t duration_ms, bool success, bool was_retry, bool was_cached = false);
 	Dictionary _export_metrics_summary() const;
 	void _reset_metrics();
 	
@@ -534,6 +535,7 @@ protected:
 	// ── B. 2D Scene Construction ──────────────────────────────────────────────
 	Dictionary _tool_create_sprite_2d(const Dictionary &p_args) const;
 	Dictionary _tool_create_animated_sprite_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_sprite_frames(const Dictionary &p_args) const;
 	Dictionary _tool_create_rigid_body_2d(const Dictionary &p_args) const;
 	Dictionary _tool_create_character_body_2d(const Dictionary &p_args) const;
 	Dictionary _tool_create_static_body_2d(const Dictionary &p_args) const;
@@ -564,6 +566,16 @@ protected:
 	Dictionary _tool_create_tween(const Dictionary &p_args) const;
 	Dictionary _tool_create_path_follow_2d(const Dictionary &p_args) const;
 	Dictionary _tool_query_raycast_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_light_occluder_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_canvas_modulate(const Dictionary &p_args) const;
+	Dictionary _tool_create_skeleton_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_bone_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_pin_joint_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_damped_spring_joint_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_multimesh_instance_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_touch_screen_button(const Dictionary &p_args) const;
+	Dictionary _tool_create_subviewport(const Dictionary &p_args) const;
+	Dictionary _tool_create_mesh_instance_2d(const Dictionary &p_args) const;
 	Dictionary _tool_create_button(const Dictionary &p_args) const;
 	Dictionary _tool_create_label(const Dictionary &p_args) const;
 	Dictionary _tool_create_texture_rect(const Dictionary &p_args) const;
@@ -602,6 +614,8 @@ protected:
 	Dictionary _tool_add_tileset_atlas_source(const Dictionary &p_args) const;
 	Dictionary _tool_set_tile_collision_polygon(const Dictionary &p_args) const;
 	Dictionary _tool_paint_terrain(const Dictionary &p_args) const;
+	Dictionary _tool_create_tilemap_layer(const Dictionary &p_args) const;
+	Dictionary _tool_fill_tilemap_rect(const Dictionary &p_args) const;
 
 	// ── E. Physics ────────────────────────────────────────────────────────────
 	Dictionary _tool_set_collision_layer_mask(const Dictionary &p_args) const;

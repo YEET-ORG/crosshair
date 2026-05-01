@@ -77,6 +77,29 @@ Dictionary YeetAIDock::_tool_create_sprite_2d(const Dictionary &p_args) const {
 		}
 	}
 
+	// Sprite sheet support: hframes/vframes for grid-based sprite sheets
+	const int hframes = _arg_int(p_args, "hframes", 1);
+	const int vframes = _arg_int(p_args, "vframes", 1);
+	if (hframes > 1 || vframes > 1) {
+		sprite->set_hframes(hframes);
+		sprite->set_vframes(vframes);
+		const int frame = _arg_int(p_args, "frame", 0);
+		sprite->set_frame(frame);
+	}
+
+	// Region support for atlas/spritesheet sub-regions
+	const bool use_region = _arg_bool(p_args, "use_region", false);
+	if (use_region) {
+		const int region_x = _arg_int(p_args, "region_x", 0);
+		const int region_y = _arg_int(p_args, "region_y", 0);
+		const int region_w = _arg_int(p_args, "region_w", 0);
+		const int region_h = _arg_int(p_args, "region_h", 0);
+		if (region_w > 0 && region_h > 0) {
+			sprite->set_region_enabled(true);
+			sprite->set_region_rect(Rect2(region_x, region_y, region_w, region_h));
+		}
+	}
+
 	Node2D *parent = Object::cast_to<Node2D>(_resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err));
 	if (parent == nullptr) {
 		parent = Object::cast_to<Node2D>(scene_root);
@@ -845,6 +868,72 @@ Dictionary YeetAIDock::_tool_create_animated_sprite_2d(const Dictionary &p_args)
 	return result;
 }
 
+Dictionary YeetAIDock::_tool_create_sprite_frames(const Dictionary &p_args) const {
+	const String save_path = _arg_string(p_args, "save_path", "");
+	if (!save_path.begins_with("res://")) {
+		return _make_error("save_path must start with res://");
+	}
+
+	const String texture_path = _arg_string(p_args, "texture_path", "");
+	if (texture_path.is_empty()) {
+		return _make_error("texture_path is required");
+	}
+
+	Ref<Texture2D> texture = ResourceLoader::load(texture_path, "Texture2D");
+	if (texture.is_null()) {
+		return _make_error("Failed to load texture: " + texture_path);
+	}
+
+	const int hframes = _arg_int(p_args, "hframes", 1);
+	const int vframes = _arg_int(p_args, "vframes", 1);
+	if (hframes < 1 || vframes < 1) {
+		return _make_error("hframes and vframes must be >= 1");
+	}
+
+	Ref<SpriteFrames> frames;
+	frames.instantiate();
+
+	// Get animation name (default "default")
+	const String anim_name = _arg_string(p_args, "animation_name", "default");
+	const float fps = _arg_float(p_args, "fps", 5.0);
+
+	// Calculate frame size from texture and grid
+	const int tex_w = texture->get_width();
+	const int tex_h = texture->get_height();
+	const int frame_w = tex_w / hframes;
+	const int frame_h = tex_h / vframes;
+
+	if (frame_w <= 0 || frame_h <= 0) {
+		return _make_error(vformat("Texture size (%dx%d) too small for grid (%dx%d)", tex_w, tex_h, hframes, vframes));
+	}
+
+	// Create AtlasTexture for each frame and add to animation
+	for (int y = 0; y < vframes; y++) {
+		for (int x = 0; x < hframes; x++) {
+			Ref<AtlasTexture> at;
+			at.instantiate();
+			at->set_atlas(texture);
+			at->set_region(Rect2(x * frame_w, y * frame_h, frame_w, frame_h));
+			frames->add_frame(anim_name, at);
+		}
+	}
+
+	frames->set_animation_speed(anim_name, fps);
+	frames->set_animation_loop(anim_name, _arg_bool(p_args, "loop", true));
+
+	const Error save_err = ResourceSaver::save(frames, save_path);
+	if (save_err != OK) {
+		return _make_error(vformat("Failed to save SpriteFrames: error %d", save_err));
+	}
+
+	Dictionary extra;
+	extra["save_path"] = save_path;
+	extra["animation_name"] = anim_name;
+	extra["frame_count"] = hframes * vframes;
+	extra["frame_size"] = vformat("%dx%d", frame_w, frame_h);
+	return _make_ok(extra);
+}
+
 Dictionary YeetAIDock::_tool_create_rigid_body_2d(const Dictionary &p_args) const {
 	Dictionary result;
 	String err;
@@ -1386,6 +1475,386 @@ Dictionary YeetAIDock::_tool_create_cpu_particles_2d(const Dictionary &p_args) c
 	_mark_unsaved();
 	result["ok"] = true;
 	result["node_path"] = String(particles->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_light_occluder_2d(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "LightOccluder2D");
+
+	LightOccluder2D *occluder = memnew(LightOccluder2D);
+	occluder->set_name(node_name);
+
+	// Build polygon from points
+	Array points = _arg_array(p_args, "polygon_points");
+	if (!points.is_empty()) {
+		Vector<Vector2> polygon;
+		for (int i = 0; i < points.size(); i++) {
+			Dictionary pd = points[i];
+			polygon.push_back(Vector2(_arg_float(pd, "x", 0.0), _arg_float(pd, "y", 0.0)));
+		}
+		Ref<OccluderPolygon2D> oc_poly;
+		oc_poly.instantiate();
+		oc_poly->set_polygon(polygon);
+		occluder->set_occluder_polygon(oc_poly);
+	}
+
+	// Optional: closed polygon
+	if (_arg_bool(p_args, "closed", true)) {
+		Ref<OccluderPolygon2D> oc = occluder->get_occluder_polygon();
+		if (oc.is_valid()) {
+			oc->set_closed(true);
+		}
+	}
+
+	Node2D *parent = Object::cast_to<Node2D>(_resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err));
+	if (parent == nullptr) {
+		parent = Object::cast_to<Node2D>(scene_root);
+	}
+	_add_to_scene(parent, occluder, scene_root);
+	occluder->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(occluder->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_canvas_modulate(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "CanvasModulate");
+
+	CanvasModulate *cm = memnew(CanvasModulate);
+	cm->set_name(node_name);
+	cm->set_color(_arg_color(p_args, "color", Color(1, 1, 1)));
+
+	Node *parent = _resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err);
+	if (parent == nullptr) {
+		parent = scene_root;
+	}
+	_add_to_scene(parent, cm, scene_root);
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(cm->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_skeleton_2d(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "Skeleton2D");
+
+	Skeleton2D *skel = memnew(Skeleton2D);
+	skel->set_name(node_name);
+
+	Node2D *parent = Object::cast_to<Node2D>(_resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err));
+	if (parent == nullptr) {
+		parent = Object::cast_to<Node2D>(scene_root);
+	}
+	_add_to_scene(parent, skel, scene_root);
+	skel->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(skel->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_bone_2d(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "Bone2D");
+
+	Bone2D *bone = memnew(Bone2D);
+	bone->set_name(node_name);
+	bone->set_rest_length(_arg_float(p_args, "rest_length", 16.0));
+
+	// Optional auto-calculate length
+	if (_arg_bool(p_args, "auto_calculate_length", true)) {
+		bone->set_auto_calculate_length_and_angle(true);
+	} else {
+		bone->set_auto_calculate_length_and_angle(false);
+		bone->set_length(_arg_float(p_args, "length", 16.0));
+	}
+
+	Node2D *parent = Object::cast_to<Node2D>(_resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err));
+	if (parent == nullptr) {
+		parent = Object::cast_to<Node2D>(scene_root);
+	}
+	_add_to_scene(parent, bone, scene_root);
+	bone->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(bone->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_pin_joint_2d(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "PinJoint2D");
+
+	PinJoint2D *joint = memnew(PinJoint2D);
+	joint->set_name(node_name);
+
+	// Connect to two physics bodies
+	const String node_a = _arg_string(p_args, "node_a", "");
+	const String node_b = _arg_string(p_args, "node_b", "");
+	if (!node_a.is_empty()) {
+		Node *na = _resolve_node_target(scene_root, node_a, err);
+		if (na != nullptr) {
+			joint->set_node_a(na->get_path());
+		}
+	}
+	if (!node_b.is_empty()) {
+		Node *nb = _resolve_node_target(scene_root, node_b, err);
+		if (nb != nullptr) {
+			joint->set_node_b(nb->get_path());
+		}
+	}
+
+	joint->set_softness(_arg_float(p_args, "softness", 0.0));
+	joint->set_bias(_arg_float(p_args, "bias", 0.0));
+
+	Node2D *parent = Object::cast_to<Node2D>(_resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err));
+	if (parent == nullptr) {
+		parent = Object::cast_to<Node2D>(scene_root);
+	}
+	_add_to_scene(parent, joint, scene_root);
+	joint->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(joint->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_damped_spring_joint_2d(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "DampedSpringJoint2D");
+
+	DampedSpringJoint2D *joint = memnew(DampedSpringJoint2D);
+	joint->set_name(node_name);
+
+	const String node_a = _arg_string(p_args, "node_a", "");
+	const String node_b = _arg_string(p_args, "node_b", "");
+	if (!node_a.is_empty()) {
+		Node *na = _resolve_node_target(scene_root, node_a, err);
+		if (na != nullptr) {
+			joint->set_node_a(na->get_path());
+		}
+	}
+	if (!node_b.is_empty()) {
+		Node *nb = _resolve_node_target(scene_root, node_b, err);
+		if (nb != nullptr) {
+			joint->set_node_b(nb->get_path());
+		}
+	}
+
+	joint->set_length(_arg_float(p_args, "length", 16.0));
+	joint->set_stiffness(_arg_float(p_args, "stiffness", 20.0));
+	joint->set_damping(_arg_float(p_args, "damping", 1.5));
+	joint->set_rest_length(_arg_float(p_args, "rest_length", 16.0));
+
+	Node2D *parent = Object::cast_to<Node2D>(_resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err));
+	if (parent == nullptr) {
+		parent = Object::cast_to<Node2D>(scene_root);
+	}
+	_add_to_scene(parent, joint, scene_root);
+	joint->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(joint->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_multimesh_instance_2d(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "MultiMeshInstance2D");
+
+	MultiMeshInstance2D *mmi = memnew(MultiMeshInstance2D);
+	mmi->set_name(node_name);
+
+	Ref<MultiMesh> mm;
+	mm.instantiate();
+	mm->set_transform_format(MultiMesh::TRANSFORM_2D);
+	mm->set_use_colors(true);
+	mm->set_use_custom_data(false);
+
+	// Optional: set mesh and instance count
+	const String mesh_path = _arg_string(p_args, "mesh_path", "");
+	if (!mesh_path.is_empty()) {
+		Ref<Mesh> mesh = ResourceLoader::load(mesh_path);
+		if (mesh.is_valid()) {
+			mm->set_mesh(mesh);
+		}
+	}
+
+	const int instance_count = _arg_int(p_args, "instance_count", 0);
+	if (instance_count > 0) {
+		mm->set_instance_count(instance_count);
+	}
+
+	mmi->set_multimesh(mm);
+
+	Node2D *parent = Object::cast_to<Node2D>(_resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err));
+	if (parent == nullptr) {
+		parent = Object::cast_to<Node2D>(scene_root);
+	}
+	_add_to_scene(parent, mmi, scene_root);
+	mmi->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(mmi->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_touch_screen_button(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "TouchScreenButton");
+
+	TouchScreenButton *btn = memnew(TouchScreenButton);
+	btn->set_name(node_name);
+
+	const String texture_path = _arg_string(p_args, "texture_path", "");
+	if (!texture_path.is_empty()) {
+		Ref<Texture2D> tex = ResourceLoader::load(texture_path);
+		if (tex.is_valid()) {
+			btn->set_texture_normal(tex);
+		}
+	}
+
+	const String pressed_path = _arg_string(p_args, "pressed_texture_path", "");
+	if (!pressed_path.is_empty()) {
+		Ref<Texture2D> tex = ResourceLoader::load(pressed_path);
+		if (tex.is_valid()) {
+			btn->set_texture_pressed(tex);
+		}
+	}
+
+	btn->set_passby_press(_arg_bool(p_args, "passby_press", false));
+	btn->set_visibility_mode(_arg_bool(p_args, "always_visible", true) ? TouchScreenButton::VISIBILITY_ALWAYS : TouchScreenButton::VISIBILITY_TOUCHSCREEN_ONLY);
+
+	Node2D *parent = Object::cast_to<Node2D>(_resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err));
+	if (parent == nullptr) {
+		parent = Object::cast_to<Node2D>(scene_root);
+	}
+	_add_to_scene(parent, btn, scene_root);
+	btn->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(btn->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_subviewport(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "SubViewport");
+
+	SubViewport *vp = memnew(SubViewport);
+	vp->set_name(node_name);
+	vp->set_size(Vector2i(_arg_int(p_args, "width", 512), _arg_int(p_args, "height", 512)));
+	vp->set_disable_3d(_arg_bool(p_args, "disable_3d", true));
+	vp->set_clear_mode(SubViewport::CLEAR_MODE_ALWAYS);
+	vp->set_update_mode(SubViewport::UPDATE_ALWAYS);
+
+	Node *parent = _resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err);
+	if (parent == nullptr) {
+		parent = scene_root;
+	}
+	_add_to_scene(parent, vp, scene_root);
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(vp->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_create_mesh_instance_2d(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "MeshInstance2D");
+
+	MeshInstance2D *mi = memnew(MeshInstance2D);
+	mi->set_name(node_name);
+
+	const String mesh_path = _arg_string(p_args, "mesh_path", "");
+	if (!mesh_path.is_empty()) {
+		Ref<Mesh> mesh = ResourceLoader::load(mesh_path);
+		if (mesh.is_valid()) {
+			mi->set_mesh(mesh);
+		}
+	}
+
+	const String texture_path = _arg_string(p_args, "texture_path", "");
+	if (!texture_path.is_empty()) {
+		Ref<Texture2D> tex = ResourceLoader::load(texture_path);
+		if (tex.is_valid()) {
+			mi->set_texture(tex);
+		}
+	}
+
+	Node2D *parent = Object::cast_to<Node2D>(_resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err));
+	if (parent == nullptr) {
+		parent = Object::cast_to<Node2D>(scene_root);
+	}
+	_add_to_scene(parent, mi, scene_root);
+	mi->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(mi->get_path());
 	return result;
 }
 

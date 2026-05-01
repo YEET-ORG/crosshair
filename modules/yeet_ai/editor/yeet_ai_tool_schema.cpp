@@ -2479,6 +2479,105 @@ const HashMap<String, ToolSchema> &YeetAIToolSchemaRegistry::get_all_schemas() {
 
 	{
 		ToolSchema schema;
+		schema.tool_name = "create_tilemap_layer";
+		schema.description = "Create a TileMapLayer node (Godot 4 uses layers as children of TileMap)";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("Layer0");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_pos;
+		arg_pos.name = "position";
+		arg_pos.type_hint = Variant::VECTOR2;
+		arg_pos.required = false;
+		schema.arguments.push_back(arg_pos);
+
+		ToolArgSchema arg_tileset;
+		arg_tileset.name = "tileset_path";
+		arg_tileset.type_hint = Variant::STRING;
+		arg_tileset.required = false;
+		schema.arguments.push_back(arg_tileset);
+
+		schemas["create_tilemap_layer"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "fill_tilemap_rect";
+		schema.description = "Fill a rectangular area with the same tile";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_path;
+		arg_path.name = "node_path";
+		arg_path.type_hint = Variant::STRING;
+		arg_path.required = true;
+		arg_path.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_path);
+
+		ToolArgSchema arg_from_x;
+		arg_from_x.name = "from_x";
+		arg_from_x.type_hint = Variant::INT;
+		arg_from_x.required = true;
+		schema.arguments.push_back(arg_from_x);
+
+		ToolArgSchema arg_from_y;
+		arg_from_y.name = "from_y";
+		arg_from_y.type_hint = Variant::INT;
+		arg_from_y.required = true;
+		schema.arguments.push_back(arg_from_y);
+
+		ToolArgSchema arg_to_x;
+		arg_to_x.name = "to_x";
+		arg_to_x.type_hint = Variant::INT;
+		arg_to_x.required = true;
+		schema.arguments.push_back(arg_to_x);
+
+		ToolArgSchema arg_to_y;
+		arg_to_y.name = "to_y";
+		arg_to_y.type_hint = Variant::INT;
+		arg_to_y.required = true;
+		schema.arguments.push_back(arg_to_y);
+
+		ToolArgSchema arg_source;
+		arg_source.name = "source_id";
+		arg_source.type_hint = Variant::INT;
+		arg_source.required = true;
+		schema.arguments.push_back(arg_source);
+
+		ToolArgSchema arg_atlas_x;
+		arg_atlas_x.name = "atlas_coords_x";
+		arg_atlas_x.type_hint = Variant::INT;
+		arg_atlas_x.required = false;
+		arg_atlas_x.default_value = -1;
+		schema.arguments.push_back(arg_atlas_x);
+
+		ToolArgSchema arg_atlas_y;
+		arg_atlas_y.name = "atlas_coords_y";
+		arg_atlas_y.type_hint = Variant::INT;
+		arg_atlas_y.required = false;
+		arg_atlas_y.default_value = -1;
+		schema.arguments.push_back(arg_atlas_y);
+
+		schemas["fill_tilemap_rect"] = schema;
+	}
+
+	{
+		ToolSchema schema;
 		schema.tool_name = "create_marker_2d";
 		schema.description = "Create a Marker2D node for positional markers and spawn points";
 		schema.requires_scene = true;
@@ -2836,6 +2935,156 @@ const HashMap<String, ToolSchema> &YeetAIToolSchemaRegistry::get_all_schemas() {
 
 	{
 		ToolSchema schema;
+		schema.tool_name = "create_sprite_2d";
+		schema.description = "Create a Sprite2D node. For sprite sheets, set hframes+vframes+frame. For atlas sub-regions, set use_region+region_x/y/w/h.";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("Sprite2D");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_texture;
+		arg_texture.name = "texture_path";
+		arg_texture.type_hint = Variant::STRING;
+		arg_texture.required = false;
+		schema.arguments.push_back(arg_texture);
+
+		ToolArgSchema arg_hframes;
+		arg_hframes.name = "hframes";
+		arg_hframes.type_hint = Variant::INT;
+		arg_hframes.required = false;
+		arg_hframes.default_value = 1;
+		schema.arguments.push_back(arg_hframes);
+
+		ToolArgSchema arg_vframes;
+		arg_vframes.name = "vframes";
+		arg_vframes.type_hint = Variant::INT;
+		arg_vframes.required = false;
+		arg_vframes.default_value = 1;
+		schema.arguments.push_back(arg_vframes);
+
+		ToolArgSchema arg_frame;
+		arg_frame.name = "frame";
+		arg_frame.type_hint = Variant::INT;
+		arg_frame.required = false;
+		arg_frame.default_value = 0;
+		schema.arguments.push_back(arg_frame);
+
+		ToolArgSchema arg_centered;
+		arg_centered.name = "centered";
+		arg_centered.type_hint = Variant::BOOL;
+		arg_centered.required = false;
+		arg_centered.default_value = true;
+		schema.arguments.push_back(arg_centered);
+
+		ToolArgSchema arg_use_region;
+		arg_use_region.name = "use_region";
+		arg_use_region.type_hint = Variant::BOOL;
+		arg_use_region.required = false;
+		arg_use_region.default_value = false;
+		schema.arguments.push_back(arg_use_region);
+
+		ToolArgSchema arg_region_x;
+		arg_region_x.name = "region_x";
+		arg_region_x.type_hint = Variant::INT;
+		arg_region_x.required = false;
+		arg_region_x.default_value = 0;
+		schema.arguments.push_back(arg_region_x);
+
+		ToolArgSchema arg_region_y;
+		arg_region_y.name = "region_y";
+		arg_region_y.type_hint = Variant::INT;
+		arg_region_y.required = false;
+		arg_region_y.default_value = 0;
+		schema.arguments.push_back(arg_region_y);
+
+		ToolArgSchema arg_region_w;
+		arg_region_w.name = "region_w";
+		arg_region_w.type_hint = Variant::INT;
+		arg_region_w.required = false;
+		arg_region_w.default_value = 0;
+		schema.arguments.push_back(arg_region_w);
+
+		ToolArgSchema arg_region_h;
+		arg_region_h.name = "region_h";
+		arg_region_h.type_hint = Variant::INT;
+		arg_region_h.required = false;
+		arg_region_h.default_value = 0;
+		schema.arguments.push_back(arg_region_h);
+
+		schemas["create_sprite_2d"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_sprite_frames";
+		schema.description = "Create a SpriteFrames resource from a sprite sheet grid for use with AnimatedSprite2D";
+		schema.requires_scene = false;
+		schema.is_write_operation = true;
+		schema.supports_batching = false;
+
+		ToolArgSchema arg_save;
+		arg_save.name = "save_path";
+		arg_save.type_hint = Variant::STRING;
+		arg_save.required = true;
+		schema.arguments.push_back(arg_save);
+
+		ToolArgSchema arg_texture;
+		arg_texture.name = "texture_path";
+		arg_texture.type_hint = Variant::STRING;
+		arg_texture.required = true;
+		schema.arguments.push_back(arg_texture);
+
+		ToolArgSchema arg_hframes;
+		arg_hframes.name = "hframes";
+		arg_hframes.type_hint = Variant::INT;
+		arg_hframes.required = true;
+		schema.arguments.push_back(arg_hframes);
+
+		ToolArgSchema arg_vframes;
+		arg_vframes.name = "vframes";
+		arg_vframes.type_hint = Variant::INT;
+		arg_vframes.required = true;
+		schema.arguments.push_back(arg_vframes);
+
+		ToolArgSchema arg_anim;
+		arg_anim.name = "animation_name";
+		arg_anim.type_hint = Variant::STRING;
+		arg_anim.required = false;
+		arg_anim.default_value = String("default");
+		schema.arguments.push_back(arg_anim);
+
+		ToolArgSchema arg_fps;
+		arg_fps.name = "fps";
+		arg_fps.type_hint = Variant::FLOAT;
+		arg_fps.required = false;
+		arg_fps.default_value = 5.0;
+		schema.arguments.push_back(arg_fps);
+
+		ToolArgSchema arg_loop;
+		arg_loop.name = "loop";
+		arg_loop.type_hint = Variant::BOOL;
+		arg_loop.required = false;
+		arg_loop.default_value = true;
+		schema.arguments.push_back(arg_loop);
+
+		schemas["create_sprite_frames"] = schema;
+	}
+
+	{
+		ToolSchema schema;
 		schema.tool_name = "create_path_follow_2d";
 		schema.description = "Create a PathFollow2D node for moving objects along a Path2D";
 		schema.requires_scene = true;
@@ -2885,6 +3134,419 @@ const HashMap<String, ToolSchema> &YeetAIToolSchemaRegistry::get_all_schemas() {
 		schema.arguments.push_back(arg_child_type);
 
 		schemas["create_path_follow_2d"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_light_occluder_2d";
+		schema.description = "Create a LightOccluder2D for 2D shadows. Requires polygon_points.";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("LightOccluder2D");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_points;
+		arg_points.name = "polygon_points";
+		arg_points.type_hint = Variant::ARRAY;
+		arg_points.required = false;
+		arg_points.description = "Array of {x,y} points defining the occluder polygon";
+		schema.arguments.push_back(arg_points);
+
+		ToolArgSchema arg_closed;
+		arg_closed.name = "closed";
+		arg_closed.type_hint = Variant::BOOL;
+		arg_closed.required = false;
+		arg_closed.default_value = true;
+		schema.arguments.push_back(arg_closed);
+
+		schemas["create_light_occluder_2d"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_canvas_modulate";
+		schema.description = "Create a CanvasModulate for global 2D color tint (day/night cycles)";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("CanvasModulate");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_color;
+		arg_color.name = "color";
+		arg_color.type_hint = Variant::COLOR;
+		arg_color.required = false;
+		arg_color.default_value = Color(1, 1, 1);
+		schema.arguments.push_back(arg_color);
+
+		schemas["create_canvas_modulate"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_skeleton_2d";
+		schema.description = "Create a Skeleton2D for 2D skeletal animation";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("Skeleton2D");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		schemas["create_skeleton_2d"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_bone_2d";
+		schema.description = "Create a Bone2D under a Skeleton2D. Set auto_calculate_length:true (default) or specify length manually.";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("Bone2D");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_auto;
+		arg_auto.name = "auto_calculate_length";
+		arg_auto.type_hint = Variant::BOOL;
+		arg_auto.required = false;
+		arg_auto.default_value = true;
+		schema.arguments.push_back(arg_auto);
+
+		ToolArgSchema arg_length;
+		arg_length.name = "length";
+		arg_length.type_hint = Variant::FLOAT;
+		arg_length.required = false;
+		arg_length.default_value = 16.0;
+		schema.arguments.push_back(arg_length);
+
+		schemas["create_bone_2d"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_pin_joint_2d";
+		schema.description = "Create a PinJoint2D connecting two physics bodies";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("PinJoint2D");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_a;
+		arg_a.name = "node_a";
+		arg_a.type_hint = Variant::STRING;
+		arg_a.required = false;
+		arg_a.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_a);
+
+		ToolArgSchema arg_b;
+		arg_b.name = "node_b";
+		arg_b.type_hint = Variant::STRING;
+		arg_b.required = false;
+		arg_b.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_b);
+
+		ToolArgSchema arg_softness;
+		arg_softness.name = "softness";
+		arg_softness.type_hint = Variant::FLOAT;
+		arg_softness.required = false;
+		arg_softness.default_value = 0.0;
+		schema.arguments.push_back(arg_softness);
+
+		schemas["create_pin_joint_2d"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_damped_spring_joint_2d";
+		schema.description = "Create a DampedSpringJoint2D (spring/rope physics)";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("DampedSpringJoint2D");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_a;
+		arg_a.name = "node_a";
+		arg_a.type_hint = Variant::STRING;
+		arg_a.required = false;
+		arg_a.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_a);
+
+		ToolArgSchema arg_b;
+		arg_b.name = "node_b";
+		arg_b.type_hint = Variant::STRING;
+		arg_b.required = false;
+		arg_b.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_b);
+
+		ToolArgSchema arg_length;
+		arg_length.name = "length";
+		arg_length.type_hint = Variant::FLOAT;
+		arg_length.required = false;
+		arg_length.default_value = 16.0;
+		schema.arguments.push_back(arg_length);
+
+		ToolArgSchema arg_stiffness;
+		arg_stiffness.name = "stiffness";
+		arg_stiffness.type_hint = Variant::FLOAT;
+		arg_stiffness.required = false;
+		arg_stiffness.default_value = 20.0;
+		schema.arguments.push_back(arg_stiffness);
+
+		ToolArgSchema arg_damping;
+		arg_damping.name = "damping";
+		arg_damping.type_hint = Variant::FLOAT;
+		arg_damping.required = false;
+		arg_damping.default_value = 1.5;
+		schema.arguments.push_back(arg_damping);
+
+		schemas["create_damped_spring_joint_2d"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_multimesh_instance_2d";
+		schema.description = "Create a MultiMeshInstance2D for batch-rendering thousands of identical sprites (grass, particles, stars)";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("MultiMeshInstance2D");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_mesh;
+		arg_mesh.name = "mesh_path";
+		arg_mesh.type_hint = Variant::STRING;
+		arg_mesh.required = false;
+		schema.arguments.push_back(arg_mesh);
+
+		ToolArgSchema arg_count;
+		arg_count.name = "instance_count";
+		arg_count.type_hint = Variant::INT;
+		arg_count.required = false;
+		arg_count.default_value = 0;
+		schema.arguments.push_back(arg_count);
+
+		schemas["create_multimesh_instance_2d"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_touch_screen_button";
+		schema.description = "Create a TouchScreenButton for mobile input";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("TouchScreenButton");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_texture;
+		arg_texture.name = "texture_path";
+		arg_texture.type_hint = Variant::STRING;
+		arg_texture.required = false;
+		schema.arguments.push_back(arg_texture);
+
+		ToolArgSchema arg_pressed;
+		arg_pressed.name = "pressed_texture_path";
+		arg_pressed.type_hint = Variant::STRING;
+		arg_pressed.required = false;
+		schema.arguments.push_back(arg_pressed);
+
+		ToolArgSchema arg_passby;
+		arg_passby.name = "passby_press";
+		arg_passby.type_hint = Variant::BOOL;
+		arg_passby.required = false;
+		arg_passby.default_value = false;
+		schema.arguments.push_back(arg_passby);
+
+		ToolArgSchema arg_visible;
+		arg_visible.name = "always_visible";
+		arg_visible.type_hint = Variant::BOOL;
+		arg_visible.required = false;
+		arg_visible.default_value = true;
+		schema.arguments.push_back(arg_visible);
+
+		schemas["create_touch_screen_button"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_subviewport";
+		schema.description = "Create a SubViewport for minimaps, split-screen, or render-to-texture";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("SubViewport");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_w;
+		arg_w.name = "width";
+		arg_w.type_hint = Variant::INT;
+		arg_w.required = false;
+		arg_w.default_value = 512;
+		schema.arguments.push_back(arg_w);
+
+		ToolArgSchema arg_h;
+		arg_h.name = "height";
+		arg_h.type_hint = Variant::INT;
+		arg_h.required = false;
+		arg_h.default_value = 512;
+		schema.arguments.push_back(arg_h);
+
+		ToolArgSchema arg_disable3d;
+		arg_disable3d.name = "disable_3d";
+		arg_disable3d.type_hint = Variant::BOOL;
+		arg_disable3d.required = false;
+		arg_disable3d.default_value = true;
+		schema.arguments.push_back(arg_disable3d);
+
+		schemas["create_subviewport"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_mesh_instance_2d";
+		schema.description = "Create a MeshInstance2D for custom 2D meshes";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("MeshInstance2D");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_mesh;
+		arg_mesh.name = "mesh_path";
+		arg_mesh.type_hint = Variant::STRING;
+		arg_mesh.required = false;
+		schema.arguments.push_back(arg_mesh);
+
+		ToolArgSchema arg_tex;
+		arg_tex.name = "texture_path";
+		arg_tex.type_hint = Variant::STRING;
+		arg_tex.required = false;
+		schema.arguments.push_back(arg_tex);
+
+		schemas["create_mesh_instance_2d"] = schema;
 	}
 
 	{

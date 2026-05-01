@@ -7,6 +7,7 @@
 
 #include "yeet_ai_dock.h"
 
+#include "core/io/json.h"
 #include "core/templates/hash_set.h"
 #include "editor/editor_interface.h"
 #include "editor/editor_log.h"
@@ -43,42 +44,43 @@ Dictionary YeetAIDock::_tool_batch_tool_calls(const Dictionary &p_args) const {
 		return result;
 	}
 
-	// GDScript file tools blow up JSON size; never mix them with scene/editor tools in one batch.
-	{
-		bool any_gdscript_tool = false;
-		bool any_non_gdscript_tool = false;
-		for (int i = 0; i < calls.size(); i++) {
-			const Dictionary parsed = _parse_one_batch_call(calls[i], i, shared_arguments);
-			if (parsed.has("error")) {
-				result["error"] = parsed["error"];
-				result["failed_index"] = parsed["failed_index"];
-				return result;
-			}
-			const String tn = String(parsed["tool"]).strip_edges();
-			const bool is_gd = (tn == "create_gdscript_file" || tn == "update_gdscript_file");
-			if (is_gd) {
-				any_gdscript_tool = true;
-			} else {
-				any_non_gdscript_tool = true;
-			}
-		}
-		if (any_gdscript_tool && any_non_gdscript_tool) {
-			result["error"] =
-					"batch_tool_calls cannot mix `create_gdscript_file` or `update_gdscript_file` with any other tool in one batch. "
-					"Use one tool_call round with only scene/editor tools (inputs, nodes, meshes, attach_script, etc.), then a separate tool_call round whose batch contains only `create_gdscript_file` and/or `update_gdscript_file` calls.";
+	// Parse all calls once upfront to avoid double-parsing later.
+	// Also detect GDScript mixing and deduplicate read-only calls.
+	Vector<Dictionary> parsed_calls;
+	parsed_calls.resize(calls.size());
+	bool any_gdscript_tool = false;
+	bool any_non_gdscript_tool = false;
+	HashMap<String, Dictionary> read_only_cache; // key -> cached result for deduplication
+
+	for (int i = 0; i < calls.size(); i++) {
+		const Dictionary parsed = _parse_one_batch_call(calls[i], i, shared_arguments);
+		if (parsed.has("error")) {
+			result["error"] = parsed["error"];
+			result["failed_index"] = parsed["failed_index"];
 			return result;
 		}
+		parsed_calls.write[i] = parsed;
+		const String tn = String(parsed["tool"]).strip_edges();
+		const bool is_gd = (tn == "create_gdscript_file" || tn == "update_gdscript_file");
+		if (is_gd) {
+			any_gdscript_tool = true;
+		} else {
+			any_non_gdscript_tool = true;
+		}
+	}
+
+	// GDScript file tools blow up JSON size; never mix them with scene/editor tools in one batch.
+	if (any_gdscript_tool && any_non_gdscript_tool) {
+		result["error"] =
+				"batch_tool_calls cannot mix `create_gdscript_file` or `update_gdscript_file` with any other tool in one batch. "
+				"Use one tool_call round with only scene/editor tools (inputs, nodes, meshes, attach_script, etc.), then a separate tool_call round whose batch contains only `create_gdscript_file` and/or `update_gdscript_file` calls.";
+		return result;
 	}
 
 	if (dry_run) {
 		Array planned;
-		for (int i = 0; i < calls.size(); i++) {
-			const Dictionary parsed = _parse_one_batch_call(calls[i], i, shared_arguments);
-			if (parsed.has("error")) {
-				result["error"] = parsed["error"];
-				result["failed_index"] = parsed["failed_index"];
-				return result;
-			}
+		for (int i = 0; i < parsed_calls.size(); i++) {
+			const Dictionary &parsed = parsed_calls[i];
 			Dictionary entry;
 			entry["tool"] = parsed["tool"];
 			entry["arguments"] = parsed["arguments"];
@@ -94,25 +96,58 @@ Dictionary YeetAIDock::_tool_batch_tool_calls(const Dictionary &p_args) const {
 	Array results;
 	int executed_count = 0;
 	bool had_failure = false;
-	for (int i = 0; i < calls.size(); i++) {
-		const Dictionary parsed = _parse_one_batch_call(calls[i], i, shared_arguments);
-		if (parsed.has("error")) {
-			result["error"] = parsed["error"];
-			result["failed_index"] = parsed["failed_index"];
-			return result;
-		}
+	
+	// Progress update throttling: update UI every N calls or on tool change.
+	const int progress_update_interval = MAX(1, calls.size() / 20); // Update at most 20 times
+	String last_progress_tool;
+
+	for (int i = 0; i < parsed_calls.size(); i++) {
+		const Dictionary &parsed = parsed_calls[i];
 		const String tool_name = String(parsed["tool"]);
 		const Dictionary call_args = parsed["arguments"];
 
-		// Update UI to show which tool is currently running in the batch.
-		const_cast<YeetAIDock *>(this)->_update_batch_progress(i + 1, calls.size(), tool_name);
+		// Throttle UI updates: only update on interval or tool change.
+		bool should_update_ui = (i == 0) || (i == parsed_calls.size() - 1) || 
+		                        (i % progress_update_interval == 0) || 
+		                        (tool_name != last_progress_tool);
+		if (should_update_ui) {
+			const_cast<YeetAIDock *>(this)->_update_batch_progress(i + 1, calls.size(), tool_name);
+			last_progress_tool = tool_name;
+		}
 
-		ToolExecutionResult call_result = const_cast<YeetAIDock *>(this)->_execute_tool(tool_name, call_args);
+		// Check for read-only deduplication: get_* and validate_* tools can be cached within a batch.
+		bool is_read_only = tool_name.begins_with("get_") || tool_name.begins_with("validate_");
+		String cache_key;
+		bool has_cached_result = false;
+		Dictionary cached_result;
+		if (is_read_only) {
+			cache_key = _generate_cache_key(tool_name, call_args);
+			if (read_only_cache.has(cache_key)) {
+				cached_result = read_only_cache[cache_key];
+				has_cached_result = true;
+			}
+		}
+
+		ToolExecutionResult call_result;
+		if (has_cached_result) {
+			call_result.ok = true;
+			call_result.payload = cached_result;
+			call_result.display_text = JSON::stringify(cached_result, "\t", false, true);
+		} else {
+			call_result = const_cast<YeetAIDock *>(this)->_execute_tool(tool_name, call_args);
+			if (is_read_only && call_result.ok && !call_result.payload.has("error")) {
+				read_only_cache[cache_key] = call_result.payload;
+			}
+		}
+
 		Dictionary call_entry;
 		call_entry["tool"] = tool_name;
 		call_entry["arguments"] = call_args;
 		call_entry["ok"] = call_result.ok && !call_result.payload.has("error");
 		call_entry["result"] = call_result.payload;
+		if (has_cached_result) {
+			call_entry["cached"] = true;
+		}
 		results.push_back(call_entry);
 		executed_count++;
 		had_failure = had_failure || !bool(call_entry["ok"]);

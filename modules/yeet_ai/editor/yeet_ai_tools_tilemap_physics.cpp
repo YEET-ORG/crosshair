@@ -301,6 +301,81 @@ Dictionary YeetAIDock::_tool_paint_terrain(const Dictionary &p_args) const {
 	return _make_ok(extra);
 }
 
+Dictionary YeetAIDock::_tool_create_tilemap_layer(const Dictionary &p_args) const {
+	Dictionary result;
+	String err;
+	Node *scene_root;
+	if (!_resolve_scene(p_args, &scene_root, err)) {
+		return _make_error(err);
+	}
+	const String node_name = _arg_string(p_args, "name", "Layer0");
+
+	TileMapLayer *layer = memnew(TileMapLayer);
+	layer->set_name(node_name);
+
+	// Optional: assign tileset
+	const String tile_set_path = _arg_string(p_args, "tileset_path", "");
+	if (!tile_set_path.is_empty()) {
+		Ref<TileSet> ts = ResourceLoader::load(tile_set_path);
+		if (ts.is_valid()) {
+			layer->set_tile_set(ts);
+		}
+	}
+
+	// Find parent: either a TileMap or regular node
+	Node *parent = _resolve_node_target(scene_root, _arg_string(p_args, "parent_path", ""), err);
+	if (parent == nullptr) {
+		parent = scene_root;
+	}
+	_add_to_scene(parent, layer, scene_root);
+
+	layer->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
+
+	_mark_unsaved();
+	result["ok"] = true;
+	result["node_path"] = String(layer->get_path());
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_fill_tilemap_rect(const Dictionary &p_args) const {
+	String err;
+	Node *scene_root;
+	Node *node;
+	if (!_resolve_scene_and_node(p_args, "node_path", &scene_root, &node, err)) {
+		return _make_error(err);
+	}
+
+	TileMapLayer *layer = Object::cast_to<TileMapLayer>(node);
+	if (layer == nullptr) {
+		return _make_error("Node is not a TileMapLayer");
+	}
+
+	const int from_x = _arg_int(p_args, "from_x", 0);
+	const int from_y = _arg_int(p_args, "from_y", 0);
+	const int to_x = _arg_int(p_args, "to_x", 0);
+	const int to_y = _arg_int(p_args, "to_y", 0);
+	const int source_id = _arg_int(p_args, "source_id", 0);
+	const int atlas_coords_x = _arg_int(p_args, "atlas_coords_x", -1);
+	const int atlas_coords_y = _arg_int(p_args, "atlas_coords_y", -1);
+	const int alternative_tile = _arg_int(p_args, "alternative_tile", 0);
+
+	Vector2i atlas_coords(atlas_coords_x, atlas_coords_y);
+
+	int painted = 0;
+	for (int y = from_y; y <= to_y; y++) {
+		for (int x = from_x; x <= to_x; x++) {
+			layer->set_cell(Vector2i(x, y), source_id, atlas_coords, alternative_tile);
+			painted++;
+		}
+	}
+
+	_mark_unsaved();
+	Dictionary extra;
+	extra["cells_painted"] = painted;
+	extra["rect"] = vformat("(%d,%d) to (%d,%d)", from_x, from_y, to_x, to_y);
+	return _make_ok(extra);
+}
+
 Dictionary YeetAIDock::_tool_set_collision_layer_mask(const Dictionary &p_args) const {
 	String err;
 	Node *scene_root;
