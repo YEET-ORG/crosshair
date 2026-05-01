@@ -2945,6 +2945,24 @@ String YeetAIDock::_escape_bbcode(const String &p_text) const {
 		pos = start + bbcode.length();
 	}
 
+	// Convert inline code `text` to [code]text[/code]
+	// Process sequentially to handle multiple inline codes
+	pos = 0;
+	while (true) {
+		int start = escaped.find("`", pos);
+		if (start < 0) {
+			break;
+		}
+		int end = escaped.find("`", start + 1);
+		if (end < 0) {
+			break; // Unclosed inline code — leave as-is
+		}
+		String inline_code = escaped.substr(start + 1, end - start - 1);
+		String bbcode = "[code]" + inline_code + "[/code]";
+		escaped = escaped.substr(0, start) + bbcode + escaped.substr(end + 1);
+		pos = start + bbcode.length();
+	}
+
 	return escaped;
 }
 
