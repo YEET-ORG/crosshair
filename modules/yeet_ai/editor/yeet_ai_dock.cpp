@@ -1722,6 +1722,15 @@ void YeetAIDock::_on_prompt_gui_input(const Ref<InputEvent> &p_event) {
 		} else if (key->get_keycode() == Key::DOWN && key->is_alt_pressed()) {
 			_history_navigate(1);
 			get_viewport()->set_input_as_handled();
+		} else if (key->get_keycode() == Key::ESCAPE && _stream_active) {
+			_on_stop_pressed();
+			get_viewport()->set_input_as_handled();
+		} else if (key->get_keycode() == Key::L && key->is_ctrl_pressed()) {
+			_clear_chat();
+			get_viewport()->set_input_as_handled();
+		} else if (key->get_keycode() == Key::N && key->is_ctrl_pressed() && key->is_shift_pressed()) {
+			_on_new_chat_pressed();
+			get_viewport()->set_input_as_handled();
 		}
 	}
 }
