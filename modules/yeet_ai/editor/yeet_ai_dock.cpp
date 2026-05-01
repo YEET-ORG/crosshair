@@ -2963,6 +2963,63 @@ String YeetAIDock::_escape_bbcode(const String &p_text) const {
 		pos = start + bbcode.length();
 	}
 
+	// Convert markdown bold **text** to [b]text[/b]
+	// Must process before italic to avoid conflicts with * inside **
+	pos = 0;
+	while (true) {
+		int start = escaped.find("**", pos);
+		if (start < 0) {
+			break;
+		}
+		int end = escaped.find("**", start + 2);
+		if (end < 0) {
+			break;
+		}
+		String bold_text = escaped.substr(start + 2, end - start - 2);
+		String bbcode = "[b]" + bold_text + "[/b]";
+		escaped = escaped.substr(0, start) + bbcode + escaped.substr(end + 2);
+		pos = start + bbcode.length();
+	}
+
+	// Convert markdown italic *text* to [i]text[/i]
+	pos = 0;
+	while (true) {
+		int start = escaped.find("*", pos);
+		if (start < 0) {
+			break;
+		}
+		int end = escaped.find("*", start + 1);
+		if (end < 0) {
+			break;
+		}
+		String italic_text = escaped.substr(start + 1, end - start - 1);
+		String bbcode = "[i]" + italic_text + "[/i]";
+		escaped = escaped.substr(0, start) + bbcode + escaped.substr(end + 1);
+		pos = start + bbcode.length();
+	}
+
+	// Convert markdown headers ### Title to [b][u]Title[/u][/b]
+	// Process line by line for headers
+	Vector<String> lines = escaped.split("\n");
+	for (int i = 0; i < lines.size(); i++) {
+		String line = lines[i];
+		int space_pos = line.find(" ");
+		if (space_pos > 0 && space_pos <= 6) {
+			bool is_header = true;
+			for (int j = 0; j < space_pos; j++) {
+				if (line[j] != '#') {
+					is_header = false;
+					break;
+				}
+			}
+			if (is_header) {
+				String header_text = line.substr(space_pos + 1).strip_edges();
+				lines.write[i] = "[b][u]" + header_text + "[/u][/b]";
+			}
+		}
+	}
+	escaped = String("\n").join(lines);
+
 	return escaped;
 }
 
