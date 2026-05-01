@@ -578,11 +578,27 @@ static ToolSchema _infer_schema(const String &p_tool_name) {
 	if (s.begins_with("capture_") || s == "capture_dual_view") {
 		schema.requires_scene = true;
 		schema.is_write_operation = false;
-		if (s == "capture_editor_viewport" || s == "capture_game_viewport" || s == "capture_texture_resource") {
+		if (s == "capture_editor_viewport" || s == "capture_game_viewport") {
 			ToolArgSchema arg_max;
-			arg_max.name = s == "capture_texture_resource" ? "path" : "max_width";
-			arg_max.type_hint = s == "capture_texture_resource" ? Variant::STRING : Variant::INT;
+			arg_max.name = "max_width";
+			arg_max.type_hint = Variant::INT;
 			arg_max.required = false;
+			schema.arguments.push_back(arg_max);
+		}
+		if (s == "capture_texture_resource") {
+			ToolArgSchema arg_path;
+			arg_path.name = "path";
+			arg_path.type_hint = Variant::STRING;
+			arg_path.required = true;
+			arg_path.description = "Texture resource path under res:// to capture for visual inspection.";
+			schema.arguments.push_back(arg_path);
+
+			ToolArgSchema arg_max;
+			arg_max.name = "max_width";
+			arg_max.type_hint = Variant::INT;
+			arg_max.required = false;
+			arg_max.default_value = 640;
+			arg_max.description = "Maximum encoded PNG width. Use smaller values to reduce token/image size.";
 			schema.arguments.push_back(arg_max);
 		}
 		if (s == "capture_subviewport") {
@@ -592,6 +608,14 @@ static ToolSchema _infer_schema(const String &p_tool_name) {
 			arg_path.required = true;
 			arg_path.auto_resolve_node_path = true;
 			schema.arguments.push_back(arg_path);
+
+			ToolArgSchema arg_max;
+			arg_max.name = "max_width";
+			arg_max.type_hint = Variant::INT;
+			arg_max.required = false;
+			arg_max.default_value = 640;
+			arg_max.description = "Maximum encoded PNG width. Use smaller values to reduce token/image size.";
+			schema.arguments.push_back(arg_max);
 		}
 		return schema;
 	}
@@ -1948,7 +1972,7 @@ const HashMap<String, ToolSchema> &YeetAIToolSchemaRegistry::get_all_schemas() {
 	{
 		ToolSchema schema;
 		schema.tool_name = "add_collision_shape_2d";
-		schema.description = "Add a CollisionShape2D to a 2D physics body with a shape resource";
+		schema.description = "Add a direct CollisionShape2D child to an Area2D, StaticBody2D, RigidBody2D, CharacterBody2D, or AnimatableBody2D. Prefer explicit size/radius so colliders match visuals.";
 		schema.requires_scene = true;
 		schema.is_write_operation = true;
 		schema.supports_batching = true;
@@ -1956,23 +1980,58 @@ const HashMap<String, ToolSchema> &YeetAIToolSchemaRegistry::get_all_schemas() {
 		ToolArgSchema arg_parent;
 		arg_parent.name = "parent_path";
 		arg_parent.type_hint = Variant::STRING;
-		arg_parent.required = true;
+		arg_parent.required = false;
 		arg_parent.auto_resolve_node_path = true;
+		arg_parent.description = "2D collision object path. Use parent_path for new calls; node_path is accepted as a legacy alias.";
 		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_node_path;
+		arg_node_path.name = "node_path";
+		arg_node_path.type_hint = Variant::STRING;
+		arg_node_path.required = false;
+		arg_node_path.auto_resolve_node_path = true;
+		arg_node_path.description = "Legacy alias for parent_path.";
+		schema.arguments.push_back(arg_node_path);
 
 		ToolArgSchema arg_shape;
 		arg_shape.name = "shape_type";
 		arg_shape.type_hint = Variant::STRING;
-		arg_shape.required = true;
-		arg_shape.description = "Shape type: rectangle, circle, capsule, or segment";
+		arg_shape.required = false;
+		arg_shape.default_value = String("rectangle");
+		arg_shape.valid_values = Vector<String>{"rectangle", "box", "circle", "capsule", "segment", "convex", "separation_ray", "world_boundary"};
+		arg_shape.description = "Shape type. Use rectangle/box for platforms, capsule for characters, circle for collectibles/projectiles.";
 		schema.arguments.push_back(arg_shape);
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("CollisionShape2D");
+		schema.arguments.push_back(arg_name);
 
 		ToolArgSchema arg_size;
 		arg_size.name = "size";
 		arg_size.type_hint = Variant::VECTOR2;
 		arg_size.required = false;
 		arg_size.default_value = Vector2(32, 32);
+		arg_size.description = "Explicit collider size for rectangle/box and default dimensions for other shapes.";
 		schema.arguments.push_back(arg_size);
+
+		ToolArgSchema arg_width;
+		arg_width.name = "width";
+		arg_width.type_hint = Variant::FLOAT;
+		arg_width.required = false;
+		arg_width.default_value = 32.0;
+		arg_width.description = "Legacy width alias used when size is omitted.";
+		schema.arguments.push_back(arg_width);
+
+		ToolArgSchema arg_height;
+		arg_height.name = "height";
+		arg_height.type_hint = Variant::FLOAT;
+		arg_height.required = false;
+		arg_height.default_value = 32.0;
+		arg_height.description = "Height for rectangle/capsule/cylinder-like 2D shapes.";
+		schema.arguments.push_back(arg_height);
 
 		ToolArgSchema arg_radius;
 		arg_radius.name = "radius";
@@ -1985,14 +2044,405 @@ const HashMap<String, ToolSchema> &YeetAIToolSchemaRegistry::get_all_schemas() {
 		arg_pos.name = "position";
 		arg_pos.type_hint = Variant::VECTOR2;
 		arg_pos.required = false;
+		arg_pos.description = "Local offset of the CollisionShape2D relative to its parent body.";
 		schema.arguments.push_back(arg_pos);
+
+		ToolArgSchema arg_x;
+		arg_x.name = "x";
+		arg_x.type_hint = Variant::FLOAT;
+		arg_x.required = false;
+		arg_x.default_value = 0.0;
+		arg_x.description = "Legacy local x offset used when position is omitted.";
+		schema.arguments.push_back(arg_x);
+
+		ToolArgSchema arg_y;
+		arg_y.name = "y";
+		arg_y.type_hint = Variant::FLOAT;
+		arg_y.required = false;
+		arg_y.default_value = 0.0;
+		arg_y.description = "Legacy local y offset used when position is omitted.";
+		schema.arguments.push_back(arg_y);
+
+		ToolArgSchema arg_points;
+		arg_points.name = "points";
+		arg_points.type_hint = Variant::ARRAY;
+		arg_points.required = false;
+		arg_points.description = "Points for convex/segment shapes. Each point is {x,y}.";
+		schema.arguments.push_back(arg_points);
+
+		ToolArgSchema arg_disabled;
+		arg_disabled.name = "disabled";
+		arg_disabled.type_hint = Variant::BOOL;
+		arg_disabled.required = false;
+		arg_disabled.default_value = false;
+		schema.arguments.push_back(arg_disabled);
+
+		ToolArgSchema arg_one_way;
+		arg_one_way.name = "one_way_collision";
+		arg_one_way.type_hint = Variant::BOOL;
+		arg_one_way.required = false;
+		arg_one_way.default_value = false;
+		schema.arguments.push_back(arg_one_way);
+
+		ToolArgSchema arg_one_way_margin;
+		arg_one_way_margin.name = "one_way_collision_margin";
+		arg_one_way_margin.type_hint = Variant::FLOAT;
+		arg_one_way_margin.required = false;
+		arg_one_way_margin.default_value = 1.0;
+		schema.arguments.push_back(arg_one_way_margin);
 
 		schemas["add_collision_shape_2d"] = schema;
 	}
 
 	{
 		ToolSchema schema;
-		schema.tool_name = "create_tilemap";
+		schema.tool_name = "add_2d_collision_shape";
+		schema.description = "Legacy alias for add_collision_shape_2d. Accepts node_path or parent_path plus the same shape/dimension arguments.";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_node_path;
+		arg_node_path.name = "node_path";
+		arg_node_path.type_hint = Variant::STRING;
+		arg_node_path.required = false;
+		arg_node_path.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_node_path);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_shape;
+		arg_shape.name = "shape_type";
+		arg_shape.type_hint = Variant::STRING;
+		arg_shape.required = false;
+		arg_shape.default_value = String("rectangle");
+		arg_shape.valid_values = Vector<String>{"rectangle", "box", "circle", "capsule", "segment", "convex", "separation_ray", "world_boundary"};
+		schema.arguments.push_back(arg_shape);
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		arg_name.default_value = String("CollisionShape2D");
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_size;
+		arg_size.name = "size";
+		arg_size.type_hint = Variant::VECTOR2;
+		arg_size.required = false;
+		arg_size.default_value = Vector2(32, 32);
+		schema.arguments.push_back(arg_size);
+
+		ToolArgSchema arg_width;
+		arg_width.name = "width";
+		arg_width.type_hint = Variant::FLOAT;
+		arg_width.required = false;
+		arg_width.default_value = 32.0;
+		schema.arguments.push_back(arg_width);
+
+		ToolArgSchema arg_radius;
+		arg_radius.name = "radius";
+		arg_radius.type_hint = Variant::FLOAT;
+		arg_radius.required = false;
+		arg_radius.default_value = 16.0;
+		schema.arguments.push_back(arg_radius);
+
+		ToolArgSchema arg_height;
+		arg_height.name = "height";
+		arg_height.type_hint = Variant::FLOAT;
+		arg_height.required = false;
+		arg_height.default_value = 32.0;
+		schema.arguments.push_back(arg_height);
+
+		ToolArgSchema arg_pos;
+		arg_pos.name = "position";
+		arg_pos.type_hint = Variant::VECTOR2;
+		arg_pos.required = false;
+		schema.arguments.push_back(arg_pos);
+
+		ToolArgSchema arg_x;
+		arg_x.name = "x";
+		arg_x.type_hint = Variant::FLOAT;
+		arg_x.required = false;
+		arg_x.default_value = 0.0;
+		schema.arguments.push_back(arg_x);
+
+		ToolArgSchema arg_y;
+		arg_y.name = "y";
+		arg_y.type_hint = Variant::FLOAT;
+		arg_y.required = false;
+		arg_y.default_value = 0.0;
+		schema.arguments.push_back(arg_y);
+
+		ToolArgSchema arg_points;
+		arg_points.name = "points";
+		arg_points.type_hint = Variant::ARRAY;
+		arg_points.required = false;
+		schema.arguments.push_back(arg_points);
+
+		ToolArgSchema arg_disabled;
+		arg_disabled.name = "disabled";
+		arg_disabled.type_hint = Variant::BOOL;
+		arg_disabled.required = false;
+		arg_disabled.default_value = false;
+		schema.arguments.push_back(arg_disabled);
+
+		ToolArgSchema arg_one_way;
+		arg_one_way.name = "one_way_collision";
+		arg_one_way.type_hint = Variant::BOOL;
+		arg_one_way.required = false;
+		arg_one_way.default_value = false;
+		schema.arguments.push_back(arg_one_way);
+
+		schemas["add_2d_collision_shape"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_game_actor_2d";
+		schema.description = "Create a complete 2D gameplay actor with physics body, direct CollisionShape2D, sensible collider size, collision layer/mask, and optional matching visual.";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_role;
+		arg_role.name = "role";
+		arg_role.type_hint = Variant::STRING;
+		arg_role.required = false;
+		arg_role.default_value = String("generic");
+		arg_role.valid_values = Vector<String>{"player", "enemy", "platform", "wall", "collectible", "hazard", "projectile", "trigger", "generic"};
+		schema.arguments.push_back(arg_role);
+
+		ToolArgSchema arg_body;
+		arg_body.name = "body_type";
+		arg_body.type_hint = Variant::STRING;
+		arg_body.required = false;
+		arg_body.description = "CharacterBody2D, StaticBody2D, RigidBody2D, or Area2D. Defaults from role.";
+		schema.arguments.push_back(arg_body);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_position;
+		arg_position.name = "position";
+		arg_position.type_hint = Variant::VECTOR2;
+		arg_position.required = false;
+		schema.arguments.push_back(arg_position);
+
+		ToolArgSchema arg_size;
+		arg_size.name = "size";
+		arg_size.type_hint = Variant::VECTOR2;
+		arg_size.required = false;
+		arg_size.description = "Collider/visual size in pixels. Defaults from role.";
+		schema.arguments.push_back(arg_size);
+
+		ToolArgSchema arg_shape;
+		arg_shape.name = "shape_type";
+		arg_shape.type_hint = Variant::STRING;
+		arg_shape.required = false;
+		arg_shape.valid_values = Vector<String>{"rectangle", "box", "circle", "capsule"};
+		arg_shape.description = "rectangle, circle, or capsule. Defaults from role.";
+		schema.arguments.push_back(arg_shape);
+
+		ToolArgSchema arg_layer;
+		arg_layer.name = "collision_layer";
+		arg_layer.type_hint = Variant::INT;
+		arg_layer.required = false;
+		arg_layer.default_value = 1;
+		schema.arguments.push_back(arg_layer);
+
+		ToolArgSchema arg_mask;
+		arg_mask.name = "collision_mask";
+		arg_mask.type_hint = Variant::INT;
+		arg_mask.required = false;
+		arg_mask.default_value = 1;
+		schema.arguments.push_back(arg_mask);
+
+		ToolArgSchema arg_visual;
+		arg_visual.name = "add_visual";
+		arg_visual.type_hint = Variant::BOOL;
+		arg_visual.required = false;
+		arg_visual.default_value = true;
+		schema.arguments.push_back(arg_visual);
+
+		schemas["create_game_actor_2d"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_game_actor_3d";
+		schema.description = "Create a complete 3D gameplay actor with physics body, direct CollisionShape3D, sensible collider size, collision layer/mask, and optional matching visual.";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = true;
+
+		ToolArgSchema arg_name;
+		arg_name.name = "name";
+		arg_name.type_hint = Variant::STRING;
+		arg_name.required = false;
+		schema.arguments.push_back(arg_name);
+
+		ToolArgSchema arg_role;
+		arg_role.name = "role";
+		arg_role.type_hint = Variant::STRING;
+		arg_role.required = false;
+		arg_role.default_value = String("generic");
+		arg_role.valid_values = Vector<String>{"player", "enemy", "platform", "wall", "collectible", "hazard", "projectile", "trigger", "generic"};
+		schema.arguments.push_back(arg_role);
+
+		ToolArgSchema arg_body;
+		arg_body.name = "body_type";
+		arg_body.type_hint = Variant::STRING;
+		arg_body.required = false;
+		arg_body.description = "CharacterBody3D, StaticBody3D, RigidBody3D, or Area3D. Defaults from role.";
+		schema.arguments.push_back(arg_body);
+
+		ToolArgSchema arg_parent;
+		arg_parent.name = "parent_path";
+		arg_parent.type_hint = Variant::STRING;
+		arg_parent.required = false;
+		arg_parent.auto_resolve_node_path = true;
+		schema.arguments.push_back(arg_parent);
+
+		ToolArgSchema arg_position;
+		arg_position.name = "position";
+		arg_position.type_hint = Variant::VECTOR3;
+		arg_position.required = false;
+		schema.arguments.push_back(arg_position);
+
+		ToolArgSchema arg_size;
+		arg_size.name = "size";
+		arg_size.type_hint = Variant::VECTOR3;
+		arg_size.required = false;
+		arg_size.description = "Collider/visual size in world units. Defaults from role.";
+		schema.arguments.push_back(arg_size);
+
+		ToolArgSchema arg_shape;
+		arg_shape.name = "shape_type";
+		arg_shape.type_hint = Variant::STRING;
+		arg_shape.required = false;
+		arg_shape.valid_values = Vector<String>{"box", "sphere", "capsule", "cylinder"};
+		schema.arguments.push_back(arg_shape);
+
+		ToolArgSchema arg_layer;
+		arg_layer.name = "collision_layer";
+		arg_layer.type_hint = Variant::INT;
+		arg_layer.required = false;
+		arg_layer.default_value = 1;
+		schema.arguments.push_back(arg_layer);
+
+		ToolArgSchema arg_mask;
+		arg_mask.name = "collision_mask";
+		arg_mask.type_hint = Variant::INT;
+		arg_mask.required = false;
+		arg_mask.default_value = 1;
+		schema.arguments.push_back(arg_mask);
+
+		ToolArgSchema arg_visual;
+		arg_visual.name = "add_visual";
+		arg_visual.type_hint = Variant::BOOL;
+		arg_visual.required = false;
+		arg_visual.default_value = true;
+		schema.arguments.push_back(arg_visual);
+
+		schemas["create_game_actor_3d"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "audit_game_physics";
+		schema.description = "Inspect the current scene for missing, disabled, tiny, or misconfigured colliders and return suggested repair tool calls.";
+		schema.requires_scene = true;
+		schema.is_write_operation = false;
+		schema.supports_batching = false;
+
+		ToolArgSchema arg_scene;
+		arg_scene.name = "scene_path";
+		arg_scene.type_hint = Variant::STRING;
+		arg_scene.required = false;
+		schema.arguments.push_back(arg_scene);
+
+		ToolArgSchema arg_dimensions;
+		arg_dimensions.name = "dimensions";
+		arg_dimensions.type_hint = Variant::STRING;
+		arg_dimensions.required = false;
+		arg_dimensions.default_value = String("both");
+		arg_dimensions.valid_values = Vector<String>{"2d", "3d", "both"};
+		schema.arguments.push_back(arg_dimensions);
+
+		ToolArgSchema arg_min2d;
+		arg_min2d.name = "min_2d_size_px";
+		arg_min2d.type_hint = Variant::FLOAT;
+		arg_min2d.required = false;
+		arg_min2d.default_value = 8.0;
+		schema.arguments.push_back(arg_min2d);
+
+		ToolArgSchema arg_min3d;
+		arg_min3d.name = "min_3d_size";
+		arg_min3d.type_hint = Variant::FLOAT;
+		arg_min3d.required = false;
+		arg_min3d.default_value = 0.05;
+		schema.arguments.push_back(arg_min3d);
+
+		ToolArgSchema arg_suggest;
+		arg_suggest.name = "include_suggestions";
+		arg_suggest.type_hint = Variant::BOOL;
+		arg_suggest.required = false;
+		arg_suggest.default_value = true;
+		schema.arguments.push_back(arg_suggest);
+
+		schemas["audit_game_physics"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "repair_game_physics";
+		schema.description = "Repair missing and tiny collider issues reported by audit_game_physics. Dry-run by default; set apply:true to modify the scene.";
+		schema.requires_scene = true;
+		schema.is_write_operation = true;
+		schema.supports_batching = false;
+
+		ToolArgSchema arg_scene;
+		arg_scene.name = "scene_path";
+		arg_scene.type_hint = Variant::STRING;
+		arg_scene.required = false;
+		schema.arguments.push_back(arg_scene);
+
+		ToolArgSchema arg_ids;
+		arg_ids.name = "issue_ids";
+		arg_ids.type_hint = Variant::ARRAY;
+		arg_ids.required = false;
+		arg_ids.description = "Optional issue id list from audit_game_physics. Omit to repair all supported issues.";
+		schema.arguments.push_back(arg_ids);
+
+		ToolArgSchema arg_apply;
+		arg_apply.name = "apply";
+		arg_apply.type_hint = Variant::BOOL;
+		arg_apply.required = false;
+		arg_apply.default_value = false;
+		schema.arguments.push_back(arg_apply);
+
+		schemas["repair_game_physics"] = schema;
+	}
+
+	{
+		ToolSchema schema;
+		schema.tool_name = "create_tile_map";
 		schema.description = "Create a TileMap node for 2D tile-based maps";
 		schema.requires_scene = true;
 		schema.is_write_operation = true;
@@ -2024,7 +2474,7 @@ const HashMap<String, ToolSchema> &YeetAIToolSchemaRegistry::get_all_schemas() {
 		arg_tileset.required = false;
 		schema.arguments.push_back(arg_tileset);
 
-		schemas["create_tilemap"] = schema;
+		schemas["create_tile_map"] = schema;
 	}
 
 	{

@@ -21,6 +21,15 @@ These settings are registered under the editor settings database:
 - `yeet_ai/chat/api_key`
 - `yeet_ai/chat/max_tokens`
 - `yeet_ai/chat/max_tool_round_trips`
+- `yeet_ai/chat/context_token_budget`
+- `yeet_ai/chat/context_summarization_enabled`
+- `yeet_ai/chat/context_summary_trigger_tokens`
+- `yeet_ai/chat/context_summary_keep_recent_messages`
+- `yeet_ai/chat/context_summary_max_chars`
+
+## Context management
+
+Long chats keep a persistent per-chat context summary. Older messages are compacted locally when the approximate token trigger is crossed, while the newest messages stay verbatim. Requests include the live editor snapshot, the saved summary, and a safe recent-message suffix.
 
 Defaults are aimed at:
 

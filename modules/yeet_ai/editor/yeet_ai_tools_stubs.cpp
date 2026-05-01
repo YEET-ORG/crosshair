@@ -140,7 +140,9 @@ Dictionary YeetAIDock::_tool_capture_subviewport(const Dictionary &p_args) const
 	result["width"] = img->get_width();
 	result["height"] = img->get_height();
 	const PackedByteArray png = img->save_png_to_buffer();
-	result["image_base64"] = CoreBind::Marshalls::get_singleton()->raw_to_base64(png);
+	const String b64 = CoreBind::Marshalls::get_singleton()->raw_to_base64(png);
+	result["png_base64"] = b64;
+	result["image_base64"] = b64;
 	result["size_bytes"] = png.size();
 	return result;
 }
@@ -169,7 +171,9 @@ Dictionary YeetAIDock::_tool_capture_texture_resource(const Dictionary &p_args) 
 	result["width"] = img->get_width();
 	result["height"] = img->get_height();
 	const PackedByteArray png = img->save_png_to_buffer();
-	result["image_base64"] = CoreBind::Marshalls::get_singleton()->raw_to_base64(png);
+	const String b64 = CoreBind::Marshalls::get_singleton()->raw_to_base64(png);
+	result["png_base64"] = b64;
+	result["image_base64"] = b64;
 	result["size_bytes"] = png.size();
 	return result;
 }

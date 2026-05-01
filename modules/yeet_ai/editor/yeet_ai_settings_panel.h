@@ -57,6 +57,11 @@ class YeetAISettingsPanel : public VBoxContainer {
 	LineEdit *settings_azure_model = nullptr;
 	SpinBox *settings_max_tokens = nullptr;
 	SpinBox *settings_max_tool_round_trips = nullptr;
+	SpinBox *settings_context_token_budget = nullptr;
+	CheckBox *settings_context_summarization_enabled = nullptr;
+	SpinBox *settings_context_summary_trigger_tokens = nullptr;
+	SpinBox *settings_context_summary_keep_recent_messages = nullptr;
+	SpinBox *settings_context_summary_max_chars = nullptr;
 	SpinBox *settings_max_base64_chars = nullptr;
 	SpinBox *settings_game_screenshot_timeout_ms = nullptr;
 	SpinBox *settings_temperature = nullptr;

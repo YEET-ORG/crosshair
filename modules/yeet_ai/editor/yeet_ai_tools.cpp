@@ -6,7 +6,7 @@
 /**************************************************************************/
 /*                                                                        */
 /*  Tool dispatch: _execute_tool replaces the old if/else chain with a    */
-/*  sorted binary-search lookup over tool name → handler pairs.           */
+/*  table lookup over tool name → handler pairs.                          */
 /*                                                                        */
 /*  New tool implementations should be added to yeet_ai_dock.cpp and     */
 /*  registered here (and in the system prompt) to complete the loop.      */
@@ -18,10 +18,8 @@
 #include "core/io/json.h"
 #include "core/string/translation.h"
 
-#include <algorithm>
-
 // ═══════════════════════════════════════════════════════════════════════════
-// _execute_tool — sorted dispatch table (binary search)
+// _execute_tool — dispatch table
 // ═══════════════════════════════════════════════════════════════════════════
 
 YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_name, const Dictionary &p_args) {
@@ -30,13 +28,12 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 	struct ToolEntry {
 		const char *name;
 		ToolHandler handler;
-		bool operator<(const ToolEntry &o) const { return strcmp(name, o.name) < 0; }
 	};
 
-	// Static, sorted once at first call. No file-scope member pointer access.
+	// Static lookup table. No file-scope member pointer access.
 	static const ToolEntry table[] = {
 		// ═══════════════════════════════════════════════════════════════════════
-		// SORTED ALPHABETICALLY — binary search requires this order.
+		// Tool name → handler pairs.
 		// ═══════════════════════════════════════════════════════════════════════
 		{ "add_2d_collision_shape",              &YeetAIDock::_tool_add_2d_collision_shape },
 		{ "add_animation_track",                 &YeetAIDock::_tool_add_animation_track },
@@ -52,6 +49,7 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 		{ "add_tileset_atlas_source",            &YeetAIDock::_tool_add_tileset_atlas_source },
 		{ "assign_resource_to_property",         &YeetAIDock::_tool_assign_resource_to_property },
 		{ "attach_script",                       &YeetAIDock::_tool_attach_script },
+		{ "audit_game_physics",                  &YeetAIDock::_tool_audit_game_physics },
 		{ "bake_navigation_mesh",                &YeetAIDock::_tool_bake_navigation_mesh },
 		{ "batch_reparent_nodes",                &YeetAIDock::_tool_batch_reparent_nodes },
 		{ "batch_set_node_property",             &YeetAIDock::_tool_batch_set_node_property },
@@ -92,6 +90,8 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 		{ "create_curve",                        &YeetAIDock::_tool_create_curve },
 		{ "create_fog_volume",                   &YeetAIDock::_tool_create_fog_volume },
 		{ "create_font",                         &YeetAIDock::_tool_create_font },
+		{ "create_game_actor_2d",                &YeetAIDock::_tool_create_game_actor_2d },
+		{ "create_game_actor_3d",                &YeetAIDock::_tool_create_game_actor_3d },
 		{ "create_gdscript_file",                &YeetAIDock::_tool_create_gdscript_file },
 		{ "create_gi_probe",                     &YeetAIDock::_tool_create_gi_probe },
 		{ "create_gpu_particles_2d",             &YeetAIDock::_tool_create_gpu_particles_2d },
@@ -259,6 +259,7 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 		{ "rename_node",                         &YeetAIDock::_tool_rename_node },
 		{ "rename_resource_references",          &YeetAIDock::_tool_rename_resource_references },
 		{ "reparent_node",                       &YeetAIDock::_tool_reparent_node },
+		{ "repair_game_physics",                 &YeetAIDock::_tool_repair_game_physics },
 		{ "replace_in_project_files",            &YeetAIDock::_tool_replace_in_project_files },
 		{ "replace_node_with_scene",              &YeetAIDock::_tool_replace_node_with_scene },
 		{ "resolve_resource_uid",                &YeetAIDock::_tool_resolve_resource_uid },
@@ -306,19 +307,17 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 	};
 	static const int table_size = sizeof(table) / sizeof(table[0]);
 
-	// Binary search over the sorted table.
-	// NOTE: hold the CharString in a named lvalue so the underlying char* in `key`
-	// stays valid for the duration of the search. `p_tool_name.utf8().get_data()`
-	// inline would dangle past the full-expression.
 	const CharString tool_name_utf8 = p_tool_name.utf8();
-	const ToolEntry key = { tool_name_utf8.get_data(), nullptr };
-	const ToolEntry *found = std::lower_bound(table, table + table_size, key,
-			[](const ToolEntry &a, const ToolEntry &b) {
-				return strcmp(a.name, b.name) < 0;
-			});
+	const ToolEntry *found = nullptr;
+	for (int i = 0; i < table_size; i++) {
+		if (strcmp(table[i].name, tool_name_utf8.get_data()) == 0) {
+			found = &table[i];
+			break;
+		}
+	}
 
-ToolExecutionResult result;
-	if (found == table + table_size || strcmp(found->name, tool_name_utf8.get_data()) != 0) {
+	ToolExecutionResult result;
+	if (found == nullptr) {
 		result.payload["error"] = "Unknown tool";
 		result.display_text = vformat("Unknown tool: %s", p_tool_name);
 		// Record failed tool execution metric
@@ -486,6 +485,7 @@ Vector<String> yeet_ai_get_all_tool_names() {
 		"add_audio_bus_effect", "add_collision_exception", "add_collision_shape", "add_collision_shape_2d",
 		"add_csg_primitive", "add_custom_class", "add_node", "add_primitive_mesh",
 		"add_tileset_atlas_source", "assign_resource_to_property", "attach_script",
+		"audit_game_physics",
 		"bake_navigation_mesh", "batch_reparent_nodes", "batch_set_node_property",
 		"batch_tool_calls", "capture_dual_view", "capture_editor_viewport",
 		"capture_game_viewport", "capture_subviewport", "capture_texture_resource",
@@ -494,7 +494,7 @@ Vector<String> yeet_ai_get_all_tool_names() {
 		"create_area_3d", "create_aspect_ratio_container", "create_atlas_texture", "create_audio_player",
 		"create_audio_stream_player_2d", "create_blend_tree", "create_button", 		"create_camera_2d", "create_camera_3d", "create_canvas_layer", "create_character_body_2d",
 		"create_character_body_3d", "create_check_box", "create_color_rect", "create_collision_polygon_2d", "create_confirmation_dialog", "create_container_layout", "create_control_node",
-		"create_curve", "create_fog_volume", "create_font", "create_gdscript_file",
+		"create_curve", "create_fog_volume", "create_font", "create_game_actor_2d", "create_game_actor_3d", "create_gdscript_file",
 		"create_gi_probe", "create_gpu_particles_2d", "create_gradient", "create_graph_node",
 		"create_h_separator", "create_input_action", "create_item_list", "create_label", "create_line_edit", "create_light",
 		"create_light_2d", "create_line_2d", "create_margin_container", "create_marker_2d", "create_multiplayer_spawner",
@@ -539,7 +539,7 @@ Vector<String> yeet_ai_get_all_tool_names() {
 		"query_physics", "query_raycast_2d", "raycast_query", "read_project_file",
 		"reimport_project_files", "reload_scene", "remove_animation_track",
 		"remove_collision_exception", "remove_input_action", "remove_node",
-		"rename_node", "rename_resource_references", "reparent_node",
+		"rename_node", "rename_resource_references", "reparent_node", "repair_game_physics",
 		"replace_in_project_files", "replace_node_with_scene", "resolve_resource_uid",
 		"run_gdscript_expression", "run_gdscript_test", "run_scene_script",
 		"save_all_scenes", "save_current_scene", "save_resource",

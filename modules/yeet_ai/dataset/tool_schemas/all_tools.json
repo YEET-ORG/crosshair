@@ -511,21 +511,135 @@
       "name": "add_2d_collision_shape",
       "category": "physics",
       "status": "implemented",
-      "description": "Adds a CollisionShape2D child to a 2D physics body with a specified shape type.",
+      "description": "Legacy alias for add_collision_shape_2d. Accepts node_path or parent_path and the same explicit shape/dimension arguments.",
       "arguments": {
         "type": "object",
         "properties": {
           "scene_path": { "type": "string", "default": "" },
-          "node_path": { "type": "string", "description": "CollisionObject2D node path." },
-          "shape_type": { "type": "string", "enum": ["circle", "rectangle", "capsule", "convex", "world_boundary"], "default": "rectangle" },
-          "name": { "type": "string", "default": "", "description": "Name for the CollisionShape2D." },
-          "radius": { "type": "number", "default": 10.0 },
-          "height": { "type": "number", "default": 30.0 },
-          "size": { "type": "object", "default": {}, "description": "{x, y} for rectangle." }
-        },
-        "required": ["node_path"]
+          "parent_path": { "type": "string", "description": "CollisionObject2D parent path." },
+          "node_path": { "type": "string", "description": "Legacy alias for parent_path." },
+          "name": { "type": "string", "default": "CollisionShape2D" },
+          "shape_type": { "type": "string", "enum": ["rectangle", "box", "circle", "capsule", "segment", "convex", "separation_ray", "world_boundary"], "default": "rectangle" },
+          "size": { "type": "object", "default": { "x": 32, "y": 32 }, "description": "{x, y} collider dimensions." },
+          "width": { "type": "number", "default": 32 },
+          "height": { "type": "number", "default": 32 },
+          "radius": { "type": "number", "default": 16 },
+          "position": { "type": "object", "description": "{x, y} local collider offset." },
+          "x": { "type": "number", "default": 0, "description": "Legacy local x offset used when position is omitted." },
+          "y": { "type": "number", "default": 0, "description": "Legacy local y offset used when position is omitted." },
+          "points": { "type": "array", "description": "Convex or segment points as {x,y}." },
+          "disabled": { "type": "boolean", "default": false },
+          "one_way_collision": { "type": "boolean", "default": false },
+          "one_way_collision_margin": { "type": "number", "default": 1 }
+        }
       },
-      "returns": { "type": "object", "properties": { "node_path": { "type": "string" }, "shape_type": { "type": "string" } } }
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" }, "shape_type": { "type": "string" }, "shape_size": { "type": "object" } } }
+    },
+    {
+      "name": "add_collision_shape_2d",
+      "category": "physics",
+      "status": "implemented",
+      "description": "Adds a direct CollisionShape2D child to a 2D physics body or area. Accepts parent_path or legacy node_path, and explicit size/radius/height so generated game colliders match visuals.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "parent_path": { "type": "string", "description": "CollisionObject2D parent path." },
+          "node_path": { "type": "string", "description": "Legacy alias for parent_path." },
+          "name": { "type": "string", "default": "CollisionShape2D" },
+          "shape_type": { "type": "string", "enum": ["rectangle", "box", "circle", "capsule", "segment", "convex", "separation_ray", "world_boundary"], "default": "rectangle" },
+          "size": { "type": "object", "default": { "x": 32, "y": 32 }, "description": "{x, y} collider dimensions." },
+          "width": { "type": "number", "default": 32 },
+          "height": { "type": "number", "default": 32 },
+          "radius": { "type": "number", "default": 16 },
+          "position": { "type": "object", "description": "{x, y} local collider offset." },
+          "x": { "type": "number", "default": 0, "description": "Legacy local x offset used when position is omitted." },
+          "y": { "type": "number", "default": 0, "description": "Legacy local y offset used when position is omitted." },
+          "points": { "type": "array", "description": "Convex or segment points as {x,y}." },
+          "disabled": { "type": "boolean", "default": false },
+          "one_way_collision": { "type": "boolean", "default": false },
+          "one_way_collision_margin": { "type": "number", "default": 1 }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" }, "shape_type": { "type": "string" }, "shape_size": { "type": "object" } } }
+    },
+    {
+      "name": "create_game_actor_2d",
+      "category": "2d_scene",
+      "status": "implemented",
+      "description": "Creates a complete 2D gameplay actor with physics body, direct CollisionShape2D, sensible collider size, collision layer/mask, and optional matching visual.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "name": { "type": "string" },
+          "role": { "type": "string", "enum": ["player", "enemy", "platform", "wall", "collectible", "hazard", "projectile", "trigger", "generic"], "default": "generic" },
+          "body_type": { "type": "string", "enum": ["CharacterBody2D", "StaticBody2D", "RigidBody2D", "Area2D"] },
+          "parent_path": { "type": "string", "default": "" },
+          "position": { "type": "object", "description": "{x,y}" },
+          "size": { "type": "object", "description": "{x,y} collider and visual size." },
+          "shape_type": { "type": "string", "enum": ["rectangle", "box", "circle", "capsule"] },
+          "collision_layer": { "type": "integer", "default": 1 },
+          "collision_mask": { "type": "integer", "default": 1 },
+          "add_visual": { "type": "boolean", "default": true }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" }, "collision_shape_path": { "type": "string" }, "visual_path": { "type": "string" } } }
+    },
+    {
+      "name": "create_game_actor_3d",
+      "category": "3d_scene",
+      "status": "implemented",
+      "description": "Creates a complete 3D gameplay actor with physics body, direct CollisionShape3D, sensible collider size, collision layer/mask, and optional matching visual.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "name": { "type": "string" },
+          "role": { "type": "string", "enum": ["player", "enemy", "platform", "wall", "collectible", "hazard", "projectile", "trigger", "generic"], "default": "generic" },
+          "body_type": { "type": "string", "enum": ["CharacterBody3D", "StaticBody3D", "RigidBody3D", "Area3D"] },
+          "parent_path": { "type": "string", "default": "" },
+          "position": { "type": "object", "description": "{x,y,z}" },
+          "size": { "type": "object", "description": "{x,y,z} collider and visual size." },
+          "shape_type": { "type": "string", "enum": ["box", "sphere", "capsule", "cylinder"] },
+          "collision_layer": { "type": "integer", "default": 1 },
+          "collision_mask": { "type": "integer", "default": 1 },
+          "add_visual": { "type": "boolean", "default": true }
+        }
+      },
+      "returns": { "type": "object", "properties": { "node_path": { "type": "string" }, "collision_shape_path": { "type": "string" }, "visual_path": { "type": "string" } } }
+    },
+    {
+      "name": "audit_game_physics",
+      "category": "physics",
+      "status": "implemented",
+      "description": "Audits a scene for missing, disabled, tiny, or misconfigured game colliders and returns suggested repairs.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "dimensions": { "type": "string", "enum": ["2d", "3d", "both"], "default": "both" },
+          "include_suggestions": { "type": "boolean", "default": true },
+          "min_2d_size_px": { "type": "number", "default": 8 },
+          "min_3d_size": { "type": "number", "default": 0.05 }
+        }
+      },
+      "returns": { "type": "object", "properties": { "valid": { "type": "boolean" }, "issues": { "type": "array" }, "suggested_tool_calls": { "type": "array" } } }
+    },
+    {
+      "name": "repair_game_physics",
+      "category": "physics",
+      "status": "implemented",
+      "description": "Repairs supported issues from audit_game_physics. Dry-run by default; set apply true to modify the scene.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "scene_path": { "type": "string", "default": "" },
+          "issue_ids": { "type": "array", "default": [] },
+          "apply": { "type": "boolean", "default": false }
+        }
+      },
+      "returns": { "type": "object", "properties": { "repair_count": { "type": "integer" }, "repaired_issue_ids": { "type": "array" }, "post_audit": { "type": "object" } } }
     },
     {
       "name": "create_standard_material",
@@ -919,7 +1033,7 @@
           "max_width": { "type": "integer", "default": 640 }
         }
       },
-      "returns": { "type": "object", "properties": { "image_base64": { "type": "string" }, "width": { "type": "integer" }, "height": { "type": "integer" } } }
+      "returns": { "type": "object", "properties": { "png_base64": { "type": "string" }, "image_base64": { "type": "string", "description": "Legacy alias for png_base64." }, "width": { "type": "integer" }, "height": { "type": "integer" } } }
     },
     {
       "name": "capture_game_viewport",
@@ -932,7 +1046,37 @@
           "max_width": { "type": "integer", "default": 640 }
         }
       },
-      "returns": { "type": "object", "properties": { "image_base64": { "type": "string" }, "width": { "type": "integer" }, "height": { "type": "integer" } } }
+      "returns": { "type": "object", "properties": { "png_base64": { "type": "string" }, "image_base64": { "type": "string", "description": "Legacy alias for png_base64." }, "width": { "type": "integer" }, "height": { "type": "integer" } } }
+    },
+    {
+      "name": "capture_subviewport",
+      "category": "vision",
+      "status": "implemented",
+      "description": "Captures a SubViewport node texture as PNG base64 for visual inspection.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "node_path": { "type": "string" },
+          "max_width": { "type": "integer", "default": 640 }
+        },
+        "required": ["node_path"]
+      },
+      "returns": { "type": "object", "properties": { "png_base64": { "type": "string" }, "image_base64": { "type": "string", "description": "Legacy alias for png_base64." }, "width": { "type": "integer" }, "height": { "type": "integer" }, "size_bytes": { "type": "integer" } } }
+    },
+    {
+      "name": "capture_texture_resource",
+      "category": "vision",
+      "status": "implemented",
+      "description": "Captures a Texture2D resource under res:// as PNG base64 so the agent can visually inspect project image assets before choosing or assigning them.",
+      "arguments": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "Texture resource path under res://." },
+          "max_width": { "type": "integer", "default": 640 }
+        },
+        "required": ["path"]
+      },
+      "returns": { "type": "object", "properties": { "png_base64": { "type": "string" }, "image_base64": { "type": "string", "description": "Legacy alias for png_base64." }, "path": { "type": "string" }, "width": { "type": "integer" }, "height": { "type": "integer" }, "size_bytes": { "type": "integer" } } }
     },
     {
       "name": "get_debug_snapshot",

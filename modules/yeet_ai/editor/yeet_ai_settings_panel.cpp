@@ -457,6 +457,34 @@ void YeetAISettingsPanel::_build_ui() {
 	settings_max_tool_round_trips->set_step(1);
 	_add_settings_labeled_row(vb, TTR("Tool round-trips"), settings_max_tool_round_trips, TTR("Maximum assistant tool-call loops per user message."));
 
+	settings_context_token_budget = memnew(SpinBox);
+	settings_context_token_budget->set_min(2000);
+	settings_context_token_budget->set_max(500000);
+	settings_context_token_budget->set_step(100);
+	_add_settings_labeled_row(vb, TTR("Context budget"), settings_context_token_budget, TTR("Approximate token budget used to prune chat history before each request."));
+
+	settings_context_summarization_enabled = memnew(CheckBox);
+	settings_context_summarization_enabled->set_text(TTR("Summarize older chat context when conversations get long"));
+	vb->add_child(settings_context_summarization_enabled);
+
+	settings_context_summary_trigger_tokens = memnew(SpinBox);
+	settings_context_summary_trigger_tokens->set_min(1000);
+	settings_context_summary_trigger_tokens->set_max(500000);
+	settings_context_summary_trigger_tokens->set_step(100);
+	_add_settings_labeled_row(vb, TTR("Summary trigger"), settings_context_summary_trigger_tokens, TTR("Approximate conversation tokens before older messages are summarized."));
+
+	settings_context_summary_keep_recent_messages = memnew(SpinBox);
+	settings_context_summary_keep_recent_messages->set_min(2);
+	settings_context_summary_keep_recent_messages->set_max(200);
+	settings_context_summary_keep_recent_messages->set_step(1);
+	_add_settings_labeled_row(vb, TTR("Keep recent messages"), settings_context_summary_keep_recent_messages, TTR("Number of newest messages kept verbatim while older messages move into summary."));
+
+	settings_context_summary_max_chars = memnew(SpinBox);
+	settings_context_summary_max_chars->set_min(2000);
+	settings_context_summary_max_chars->set_max(100000);
+	settings_context_summary_max_chars->set_step(100);
+	_add_settings_labeled_row(vb, TTR("Summary max chars"), settings_context_summary_max_chars, TTR("Maximum stored summary length per chat session."));
+
 	settings_vision_enabled = memnew(CheckBox);
 	settings_vision_enabled->set_text(TTR("Include viewport/screenshot images in requests (vision models)"));
 	vb->add_child(settings_vision_enabled);
@@ -538,6 +566,11 @@ void YeetAISettingsPanel::_build_ui() {
 	settings_max_tokens->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_spinbox_changed));
 	settings_temperature->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_spinbox_changed));
 	settings_max_tool_round_trips->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_spinbox_changed));
+	settings_context_token_budget->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_spinbox_changed));
+	settings_context_summarization_enabled->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_checkbox_toggled));
+	settings_context_summary_trigger_tokens->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_spinbox_changed));
+	settings_context_summary_keep_recent_messages->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_spinbox_changed));
+	settings_context_summary_max_chars->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_spinbox_changed));
 	settings_vision_enabled->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_checkbox_toggled));
 	settings_vision_default_max_dimension->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_spinbox_changed));
 	settings_allow_project_settings_write->connect(SceneStringName(toggled), callable_mp(this, &YeetAISettingsPanel::_commit_checkbox_toggled));
@@ -1271,6 +1304,11 @@ void YeetAISettingsPanel::_load_from_settings() {
 	settings_max_tokens->set_value_no_signal(_get_setting_int("yeet_ai/chat/max_tokens", 32768));
 	settings_temperature->set_value_no_signal((double)_get_setting_float("yeet_ai/chat/temperature", 0.25f));
 	settings_max_tool_round_trips->set_value_no_signal(_get_setting_int("yeet_ai/chat/max_tool_round_trips", 100));
+	settings_context_token_budget->set_value_no_signal(_get_setting_int("yeet_ai/chat/context_token_budget", 150000));
+	settings_context_summarization_enabled->set_pressed_no_signal(_get_setting_bool("yeet_ai/chat/context_summarization_enabled", true));
+	settings_context_summary_trigger_tokens->set_value_no_signal(_get_setting_int("yeet_ai/chat/context_summary_trigger_tokens", 24000));
+	settings_context_summary_keep_recent_messages->set_value_no_signal(_get_setting_int("yeet_ai/chat/context_summary_keep_recent_messages", 16));
+	settings_context_summary_max_chars->set_value_no_signal(_get_setting_int("yeet_ai/chat/context_summary_max_chars", 12000));
 	settings_vision_enabled->set_pressed_no_signal(_get_setting_bool("yeet_ai/chat/vision_enabled", false));
 	settings_vision_default_max_dimension->set_value_no_signal(_get_setting_int("yeet_ai/chat/vision_default_max_dimension", 1280));
 	settings_allow_project_settings_write->set_pressed_no_signal(_get_setting_bool("yeet_ai/tools/allow_project_settings_write", true));
@@ -1313,6 +1351,11 @@ void YeetAISettingsPanel::_commit_to_settings() {
 	s->set_setting("yeet_ai/chat/max_tokens", int(settings_max_tokens->get_value()));
 	s->set_setting("yeet_ai/chat/temperature", float(settings_temperature->get_value()));
 	s->set_setting("yeet_ai/chat/max_tool_round_trips", int(settings_max_tool_round_trips->get_value()));
+	s->set_setting("yeet_ai/chat/context_token_budget", int(settings_context_token_budget->get_value()));
+	s->set_setting("yeet_ai/chat/context_summarization_enabled", settings_context_summarization_enabled->is_pressed());
+	s->set_setting("yeet_ai/chat/context_summary_trigger_tokens", int(settings_context_summary_trigger_tokens->get_value()));
+	s->set_setting("yeet_ai/chat/context_summary_keep_recent_messages", int(settings_context_summary_keep_recent_messages->get_value()));
+	s->set_setting("yeet_ai/chat/context_summary_max_chars", int(settings_context_summary_max_chars->get_value()));
 	s->set_setting("yeet_ai/chat/vision_enabled", settings_vision_enabled->is_pressed());
 	s->set_setting("yeet_ai/chat/vision_default_max_dimension", int(settings_vision_default_max_dimension->get_value()));
 	s->set_setting("yeet_ai/tools/allow_project_settings_write", settings_allow_project_settings_write->is_pressed());

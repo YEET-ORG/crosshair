@@ -39,6 +39,7 @@
 #include "scene/2d/navigation/navigation_region_2d.h"
 #include "scene/resources/2d/capsule_shape_2d.h"
 #include "scene/resources/2d/circle_shape_2d.h"
+#include "scene/resources/2d/convex_polygon_shape_2d.h"
 #include "scene/resources/2d/rectangle_shape_2d.h"
 #include "scene/resources/2d/segment_shape_2d.h"
 #include "scene/resources/2d/separation_ray_shape_2d.h"
@@ -700,7 +701,10 @@ Dictionary YeetAIDock::_tool_add_collision_shape_2d(const Dictionary &p_args) co
 	if (!_resolve_scene(p_args, &scene_root, err)) {
 		return _make_error(err);
 	}
-	const String parent_path = _arg_string(p_args, "parent_path", "");
+	String parent_path = _arg_string(p_args, "parent_path", "");
+	if (parent_path.is_empty()) {
+		parent_path = _arg_string(p_args, "node_path", "");
+	}
 	Node *parent = _resolve_node_target(scene_root, parent_path, err);
 	CollisionObject2D *collision_parent = Object::cast_to<CollisionObject2D>(parent);
 	if (collision_parent == nullptr) {
@@ -709,35 +713,77 @@ Dictionary YeetAIDock::_tool_add_collision_shape_2d(const Dictionary &p_args) co
 
 	const String shape_type = _arg_string(p_args, "shape_type", "rectangle").to_lower();
 	Ref<Shape2D> shape;
+	Array warnings;
+
+	const Vector2 rect_size = _arg_vector2(p_args, "size", Vector2(_arg_float(p_args, "width", 32.0), _arg_float(p_args, "height", 32.0)));
+	const Vector2 shape_position = _arg_vector2(p_args, "position", Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
+	const double derived_radius = MAX(0.001, MIN(Math::abs(rect_size.x), Math::abs(rect_size.y)) * 0.5);
+	const double radius = _arg_float(p_args, "radius", derived_radius);
+	const double height = _arg_float(p_args, "height", MAX(Math::abs(rect_size.y), radius * 2.0));
 
 	if (shape_type == "circle") {
 		Ref<CircleShape2D> circle = memnew(CircleShape2D);
-		circle->set_radius(_arg_float(p_args, "radius", 10.0));
+		circle->set_radius(radius);
 		shape = circle;
 	} else if (shape_type == "capsule") {
 		Ref<CapsuleShape2D> capsule = memnew(CapsuleShape2D);
-		capsule->set_radius(_arg_float(p_args, "radius", 10.0));
-		capsule->set_height(_arg_float(p_args, "height", 20.0));
+		capsule->set_radius(radius);
+		capsule->set_height(MAX(height, radius * 2.0));
 		shape = capsule;
 	} else if (shape_type == "segment") {
 		Ref<SegmentShape2D> segment = memnew(SegmentShape2D);
-		segment->set_a(Vector2(_arg_float(p_args, "a_x", -10.0), _arg_float(p_args, "a_y", 0.0)));
-		segment->set_b(Vector2(_arg_float(p_args, "b_x", 10.0), _arg_float(p_args, "b_y", 0.0)));
+		Array points = _arg_array(p_args, "points");
+		if (points.size() >= 2 && points[0].get_type() == Variant::DICTIONARY && points[1].get_type() == Variant::DICTIONARY) {
+			const Dictionary a = points[0];
+			const Dictionary b = points[1];
+			segment->set_a(Vector2(_arg_float(a, "x", -rect_size.x * 0.5), _arg_float(a, "y", 0.0)));
+			segment->set_b(Vector2(_arg_float(b, "x", rect_size.x * 0.5), _arg_float(b, "y", 0.0)));
+		} else {
+			segment->set_a(Vector2(_arg_float(p_args, "a_x", -rect_size.x * 0.5), _arg_float(p_args, "a_y", 0.0)));
+			segment->set_b(Vector2(_arg_float(p_args, "b_x", rect_size.x * 0.5), _arg_float(p_args, "b_y", 0.0)));
+		}
 		shape = segment;
+	} else if (shape_type == "convex") {
+		Array points = _arg_array(p_args, "points");
+		if (points.is_empty()) {
+			points = _arg_array(p_args, "vertices");
+		}
+		if (points.size() < 3) {
+			return _make_error("Convex CollisionShape2D requires at least 3 points in 'points' or 'vertices'.");
+		}
+		Vector<Vector2> convex_points;
+		for (int i = 0; i < points.size(); i++) {
+			if (points[i].get_type() == Variant::DICTIONARY) {
+				const Dictionary d = points[i];
+				convex_points.push_back(Vector2(_arg_float(d, "x", 0.0), _arg_float(d, "y", 0.0)));
+			}
+		}
+		if (convex_points.size() < 3) {
+			return _make_error("Convex CollisionShape2D points must be dictionaries with x/y values.");
+		}
+		Ref<ConvexPolygonShape2D> convex = memnew(ConvexPolygonShape2D);
+		convex->set_points(convex_points);
+		shape = convex;
 	} else if (shape_type == "separation_ray") {
 		Ref<SeparationRayShape2D> ray = memnew(SeparationRayShape2D);
-		ray->set_length(_arg_float(p_args, "length", 20.0));
+		ray->set_length(_arg_float(p_args, "length", MAX(rect_size.y, 32.0)));
 		shape = ray;
 	} else if (shape_type == "world_boundary") {
 		Ref<WorldBoundaryShape2D> boundary = memnew(WorldBoundaryShape2D);
 		boundary->set_normal(Vector2(_arg_float(p_args, "normal_x", 0.0), _arg_float(p_args, "normal_y", -1.0)));
 		boundary->set_distance(_arg_float(p_args, "distance", 0.0));
 		shape = boundary;
-	} else {
+	} else if (shape_type == "rectangle" || shape_type == "box") {
 		// Default: rectangle
 		Ref<RectangleShape2D> rect = memnew(RectangleShape2D);
-		rect->set_size(Vector2(_arg_float(p_args, "width", 20.0), _arg_float(p_args, "height", 20.0)));
+		rect->set_size(rect_size);
 		shape = rect;
+	} else {
+		return _make_error("Unknown 2D shape type. Use: rectangle, circle, capsule, segment, convex, separation_ray, world_boundary.");
+	}
+
+	if (!p_args.has("size") && !p_args.has("width") && !p_args.has("height") && shape_type != "world_boundary") {
+		warnings.push_back("No explicit collider dimensions were provided; used conservative defaults. Prefer passing size, radius, or height.");
 	}
 
 	CollisionShape2D *cs = memnew(CollisionShape2D);
@@ -746,7 +792,7 @@ Dictionary YeetAIDock::_tool_add_collision_shape_2d(const Dictionary &p_args) co
 	cs->set_disabled(_arg_bool(p_args, "disabled", false));
 	cs->set_one_way_collision(_arg_bool(p_args, "one_way_collision", false));
 	cs->set_one_way_collision_margin(_arg_float(p_args, "one_way_collision_margin", 1.0));
-	cs->set_position(Vector2(_arg_float(p_args, "x", 0.0), _arg_float(p_args, "y", 0.0)));
+	cs->set_position(shape_position);
 	cs->set_rotation_degrees(_arg_float(p_args, "rotation_degrees", 0.0));
 
 	_add_to_scene(collision_parent, cs, scene_root);
@@ -755,6 +801,9 @@ Dictionary YeetAIDock::_tool_add_collision_shape_2d(const Dictionary &p_args) co
 	result["ok"] = true;
 	result["node_path"] = String(cs->get_path());
 	result["shape_type"] = shape_type;
+	result["shape_size"] = rect_size;
+	result["shape_position"] = shape_position;
+	result["warnings"] = warnings;
 	return result;
 }
 

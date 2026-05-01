@@ -886,9 +886,9 @@ int YeetAIDock::ConversationWindow::estimate_message_tokens(const String &text) 
 }
 
 void YeetAIDock::_init_conversation_window() {
-	_conversation_window.max_tokens = 128000;
+	_conversation_window.max_tokens = _get_editor_setting_int("yeet_ai/chat/context_token_budget", 150000);
 	_conversation_window.current_tokens = 0;
-	_conversation_window.trim_threshold = 100000;
+	_conversation_window.trim_threshold = MAX(2000, int(_conversation_window.max_tokens * 0.8f));
 	_conversation_window.sliding_enabled = true;
 	_conversation_window.min_keep_messages = 3;
 }
@@ -939,6 +939,261 @@ void YeetAIDock::_trim_to_fit(int new_message_tokens) {
 
 int YeetAIDock::_get_windowed_messages_count() const {
 	return conversation_messages.size();
+}
+
+String YeetAIDock::_message_content_to_text(const Variant &p_content) const {
+	if (p_content.get_type() == Variant::NIL) {
+		return String();
+	}
+	if (p_content.get_type() == Variant::STRING || p_content.get_type() == Variant::STRING_NAME) {
+		return String(p_content);
+	}
+	if (p_content.get_type() == Variant::ARRAY) {
+		const Array parts = p_content;
+		String out;
+		for (int i = 0; i < parts.size(); i++) {
+			if (i > 0 && !out.ends_with("\n")) {
+				out += "\n";
+			}
+			const Variant part = parts[i];
+			if (part.get_type() == Variant::DICTIONARY) {
+				const Dictionary d = part;
+				const String type = _clean_json_string_field(d, SNAME("type"));
+				if (type == "text") {
+					out += String(d.get("text", ""));
+				} else if (type == "image_url") {
+					out += "[image omitted]";
+				} else {
+					out += JSON::stringify(d, "", false, true);
+				}
+			} else {
+				out += String(part);
+			}
+		}
+		return out;
+	}
+	if (p_content.get_type() == Variant::DICTIONARY) {
+		return JSON::stringify(p_content, "", false, true);
+	}
+	return String(p_content);
+}
+
+int YeetAIDock::_estimate_message_tokens(const Variant &p_message) const {
+	String text;
+	if (p_message.get_type() == Variant::DICTIONARY) {
+		const Dictionary d = p_message;
+		text = _message_content_to_text(d.get("content", Variant()));
+		if (d.has("tool_calls")) {
+			text += JSON::stringify(d.get("tool_calls", Array()), "", false, true);
+		}
+	} else {
+		text = _message_content_to_text(p_message);
+	}
+	return MAX(1, text.length() / 4);
+}
+
+int YeetAIDock::_estimate_messages_tokens(const Array &p_messages) const {
+	int tokens = 0;
+	for (const Variant &message : p_messages) {
+		tokens += _estimate_message_tokens(message);
+	}
+	return tokens;
+}
+
+bool YeetAIDock::_is_context_summarization_enabled() const {
+	return _get_editor_setting_bool("yeet_ai/chat/context_summarization_enabled", true);
+}
+
+int YeetAIDock::_get_context_summary_trigger_tokens() const {
+	return CLAMP(_get_editor_setting_int("yeet_ai/chat/context_summary_trigger_tokens", 24000), 1000, 500000);
+}
+
+int YeetAIDock::_get_context_summary_keep_recent_messages() const {
+	return CLAMP(_get_editor_setting_int("yeet_ai/chat/context_summary_keep_recent_messages", 16), 2, 200);
+}
+
+int YeetAIDock::_get_context_summary_max_chars() const {
+	return CLAMP(_get_editor_setting_int("yeet_ai/chat/context_summary_max_chars", 12000), 2000, 100000);
+}
+
+String YeetAIDock::_truncate_context_summary(const String &p_summary) const {
+	const int max_chars = _get_context_summary_max_chars();
+	if (p_summary.length() <= max_chars) {
+		return p_summary;
+	}
+	String tail = p_summary.substr(p_summary.length() - max_chars, max_chars);
+	const int first_newline = tail.find("\n");
+	if (first_newline > 0 && first_newline < tail.length() - 1) {
+		tail = tail.substr(first_newline + 1);
+	}
+	return "[Earlier summary entries were compacted.]\n" + tail;
+}
+
+String YeetAIDock::_summarize_message_for_context(const Dictionary &p_message) const {
+	const String role = _clean_json_string_field(p_message, SNAME("role"));
+	String content = _clean_content_artifacts(_message_content_to_text(p_message.get("content", Variant()))).strip_edges();
+	content = content.replace("\r", " ").replace("\n", " ");
+
+	if (role == "assistant" && content.begins_with("{")) {
+		const Variant parsed = JSON::parse_string(content);
+		if (parsed.get_type() == Variant::DICTIONARY) {
+			const Dictionary d = parsed;
+			const String type = _clean_json_string_field(d, SNAME("type"));
+			if (type == "tool_call") {
+				const String tool_name = _clean_json_string_field(d, SNAME("tool"));
+				String args = JSON::stringify(d.get("arguments", Dictionary()), "", false, true);
+				if (args.length() > 360) {
+					args = args.substr(0, 360) + " ...";
+				}
+				return vformat("- Assistant requested tool `%s` with args %s.", tool_name, args);
+			}
+			if (type == "final") {
+				content = String(d.get("message", content));
+			}
+		}
+	}
+
+	if (p_message.has("tool_calls")) {
+		const Array tool_calls = p_message.get("tool_calls", Array());
+		String calls_text;
+		for (int i = 0; i < tool_calls.size(); i++) {
+			if (tool_calls[i].get_type() != Variant::DICTIONARY) {
+				continue;
+			}
+			const Dictionary tc = tool_calls[i];
+			const Variant fn_var = tc.get("function", Variant());
+			if (fn_var.get_type() != Variant::DICTIONARY) {
+				continue;
+			}
+			const Dictionary fn = fn_var;
+			const String tool_name = _clean_json_string_field(fn, SNAME("name"));
+			if (tool_name.is_empty()) {
+				continue;
+			}
+			if (!calls_text.is_empty()) {
+				calls_text += ", ";
+			}
+			calls_text += tool_name;
+		}
+		if (!calls_text.is_empty()) {
+			if (!content.is_empty()) {
+				content += " ";
+			}
+			content += "Called tools: " + calls_text + ".";
+		}
+	}
+
+	const int max_content_chars = role == "tool" ? 900 : 1400;
+	if (content.length() > max_content_chars) {
+		content = content.substr(0, max_content_chars) + " ...";
+	}
+	if (content.is_empty()) {
+		return String();
+	}
+	if (role == "user") {
+		return "- User: " + content;
+	}
+	if (role == "assistant") {
+		return "- Assistant: " + content;
+	}
+	if (role == "tool") {
+		const String call_id = _clean_json_string_field(p_message, SNAME("tool_call_id"));
+		if (!call_id.is_empty()) {
+			return vformat("- Tool result `%s`: %s", call_id, content);
+		}
+		return "- Tool result: " + content;
+	}
+	return "- " + role.capitalize() + ": " + content;
+}
+
+void YeetAIDock::_ensure_context_summary() {
+	if (!_is_context_summarization_enabled()) {
+		return;
+	}
+	if (conversation_messages.is_empty()) {
+		_context_summary = String();
+		_context_summary_message_count = 0;
+		return;
+	}
+	if (_context_summary_message_count > conversation_messages.size()) {
+		_context_summary = String();
+		_context_summary_message_count = 0;
+	}
+
+	const int total_tokens = _estimate_messages_tokens(conversation_messages);
+	if (_context_summary.is_empty() && total_tokens < _get_context_summary_trigger_tokens()) {
+		return;
+	}
+
+	const int keep_recent = MIN(_get_context_summary_keep_recent_messages(), conversation_messages.size());
+	const int summarize_until = MAX(0, conversation_messages.size() - keep_recent);
+	if (summarize_until <= _context_summary_message_count) {
+		return;
+	}
+
+	String addition;
+	for (int i = _context_summary_message_count; i < summarize_until; i++) {
+		if (conversation_messages[i].get_type() != Variant::DICTIONARY) {
+			continue;
+		}
+		const Dictionary msg = conversation_messages[i];
+		const String line = _summarize_message_for_context(msg);
+		if (line.is_empty()) {
+			continue;
+		}
+		addition += line + "\n";
+	}
+
+	_context_summary_message_count = summarize_until;
+	if (addition.is_empty()) {
+		return;
+	}
+	if (_context_summary.is_empty()) {
+		_context_summary = "Conversation summary so far:\n";
+	} else if (!_context_summary.ends_with("\n")) {
+		_context_summary += "\n";
+	}
+	_context_summary += addition;
+	_context_summary = _truncate_context_summary(_context_summary);
+}
+
+String YeetAIDock::_build_context_summary_prompt() const {
+	if (!_is_context_summarization_enabled() || _context_summary.strip_edges().is_empty()) {
+		return String();
+	}
+	return String() +
+			"Long-running conversation memory follows. It summarizes older user messages, assistant decisions, tool calls, tool results, errors, and files touched that may be omitted from the request window.\n"
+			"Use it as continuity context, but prefer current live editor/tool state when there is a conflict.\n"
+			+ _context_summary;
+}
+
+int YeetAIDock::_adjust_context_start_for_tool_messages(int p_start) const {
+	int start = CLAMP(p_start, 0, conversation_messages.size());
+	while (start < conversation_messages.size()) {
+		if (conversation_messages[start].get_type() != Variant::DICTIONARY) {
+			break;
+		}
+		const Dictionary msg = conversation_messages[start];
+		const String role = _clean_json_string_field(msg, SNAME("role"));
+		if (role != "tool") {
+			break;
+		}
+		start++;
+	}
+	return start;
+}
+
+void YeetAIDock::_sync_active_chat_state() {
+	if (_active_chat_index < 0 || _active_chat_index >= _chat_sessions.size()) {
+		return;
+	}
+	ChatSession &active = _chat_sessions.write[_active_chat_index];
+	active.messages = conversation_messages;
+	active.records = _chat_records;
+	active.context_summary = _context_summary;
+	active.context_summary_message_count = _context_summary_message_count;
+	active.agent_preset = _get_current_agent_id();
+	active.updated_at = Time::get_singleton()->get_unix_time_from_system();
 }
 
 // ── Metrics Collector ──────────────────────────────────────────────────────
@@ -1765,6 +2020,8 @@ void YeetAIDock::_clear_chat() {
 
 	conversation_messages.clear();
 	turn_context_prompt = String();
+	_context_summary = String();
+	_context_summary_message_count = 0;
 	chat_log->clear();
 	stream_label->set_visible(false);
 	stream_label->clear();
@@ -1777,6 +2034,8 @@ void YeetAIDock::_clear_chat() {
 	if (_active_chat_index >= 0 && _active_chat_index < _chat_sessions.size()) {
 		_chat_sessions.write[_active_chat_index].messages.clear();
 		_chat_sessions.write[_active_chat_index].records.clear();
+		_chat_sessions.write[_active_chat_index].context_summary = String();
+		_chat_sessions.write[_active_chat_index].context_summary_message_count = 0;
 		_chat_sessions.write[_active_chat_index].title = TTR("New Chat");
 		_update_chat_selector();
 	}
@@ -1790,6 +2049,12 @@ void YeetAIDock::_append_message(const String &p_role, const String &p_text) {
 	}
 	// Safety net: strip any non-ASCII artifacts that may have slipped through.
 	String safe_text = _clean_content_artifacts(p_text);
+	if (!_suppress_chat_recording && !safe_text.is_empty()) {
+		MessageRecord record;
+		record.role = p_role;
+		record.text = safe_text;
+		_chat_records.push_back(record);
+	}
 	const bool tree_ready = is_inside_tree();
 	const Color font_base = tree_ready ? get_theme_color(SNAME("font_color"), EditorStringName(Editor)) : Color(0.9f, 0.9f, 0.9f);
 	const Color accent = tree_ready ? get_theme_color(SNAME("accent_color"), EditorStringName(Editor)) : Color(0.3f, 0.5f, 0.9f);
@@ -1869,9 +2134,7 @@ void YeetAIDock::_append_message(const String &p_role, const String &p_text) {
 	chat_log->append_text("\n");
 	_scroll_to_bottom();
 
-	// Auto-save chat after each message to prevent data loss on crash.
-	if (_active_chat_index >= 0 && _active_chat_index < _chat_sessions.size()) {
-		_chat_sessions.write[_active_chat_index].updated_at = Time::get_singleton()->get_unix_time_from_system();
+	if (!_suppress_chat_recording && _active_chat_index >= 0 && _active_chat_index < _chat_sessions.size()) {
 		_save_all_chats();
 	}
 }
@@ -2345,6 +2608,8 @@ void YeetAIDock::_request_model_response() {
 		payload["temperature"] = temperature;
 	}
 
+	_ensure_context_summary();
+
 	Array messages;
 	String system_prompt = _native_tools_enabled ? _build_compact_system_prompt() : _build_modular_system_prompt();
 	const String agent_id = _get_current_agent_id();
@@ -2360,6 +2625,10 @@ void YeetAIDock::_request_model_response() {
 	if (!turn_context_prompt.is_empty()) {
 		messages.append(make_message("system", turn_context_prompt));
 	}
+	const String context_summary_prompt = _build_context_summary_prompt();
+	if (!context_summary_prompt.is_empty()) {
+		messages.append(make_message("system", context_summary_prompt));
+	}
 	for (const Variant &message : conversation_messages) {
 		messages.append(message);
 	}
@@ -2370,12 +2639,7 @@ void YeetAIDock::_request_model_response() {
 	{
 		int total_chars = 0;
 		for (const Variant &msg : messages) {
-			if (msg.get_type() != Variant::DICTIONARY) {
-				continue;
-			}
-			const Dictionary d = msg;
-			const String content = d.get("content", "");
-			total_chars += content.length();
+			total_chars += _estimate_message_tokens(msg) * 3;
 		}
 		const int estimated_tokens = total_chars / 3; // ~3 chars per token for mixed content
 		const int context_budget = _get_editor_setting_int("yeet_ai/chat/context_token_budget", 150000);
@@ -2386,9 +2650,12 @@ void YeetAIDock::_request_model_response() {
 			if (!turn_context_prompt.is_empty()) {
 				messages.append(make_message("system", turn_context_prompt));
 			}
+			if (!context_summary_prompt.is_empty()) {
+				messages.append(make_message("system", context_summary_prompt));
+			}
 			// Keep only the last N conversation messages that fit within budget
 			int conv_chars = 0;
-			int conv_budget = context_budget - (system_prompt.length() + turn_context_prompt.length()) / 3;
+			int conv_budget = context_budget - (system_prompt.length() + turn_context_prompt.length() + context_summary_prompt.length()) / 3;
 			if (conv_budget < 2000) {
 				conv_budget = 2000;
 			}
@@ -2398,24 +2665,23 @@ void YeetAIDock::_request_model_response() {
 				if (msg.get_type() != Variant::DICTIONARY) {
 					continue;
 				}
-				const Dictionary d = msg;
-				const String content = d.get("content", "");
-				if (conv_chars + content.length() / 3 > conv_budget && kept >= 2) {
+				const int message_tokens = _estimate_message_tokens(msg);
+				if (conv_chars + message_tokens > conv_budget && kept >= 2) {
 					break;
 				}
-				conv_chars += content.length() / 3;
+				conv_chars += message_tokens;
 				kept++;
 			}
-			const int start = conversation_messages.size() - kept;
+			const int start = _adjust_context_start_for_tool_messages(conversation_messages.size() - kept);
 			for (int i = start; i < conversation_messages.size(); i++) {
 				messages.append(conversation_messages[i]);
 			}
 			if (start > 0) {
-				// Insert a marker so the model knows context was trimmed
+				// Insert a marker so the model knows context was trimmed.
 				Dictionary trim_marker;
-				trim_marker["role"] = "user";
-				trim_marker["content"] = vformat("[%d earlier messages trimmed to fit context window. Use get_scene_tree, read_project_file etc. to re-inspect the project state.]", start);
-				messages.insert(2, trim_marker);
+				trim_marker["role"] = "system";
+				trim_marker["content"] = vformat("%d earlier conversation messages were omitted from this request window. Use the conversation summary and live editor tools to recover details when needed.", start);
+				messages.insert(MIN(3, messages.size()), trim_marker);
 			}
 		}
 	}
@@ -2706,8 +2972,12 @@ String YeetAIDock::_build_task_hints_for_user_prompt(const String &p_user_prompt
 	const bool wants_color =
 			s.contains("color") || s.contains("colour") || s.contains("material") || s.contains("tint") ||
 			s.contains("blue") || s.contains("red") || s.contains("green") || s.contains("yellow");
+	const bool wants_game_physics =
+			s.contains("game") || s.contains("collider") || s.contains("collision") || s.contains("hitbox") ||
+			s.contains("physics") || s.contains("enemy") || s.contains("platform") || s.contains("collectible") ||
+			s.contains("hazard") || s.contains("projectile") || s.contains("tilemap");
 
-	if (!wants_move && !wants_jump && !wants_color) {
+	if (!wants_move && !wants_jump && !wants_color && !wants_game_physics) {
 		return String();
 	}
 
@@ -2726,7 +2996,15 @@ String YeetAIDock::_build_task_hints_for_user_prompt(const String &p_user_prompt
 		out += "Color / material: `add_primitive_mesh` does not set color by itself. Use `create_standard_material` (albedo color) and `assign_resource_to_property` or assign `material_override` on the MeshInstance3D.\n";
 	}
 
-	out += "Completeness: If the user asked for several things (e.g. controls + color + capsule), address every part across `batch_tool_calls` and follow-up tool_call rounds if needed—do not omit scripts, input, collision, or materials. Prefer multiple smaller rounds over one truncated JSON.\n";
+	if (wants_game_physics) {
+		out += "Game quality / colliders: Treat this as a playable slice. Prefer `create_game_actor_2d` or `create_game_actor_3d` for players, enemies, platforms, walls, collectibles, hazards, and projectiles. If using low-level tools, every physics body/area needs a direct CollisionShape child with explicit dimensions (`size`, `radius`, `height`) matching the visible actor; large floors/walls need large colliders, not small defaults. Required verification loop: save -> `audit_game_physics` -> repair/fix issues -> `audit_game_physics` again -> play -> `capture_game_viewport` + `get_runtime_debugger_state` -> `stop_playing_scene` -> fix runtime errors before final.\n";
+	}
+
+	if (s.find("asset") != -1 || s.find("texture") != -1 || s.find("sprite") != -1 || s.find("image") != -1) {
+		out += "Asset vision: If choosing among existing image assets, use `find_project_files`/`list_directory` to discover candidates, then `capture_texture_resource` with `max_width` around 512-768 to visually inspect promising textures before assigning them. If vision is disabled, rely on metadata and paths or ask the user to enable `yeet_ai/chat/vision_enabled` when visual choice matters.\n";
+	}
+
+	out += "Completeness: If the user asked for several things (e.g. controls + color + capsule), address every part across `batch_tool_calls` and follow-up tool_call rounds if needed. Do not omit scripts, input, collision, camera/viewport context, materials, saving, or verification. Prefer multiple smaller rounds over one truncated JSON.\n";
 	return out;
 }
 
@@ -2780,17 +3058,28 @@ Dictionary YeetAIDock::_make_user_message_with_optional_vision(const String &p_t
 		const String b64 = String(payload_for_text["png_base64"]);
 		payload_for_text["png_base64"] = vformat("<png base64 omitted in text; %d chars>", b64.length());
 	}
+	if (payload_for_text.has("image_base64")) {
+		const String b64 = String(payload_for_text["image_base64"]);
+		payload_for_text["image_base64"] = vformat("<image base64 omitted in text; %d chars>", b64.length());
+	}
 
 	const String text_body = vformat(
 			"Tool `%s` finished with the following JSON result:\n%s\n\nIf you need more context, return another tool_call JSON object. Otherwise return a final JSON object.",
 			p_tool_name,
 			JSON::stringify(payload_for_text, "\t", false, true));
 
-	if (!vision || !p_tool_payload.has("png_base64")) {
+	String image_b64;
+	if (p_tool_payload.has("png_base64")) {
+		image_b64 = String(p_tool_payload["png_base64"]);
+	} else if (p_tool_payload.has("image_base64")) {
+		image_b64 = String(p_tool_payload["image_base64"]);
+	}
+
+	if (!vision || image_b64.is_empty()) {
 		return make_message("user", text_body);
 	}
 
-	const String b64 = String(p_tool_payload["png_base64"]);
+	const String b64 = image_b64;
 	if (b64.length() > max_b64) {
 		const String note = vformat(
 				"\n\n[vision] Image base64 is too large (%d chars; max %d). Enable smaller captures or raise `yeet_ai/chat/max_base64_chars`. Text-only context follows.",
@@ -3701,6 +3990,12 @@ void YeetAIDock::_build_agent_presets() {
 	coder.system_suffix = "\nYou are in coding mode. Focus on writing clean, idiomatic GDScript. Prefer concise implementations. When creating gameplay, always include proper input handling, physics, and game loop logic.";
 	_agent_presets.push_back(coder);
 
+	AgentPreset game_builder;
+	game_builder.id = "game_builder";
+	game_builder.name = TTR("Game");
+	game_builder.system_suffix = "\nYou are in game-building mode. Treat requests as playable slices, not decorative scenes. Build complete actors with input, scripts, camera/viewport context, visuals, collision layers/masks, and direct CollisionShape children sized to match visuals. Prefer create_game_actor_2d/create_game_actor_3d for gameplay entities. Required loop before final: save, audit_game_physics, repair/fix and audit again, play, capture_game_viewport, get_runtime_debugger_state, stop_playing_scene.";
+	_agent_presets.push_back(game_builder);
+
 	AgentPreset architect;
 	architect.id = "architect";
 	architect.name = TTR("Architect");
@@ -3774,8 +4069,7 @@ void YeetAIDock::_create_new_chat() {
 	session.created_at = OS::get_singleton()->get_unix_time();
 	session.updated_at = session.created_at;
 	_chat_sessions.push_back(session);
-	_active_chat_index = _chat_sessions.size() - 1;
-	_switch_to_chat(_active_chat_index);
+	_switch_to_chat(_chat_sessions.size() - 1);
 	_update_chat_selector();
 }
 
@@ -3786,9 +4080,7 @@ void YeetAIDock::_switch_to_chat(int p_index) {
 
 	// Save current chat state
 	if (_active_chat_index >= 0 && _active_chat_index < _chat_sessions.size()) {
-		ChatSession &old = _chat_sessions.write[_active_chat_index];
-		old.messages = conversation_messages;
-		old.records = _chat_records;
+		_sync_active_chat_state();
 	}
 
 	_cancel_streaming();
@@ -3798,6 +4090,8 @@ void YeetAIDock::_switch_to_chat(int p_index) {
 	const ChatSession &session = _chat_sessions[p_index];
 	conversation_messages = session.messages;
 	_chat_records = session.records;
+	_context_summary = session.context_summary;
+	_context_summary_message_count = session.context_summary_message_count;
 	tool_round_trips = 0;
 	turn_context_prompt = String();
 	_session_modified_files.clear();
@@ -3806,9 +4100,7 @@ void YeetAIDock::_switch_to_chat(int p_index) {
 	_conversation_window.current_tokens = 0;
 	for (int i = 0; i < conversation_messages.size(); i++) {
 		if (conversation_messages[i].get_type() == Variant::DICTIONARY) {
-			const Dictionary msg = conversation_messages[i];
-			String content = msg.get("content", "");
-			_conversation_window.current_tokens += _conversation_window.estimate_message_tokens(content);
+			_conversation_window.current_tokens += _estimate_message_tokens(conversation_messages[i]);
 		}
 	}
 
@@ -3834,6 +4126,25 @@ void YeetAIDock::_switch_to_chat(int p_index) {
 
 	// Rebuild from records
 	intro_message_added = false;
+	if (_chat_records.is_empty() && !conversation_messages.is_empty()) {
+		for (int i = 0; i < conversation_messages.size(); i++) {
+			if (conversation_messages[i].get_type() != Variant::DICTIONARY) {
+				continue;
+			}
+			const Dictionary msg = conversation_messages[i];
+			MessageRecord record;
+			record.role = _clean_json_string_field(msg, SNAME("role"));
+			record.text = _message_content_to_text(msg.get("content", Variant())).strip_edges();
+			if (record.role.is_empty() || record.text.is_empty()) {
+				continue;
+			}
+			if (record.text.length() > 4000) {
+				record.text = record.text.substr(0, 4000) + " ...";
+			}
+			_chat_records.push_back(record);
+		}
+	}
+	_suppress_chat_recording = true;
 	if (_chat_records.is_empty()) {
 		intro_message_added = true;
 		_append_message("assistant", TTR("Crosshair AI is ready. I can inspect the project, scenes, selected nodes, and perform scene and script edits."));
@@ -3842,6 +4153,7 @@ void YeetAIDock::_switch_to_chat(int p_index) {
 			_append_message(_chat_records[i].role, _chat_records[i].text);
 		}
 	}
+	_suppress_chat_recording = false;
 
 	_update_chat_selector();
 	_update_token_counter();
@@ -3888,7 +4200,9 @@ String YeetAIDock::_get_chats_dir() const {
 	return base.path_join("yeet_ai_chats");
 }
 
-void YeetAIDock::_save_all_chats() const {
+void YeetAIDock::_save_all_chats() {
+	_sync_active_chat_state();
+
 	const String dir = _get_chats_dir();
 	Ref<DirAccess> da = DirAccess::open("res://");
 	if (da.is_null()) {
@@ -3905,6 +4219,8 @@ void YeetAIDock::_save_all_chats() const {
 		session_data["created_at"] = s.created_at;
 		session_data["updated_at"] = s.updated_at;
 		session_data["messages"] = s.messages;
+		session_data["context_summary"] = s.context_summary;
+		session_data["context_summary_message_count"] = s.context_summary_message_count;
 
 		Array records;
 		for (int j = 0; j < s.records.size(); j++) {
@@ -3954,6 +4270,8 @@ void YeetAIDock::_load_chats() {
 					session.created_at = json_data.get("created_at", 0);
 					session.updated_at = json_data.get("updated_at", 0);
 					session.messages = json_data.get("messages", Array());
+					session.context_summary = json_data.get("context_summary", "");
+					session.context_summary_message_count = json_data.get("context_summary_message_count", 0);
 
 					const Array rec_arr = json_data.get("records", Array());
 					for (int i = 0; i < rec_arr.size(); i++) {
@@ -4207,12 +4525,10 @@ void YeetAIDock::_update_token_counter() {
 	}
 	int approx_tokens = 0;
 	for (const Variant &msg : conversation_messages) {
-		if (msg.get_type() != Variant::DICTIONARY) {
-			continue;
-		}
-		const Dictionary d = msg;
-		const String content = d.get("content", "");
-		approx_tokens += content.length() / 4;
+		approx_tokens += _estimate_message_tokens(msg);
+	}
+	if (!_context_summary.is_empty()) {
+		approx_tokens += _context_summary.length() / 4;
 	}
 	if (approx_tokens > 0) {
 		_token_count_label->set_text(vformat(TTR("~%d tokens"), approx_tokens));

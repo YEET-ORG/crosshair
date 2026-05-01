@@ -43,6 +43,11 @@ void YeetAIEditorPlugin::_register_crosshair_editor_setting_hints() {
 	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/azure_api_key", PROPERTY_HINT_PASSWORD, "", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/max_tokens", PROPERTY_HINT_RANGE, "0,262144,1", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/max_tool_round_trips", PROPERTY_HINT_RANGE, "1,500,1", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/context_token_budget", PROPERTY_HINT_RANGE, "2000,500000,100", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/chat/context_summarization_enabled", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/context_summary_trigger_tokens", PROPERTY_HINT_RANGE, "1000,500000,100", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/context_summary_keep_recent_messages", PROPERTY_HINT_RANGE, "2,200,1", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/context_summary_max_chars", PROPERTY_HINT_RANGE, "2000,100000,100", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/chat/vision_enabled", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/max_base64_chars", PROPERTY_HINT_RANGE, "10000,10000000,1000", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/game_screenshot_timeout_ms", PROPERTY_HINT_RANGE, "1000,120000,100", PROPERTY_USAGE_DEFAULT));
@@ -190,6 +195,26 @@ void YeetAIEditorPlugin::_ensure_editor_settings() {
 	if (!settings->has_setting("yeet_ai/chat/max_tool_round_trips") || int(settings->get_setting("yeet_ai/chat/max_tool_round_trips")) < 100) {
 		settings->set_initial_value("yeet_ai/chat/max_tool_round_trips", 100, true);
 		settings->set_setting("yeet_ai/chat/max_tool_round_trips", 100);
+	}
+	if (!settings->has_setting("yeet_ai/chat/context_token_budget")) {
+		settings->set_initial_value("yeet_ai/chat/context_token_budget", 150000, true);
+		settings->set_setting("yeet_ai/chat/context_token_budget", 150000);
+	}
+	if (!settings->has_setting("yeet_ai/chat/context_summarization_enabled")) {
+		settings->set_initial_value("yeet_ai/chat/context_summarization_enabled", true, true);
+		settings->set_setting("yeet_ai/chat/context_summarization_enabled", true);
+	}
+	if (!settings->has_setting("yeet_ai/chat/context_summary_trigger_tokens")) {
+		settings->set_initial_value("yeet_ai/chat/context_summary_trigger_tokens", 24000, true);
+		settings->set_setting("yeet_ai/chat/context_summary_trigger_tokens", 24000);
+	}
+	if (!settings->has_setting("yeet_ai/chat/context_summary_keep_recent_messages")) {
+		settings->set_initial_value("yeet_ai/chat/context_summary_keep_recent_messages", 16, true);
+		settings->set_setting("yeet_ai/chat/context_summary_keep_recent_messages", 16);
+	}
+	if (!settings->has_setting("yeet_ai/chat/context_summary_max_chars")) {
+		settings->set_initial_value("yeet_ai/chat/context_summary_max_chars", 12000, true);
+		settings->set_setting("yeet_ai/chat/context_summary_max_chars", 12000);
 	}
 	if (!settings->has_setting("yeet_ai/chat/vision_enabled")) {
 		settings->set_initial_value("yeet_ai/chat/vision_enabled", false, true);

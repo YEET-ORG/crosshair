@@ -256,7 +256,8 @@
         "arguments": {
           "shared_arguments": { "scene_path": "res://levels/main_2d.tscn" },
           "calls": [
-            { "tool": "create_character_body_2d", "arguments": { "name": "Player2D", "motion_mode": "grounded" } },
+            { "tool": "create_game_actor_2d", "arguments": { "name": "Player2D", "role": "player", "position": { "x": 96, "y": 160 }, "size": { "x": 24, "y": 40 }, "shape_type": "capsule", "collision_layer": 1, "collision_mask": 1 } },
+            { "tool": "create_game_actor_2d", "arguments": { "name": "Floor", "role": "platform", "position": { "x": 160, "y": 220 }, "size": { "x": 320, "y": 24 }, "shape_type": "rectangle", "collision_layer": 1, "collision_mask": 1 } },
             { "tool": "create_input_action", "arguments": { "action_name": "move_left", "events": [{ "type": "key", "key": "A" }, { "type": "key", "key": "Left" }] } },
             { "tool": "create_input_action", "arguments": { "action_name": "move_right", "events": [{ "type": "key", "key": "D" }, { "type": "key", "key": "Right" }] } }
           ]
@@ -269,9 +270,37 @@
             { "tool": "create_gdscript_file", "arguments": { "script_path": "res://scripts/player_2d.gd", "contents": "extends CharacterBody2D\n\nconst SPEED = 200.0\nconst JUMP_VELOCITY = -400.0\n\nvar gravity = ProjectSettings.get_setting(\"physics/2d/default_gravity\")\n\nfunc _physics_process(delta):\n\tif not is_on_floor():\n\t\tvelocity.y += gravity * delta\n\tvar direction = Input.get_axis(\"move_left\", \"move_right\")\n\tif direction:\n\t\tvelocity.x = direction * SPEED\n\telse:\n\t\tvelocity.x = move_toward(velocity.x, 0, SPEED)\n\tmove_and_slide()\n" } }
           ]
         }
+      },
+      {
+        "tool": "attach_script",
+        "arguments": { "scene_path": "res://levels/main_2d.tscn", "node_path": "Player2D", "script_path": "res://scripts/player_2d.gd" }
+      },
+      {
+        "tool": "save_current_scene",
+        "arguments": {}
+      },
+      {
+        "tool": "audit_game_physics",
+        "arguments": { "scene_path": "res://levels/main_2d.tscn", "dimensions": "2d", "include_suggestions": true }
+      },
+      {
+        "tool": "play_current_scene",
+        "arguments": {}
+      },
+      {
+        "tool": "capture_game_viewport",
+        "arguments": { "max_width": 640 }
+      },
+      {
+        "tool": "get_runtime_debugger_state",
+        "arguments": {}
+      },
+      {
+        "tool": "stop_playing_scene",
+        "arguments": {}
       }
     ],
-    "reasoning": "2D character needs CharacterBody2D, input actions, and a movement script in a separate batch."
+    "reasoning": "2D character needs a physics body, explicit collider, matching visual, input actions, an attached movement script in a separate script batch, saving, physics audit, playtest capture, runtime debugger check, and stopping play mode before final."
   },
   {
     "id": "exp_017",
@@ -479,5 +508,29 @@
       }
     ],
     "reasoning": "Deletion requires explicit confirmation."
+  },
+  {
+    "id": "exp_031",
+    "intent": "Visually inspect candidate texture assets before choosing one",
+    "user_message": "Use the best coin sprite from my assets for the collectible",
+    "expected_tool_calls": [
+      {
+        "tool": "find_project_files",
+        "arguments": { "query": "coin" }
+      },
+      {
+        "tool": "capture_texture_resource",
+        "arguments": { "path": "res://assets/sprites/coin_gold.png", "max_width": 512 }
+      },
+      {
+        "tool": "capture_texture_resource",
+        "arguments": { "path": "res://assets/sprites/coin_silver.png", "max_width": 512 }
+      },
+      {
+        "tool": "assign_resource_to_property",
+        "arguments": { "scene_path": "res://levels/main_2d.tscn", "node_path": "Collectible/Sprite2D", "property": "texture", "resource_path": "res://assets/sprites/coin_gold.png" }
+      }
+    ],
+    "reasoning": "When an asset choice depends on appearance, discover candidates and capture texture resources so a vision-capable model can inspect the actual images before assigning one."
   }
 ]

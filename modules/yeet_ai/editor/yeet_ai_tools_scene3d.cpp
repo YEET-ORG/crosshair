@@ -136,64 +136,7 @@ Dictionary YeetAIDock::_tool_create_camera_3d(const Dictionary &p_args) const {
 }
 
 Dictionary YeetAIDock::_tool_add_2d_collision_shape(const Dictionary &p_args) const {
-	Dictionary result;
-	String err;
-	Node *scene_root;
-	Node *node;
-	if (!_resolve_scene_and_node(p_args, "node_path", &scene_root, &node, err)) {
-		return _make_error(err);
-	}
-	CollisionObject2D *co = Object::cast_to<CollisionObject2D>(node);
-	if (co == nullptr) {
-		return _make_error("Target node is not a CollisionObject2D");
-	}
-
-	const String shape_type = _arg_string(p_args, "shape_type", "rectangle").to_lower();
-	const String shape_name = _arg_string(p_args, "name", shape_type + "_collision");
-
-	CollisionShape2D *cs = memnew(CollisionShape2D);
-	cs->set_name(shape_name);
-
-	Ref<Shape2D> shape;
-	if (shape_type == "circle") {
-		Ref<CircleShape2D> s = memnew(CircleShape2D);
-		s->set_radius(_arg_float(p_args, "radius", 10.0));
-		shape = s;
-	} else if (shape_type == "rectangle" || shape_type == "box") {
-		Ref<RectangleShape2D> s = memnew(RectangleShape2D);
-		const Vector3 sz = _arg_vector3(p_args, "size", Vector3(20, 20, 0));
-		s->set_size(Vector2(sz.x, sz.y));
-		shape = s;
-	} else if (shape_type == "capsule") {
-		Ref<CapsuleShape2D> s = memnew(CapsuleShape2D);
-		s->set_radius(_arg_float(p_args, "radius", 10.0));
-		s->set_height(_arg_float(p_args, "height", 30.0));
-		shape = s;
-	} else if (shape_type == "convex") {
-		Ref<ConvexPolygonShape2D> s = memnew(ConvexPolygonShape2D);
-		Array pts = _arg_array(p_args, "points");
-		Vector<Vector2> points;
-		for (int i = 0; i < pts.size(); i++) {
-			Dictionary d = pts[i];
-			points.push_back(Vector2(d.get("x", 0.0), d.get("y", 0.0)));
-		}
-		s->set_points(points);
-		shape = s;
-	} else if (shape_type == "world_boundary") {
-		Ref<WorldBoundaryShape2D> s = memnew(WorldBoundaryShape2D);
-		shape = s;
-	} else {
-		return _make_error("Unknown 2D shape type. Use: circle, rectangle, capsule, convex, world_boundary");
-	}
-
-	cs->set_shape(shape);
-	_add_to_scene(co, cs, scene_root);
-
-	_mark_unsaved();
-	result["ok"] = true;
-	result["node_path"] = String(cs->get_path());
-	result["shape_type"] = shape_type;
-	return result;
+	return _tool_add_collision_shape_2d(p_args);
 }
 
 Dictionary YeetAIDock::_tool_create_rigid_body_3d(const Dictionary &p_args) const {

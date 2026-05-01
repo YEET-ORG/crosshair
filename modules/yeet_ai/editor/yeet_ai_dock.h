@@ -71,6 +71,8 @@ class YeetAIDock : public VBoxContainer {
 		Array messages;
 		Vector<MessageRecord> records;
 		String agent_preset;
+		String context_summary;
+		int context_summary_message_count = 0;
 		int64_t created_at = 0;
 		int64_t updated_at = 0;
 	};
@@ -148,7 +150,7 @@ class YeetAIDock : public VBoxContainer {
 	void _switch_to_chat(int p_index);
 	void _update_chat_selector();
 	void _update_chat_title();
-	void _save_all_chats() const;
+	void _save_all_chats();
 	void _load_chats();
 	String _get_chats_dir() const;
 
@@ -160,6 +162,9 @@ class YeetAIDock : public VBoxContainer {
 	bool intro_message_added = false;
 	bool _session_loaded = false;
 	String turn_context_prompt;
+	String _context_summary;
+	int _context_summary_message_count = 0;
+	bool _suppress_chat_recording = false;
 	
 	// ── Conversation Window Management ─────────────────────────────────────────
 	struct ConversationWindow {
@@ -178,6 +183,19 @@ class YeetAIDock : public VBoxContainer {
 	void _trim_conversation_window();
 	void _trim_to_fit(int new_message_tokens);
 	int _get_windowed_messages_count() const;
+	void _ensure_context_summary();
+	String _build_context_summary_prompt() const;
+	String _message_content_to_text(const Variant &p_content) const;
+	int _estimate_message_tokens(const Variant &p_message) const;
+	int _estimate_messages_tokens(const Array &p_messages) const;
+	String _summarize_message_for_context(const Dictionary &p_message) const;
+	String _truncate_context_summary(const String &p_summary) const;
+	bool _is_context_summarization_enabled() const;
+	int _get_context_summary_trigger_tokens() const;
+	int _get_context_summary_keep_recent_messages() const;
+	int _get_context_summary_max_chars() const;
+	int _adjust_context_start_for_tool_messages(int p_start) const;
+	void _sync_active_chat_state();
 	
 	// ── Metrics Collector ──────────────────────────────────────────────────────
 	struct ToolMetrics {
@@ -494,6 +512,10 @@ protected:
 	Dictionary _tool_query_physics(const Dictionary &p_args) const;
 	Dictionary _tool_create_particle_emitter(const Dictionary &p_args) const;
 	Dictionary _tool_create_ui_element(const Dictionary &p_args) const;
+	Dictionary _tool_create_game_actor_2d(const Dictionary &p_args) const;
+	Dictionary _tool_create_game_actor_3d(const Dictionary &p_args) const;
+	Dictionary _tool_audit_game_physics(const Dictionary &p_args) const;
+	Dictionary _tool_repair_game_physics(const Dictionary &p_args) const;
 
 	// ── A. 3D Scene Construction ──────────────────────────────────────────────
 	Dictionary _tool_create_light(const Dictionary &p_args) const;

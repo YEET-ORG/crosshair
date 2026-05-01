@@ -76,6 +76,7 @@ Dictionary YeetAIDock::_tool_capture_editor_viewport(const Dictionary &p_args) c
 	result["height"] = img->get_height();
 	result["format"] = "png";
 	result["png_base64"] = b64;
+	result["image_base64"] = b64;
 	result["target"] = target;
 	result["source"] = "editor_viewport";
 	return result;
@@ -138,6 +139,7 @@ Dictionary YeetAIDock::_tool_capture_game_viewport(const Dictionary &p_args) con
 	result["height"] = img->get_height();
 	result["format"] = "png";
 	result["png_base64"] = b64;
+	result["image_base64"] = b64;
 	result["source"] = "embedded_game";
 	result["raw_width"] = int(game_screenshot_w);
 	result["raw_height"] = int(game_screenshot_h);
