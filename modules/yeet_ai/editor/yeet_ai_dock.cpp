@@ -1837,6 +1837,12 @@ void YeetAIDock::_append_message(const String &p_role, const String &p_text) {
 
 	chat_log->append_text("\n");
 	_scroll_to_bottom();
+
+	// Auto-save chat after each message to prevent data loss on crash.
+	if (_active_chat_index >= 0 && _active_chat_index < _chat_sessions.size()) {
+		_chat_sessions.write[_active_chat_index].updated_at = Time::get_singleton()->get_unix_time_from_system();
+		_save_all_chats();
+	}
 }
 
 void YeetAIDock::_append_tool_running(const String &p_tool_name, const Dictionary &p_args) {
