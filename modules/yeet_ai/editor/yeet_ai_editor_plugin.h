@@ -25,6 +25,8 @@ class YeetAIEditorPlugin : public EditorPlugin {
 	void _add_ai_dock();
 	void _remove_ai_dock();
 	void _open_ai_dock_from_menu();
+	void _on_filesystem_changed();
+	void _on_resources_reimported(const PackedStringArray &p_files);
 
 protected:
 	static void _bind_methods();

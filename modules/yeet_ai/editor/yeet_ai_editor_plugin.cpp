@@ -7,6 +7,7 @@
 
 #include "yeet_ai_editor_plugin.h"
 
+#include "yeet_ai_asset_index.h"
 #include "yeet_ai_dock.h"
 
 #include "core/object/callable_mp.h"
@@ -14,6 +15,7 @@
 #include "core/object/property_info.h"
 #include "editor/docks/editor_dock.h"
 #include "editor/docks/editor_dock_manager.h"
+#include "editor/editor_file_system.h"
 #include "editor/editor_interface.h"
 #include "editor/editor_string_names.h"
 #include "editor/settings/editor_settings.h"
@@ -340,6 +342,24 @@ void YeetAIEditorPlugin::_open_ai_dock_from_menu() {
 	}
 }
 
+void YeetAIEditorPlugin::_on_filesystem_changed() {
+	YeetAIAssetIndex *index = YeetAIAssetIndex::get_singleton();
+	if (index != nullptr) {
+		index->on_filesystem_changed();
+	}
+}
+
+void YeetAIEditorPlugin::_on_resources_reimported(const PackedStringArray &p_files) {
+	YeetAIAssetIndex *index = YeetAIAssetIndex::get_singleton();
+	if (index != nullptr) {
+		Array files;
+		for (int i = 0; i < p_files.size(); i++) {
+			files.push_back(String(p_files[i]));
+		}
+		index->on_resources_reimported(files);
+	}
+}
+
 void YeetAIEditorPlugin::_notification(int p_what) {
 	switch (p_what) {
 		case NOTIFICATION_ENTER_TREE: {
@@ -348,6 +368,14 @@ void YeetAIEditorPlugin::_notification(int p_what) {
 			add_tool_menu_item(TTR("Open Crosshair AI Dock"), callable_mp(this, &YeetAIEditorPlugin::_open_ai_dock_from_menu));
 			// Defer so EditorDockManager and editor theme are fully ready (dock tab + focus).
 			callable_mp(this, &YeetAIEditorPlugin::_deferred_add_ai_dock).call_deferred();
+
+			// Initialize asset index and connect filesystem signals.
+			YeetAIAssetIndex::initialize();
+			EditorFileSystem *efs = EditorFileSystem::get_singleton();
+			if (efs != nullptr) {
+				efs->connect("filesystem_changed", callable_mp(this, &YeetAIEditorPlugin::_on_filesystem_changed));
+				efs->connect("resources_reimported", callable_mp(this, &YeetAIEditorPlugin::_on_resources_reimported));
+			}
 		} break;
 		case EditorSettings::NOTIFICATION_EDITOR_SETTINGS_CHANGED: {
 			if (!EditorSettings::get_singleton()->check_changed_settings_in_group("yeet_ai")) {
@@ -362,6 +390,17 @@ void YeetAIEditorPlugin::_notification(int p_what) {
 		case NOTIFICATION_EXIT_TREE: {
 			remove_tool_menu_item(TTR("Open Crosshair AI Dock"));
 			_remove_ai_dock();
+
+			EditorFileSystem *efs = EditorFileSystem::get_singleton();
+			if (efs != nullptr) {
+				if (efs->is_connected("filesystem_changed", callable_mp(this, &YeetAIEditorPlugin::_on_filesystem_changed))) {
+					efs->disconnect("filesystem_changed", callable_mp(this, &YeetAIEditorPlugin::_on_filesystem_changed));
+				}
+				if (efs->is_connected("resources_reimported", callable_mp(this, &YeetAIEditorPlugin::_on_resources_reimported))) {
+					efs->disconnect("resources_reimported", callable_mp(this, &YeetAIEditorPlugin::_on_resources_reimported));
+				}
+			}
+			YeetAIAssetIndex::finalize();
 		} break;
 	}
 }

@@ -731,6 +731,17 @@ protected:
 
 	// ── O. Project Configuration ─────────────────────────────────────────────
 	Dictionary _tool_manage_export_presets(const Dictionary &p_args) const;
+
+	// ── P. Asset Indexing ────────────────────────────────────────────────────
+	Dictionary _tool_index_project_assets(const Dictionary &p_args) const;
+	Dictionary _tool_index_asset(const Dictionary &p_args) const;
+	Dictionary _tool_search_assets(const Dictionary &p_args) const;
+	Dictionary _tool_get_asset_manifest(const Dictionary &p_args) const;
+	Dictionary _tool_update_asset_manifest(const Dictionary &p_args) const;
+	Dictionary _tool_confirm_asset_manifest(const Dictionary &p_args) const;
+	Dictionary _tool_list_asset_index_issues(const Dictionary &p_args) const;
+	Dictionary _tool_create_sprite_frames_from_manifest(const Dictionary &p_args) const;
+	Dictionary _tool_create_tileset_from_manifest(const Dictionary &p_args) const;
 	Dictionary _tool_export_project(const Dictionary &p_args) const;
 	Dictionary _tool_add_custom_class(const Dictionary &p_args) const;
 	Dictionary _tool_set_default_import_presets(const Dictionary &p_args) const;
