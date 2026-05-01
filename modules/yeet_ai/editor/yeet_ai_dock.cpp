@@ -1906,6 +1906,24 @@ void YeetAIDock::_append_tool_running(const String &p_tool_name, const Dictionar
 	_scroll_to_bottom();
 }
 
+void YeetAIDock::_update_batch_progress(int p_current, int p_total, const String &p_tool_name) {
+	if (status_label) {
+		const String human = _humanize_tool_name(p_tool_name);
+		status_label->set_text(vformat(TTR("Running batch: %d/%d — %s"), p_current, p_total, human));
+	}
+	if (_tool_progress_bar) {
+		_tool_progress_bar->set_visible(true);
+		_tool_progress_bar->set_max(p_total);
+		_tool_progress_bar->set_min(0);
+		_tool_progress_bar->set_value(p_current);
+		_tool_progress_bar->set_show_percentage(true);
+	}
+	// Force UI redraw so the user sees progress updates
+	if (chat_log) {
+		chat_log->queue_redraw();
+	}
+}
+
 void YeetAIDock::_append_tool_result(const String &p_tool_name, const Dictionary &p_args, const ToolExecutionResult &p_result) {
 	const Color font_base = get_theme_color(SNAME("font_color"), EditorStringName(Editor));
 	const Color font_dim = get_theme_color(SNAME("font_disabled_color"), EditorStringName(Editor));

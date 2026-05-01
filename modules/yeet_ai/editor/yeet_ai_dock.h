@@ -358,6 +358,7 @@ class YeetAIDock : public VBoxContainer {
 	void _rebuild_chat_log();
 	void _append_tool_result(const String &p_tool_name, const Dictionary &p_args, const ToolExecutionResult &p_result);
 	void _append_tool_running(const String &p_tool_name, const Dictionary &p_args);
+	void _update_batch_progress(int p_current, int p_total, const String &p_tool_name);
 	void _append_status_row(const String &p_text);
 	String _humanize_tool_name(const String &p_tool) const;
 	String _icon_for_tool(const String &p_tool_name) const;

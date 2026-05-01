@@ -104,6 +104,9 @@ Dictionary YeetAIDock::_tool_batch_tool_calls(const Dictionary &p_args) const {
 		const String tool_name = String(parsed["tool"]);
 		const Dictionary call_args = parsed["arguments"];
 
+		// Update UI to show which tool is currently running in the batch.
+		const_cast<YeetAIDock *>(this)->_update_batch_progress(i + 1, calls.size(), tool_name);
+
 		ToolExecutionResult call_result = const_cast<YeetAIDock *>(this)->_execute_tool(tool_name, call_args);
 		Dictionary call_entry;
 		call_entry["tool"] = tool_name;
