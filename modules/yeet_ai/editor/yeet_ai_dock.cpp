@@ -2018,6 +2018,20 @@ void YeetAIDock::_append_tool_result(const String &p_tool_name, const Dictionary
 		}
 	}
 
+	// Timing display
+	if (p_result.duration_ms > 0) {
+		chat_log->add_text("  ");
+		chat_log->push_color(font_dim);
+		chat_log->push_font_size(small_fs);
+		if (p_result.duration_ms < 1000) {
+			chat_log->add_text(vformat("%dms", p_result.duration_ms));
+		} else {
+			chat_log->add_text(vformat("%.1fs", p_result.duration_ms / 1000.0));
+		}
+		chat_log->pop();
+		chat_log->pop();
+	}
+
 	chat_log->append_text("\n");
 
 	// ── Additional paths ──

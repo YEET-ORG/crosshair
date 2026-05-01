@@ -55,6 +55,7 @@ class YeetAIDock : public VBoxContainer {
 		bool ok = false;
 		Dictionary payload;
 		String display_text;
+		int64_t duration_ms = 0; // Execution time in milliseconds
 	};
 
 	// Parallel record used for chat rebuild (retry, session load)

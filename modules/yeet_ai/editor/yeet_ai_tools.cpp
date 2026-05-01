@@ -404,21 +404,22 @@ ToolExecutionResult result;
  	int64_t tool_start_time = Time::get_singleton()->get_ticks_msec();
  	Dictionary payload = (this->*found->handler)(effective_args);
  	int64_t tool_duration = Time::get_singleton()->get_ticks_msec() - tool_start_time;
- 	// Check for timeout after execution.
- 	if (_check_tool_call_timeout()) {
- 		result.ok = false;
- 		result.payload["error"] = "Tool call timed out";
- 		result.payload["tool"] = p_tool_name;
- 		result.payload["timeout"] = true;
- 		result.display_text = "Tool call timed out after " + String::num_int64(tool_duration) + "ms";
- 		_cancel_tool_call_timeout();
- 		_record_tool_call(p_tool_name);
- 		((YeetAIDock*)this)->_record_tool_execution(p_tool_name, tool_duration, false, false);
- 		return result;
- 	}
- 	// Cancel timeout and record rate limit usage.
- 	_cancel_tool_call_timeout();
- 	_record_tool_call(p_tool_name);
+	// Check for timeout after execution.
+	if (_check_tool_call_timeout()) {
+		result.ok = false;
+		result.payload["error"] = "Tool call timed out";
+		result.payload["tool"] = p_tool_name;
+		result.payload["timeout"] = true;
+		result.display_text = "Tool call timed out after " + String::num_int64(tool_duration) + "ms";
+		result.duration_ms = tool_duration;
+		_cancel_tool_call_timeout();
+		_record_tool_call(p_tool_name);
+		((YeetAIDock*)this)->_record_tool_execution(p_tool_name, tool_duration, false, false);
+		return result;
+	}
+	// Cancel timeout and record rate limit usage.
+	_cancel_tool_call_timeout();
+	_record_tool_call(p_tool_name);
 
 	// ── Cache write for read-only tools ──────────────────────────────────────
 	if (is_read_only && (p_tool_name.begins_with("get_") || p_tool_name.begins_with("validate_"))) {
@@ -432,6 +433,7 @@ ToolExecutionResult result;
 		result.ok = false;
 		result.payload = payload;
 		result.display_text = JSON::stringify(payload, "\t", false, true);
+		result.duration_ms = tool_duration;
 
 		// Record tool execution metric
 		((YeetAIDock*)this)->_record_tool_execution(p_tool_name, tool_duration, false, false);
@@ -444,6 +446,7 @@ ToolExecutionResult result;
 
 	result.payload = payload;
 	result.display_text = JSON::stringify(payload, "\t", false, true);
+	result.duration_ms = tool_duration;
 
 	// Record successful tool execution metric
 	((YeetAIDock*)this)->_record_tool_execution(p_tool_name, tool_duration, true, false);
