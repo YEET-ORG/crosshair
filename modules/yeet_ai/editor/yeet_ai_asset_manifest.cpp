@@ -75,24 +75,25 @@ YeetAIAssetManifest::Status YeetAIAssetManifest::string_to_status(const String &
 
 Dictionary YeetAIAssetManifest::create_empty() {
 	Dictionary m;
-	m["schema"] = SCHEMA_VERSION;
-	m["asset_id"] = "";
-	m["path"] = "";
-	m["hash"] = "";
-	m["asset_type"] = "unknown";
-	m["status"] = "draft";
-	m["confidence"] = 0.0;
-	m["tags"] = Array();
-	m["image"] = Dictionary();
-	m["analysis"] = Dictionary();
-	m["analysis"]["deterministic_version"] = DETERMINISTIC_VERSION;
-	m["analysis"]["vision_version"] = 0;
-	m["analysis"]["sources"] = Array();
-	m["sprite_sheet"] = Variant(); // null
-	m["tileset"] = Variant(); // null
-	m["warnings"] = Array();
-	m["confirmed_fields"] = Array();
-	m["last_scanned"] = 0;
+	m[String("schema")] = SCHEMA_VERSION;
+	m[String("asset_id")] = "";
+	m[String("path")] = "";
+	m[String("hash")] = "";
+	m[String("asset_type")] = "unknown";
+	m[String("status")] = "draft";
+	m[String("confidence")] = 0.0;
+	m[String("tags")] = Array();
+	m[String("image")] = Dictionary();
+	Dictionary analysis;
+	analysis[String("deterministic_version")] = DETERMINISTIC_VERSION;
+	analysis[String("vision_version")] = 0;
+	analysis[String("sources")] = Array();
+	m[String("analysis")] = analysis;
+	m[String("sprite_sheet")] = Variant(); // null
+	m[String("tileset")] = Variant(); // null
+	m[String("warnings")] = Array();
+	m[String("confirmed_fields")] = Array();
+	m[String("last_scanned")] = 0;
 	return m;
 }
 
@@ -115,8 +116,10 @@ Dictionary YeetAIAssetManifest::from_image_scan(const String &p_path, const Ref<
 	manifest["image"] = image_info;
 
 	Dictionary deterministic = scan_image_deterministic(p_image);
-	manifest["image"]["alpha_bounds"] = deterministic.get("alpha_bounds", Dictionary());
-	manifest["image"]["transparent_gutters"] = deterministic.get("transparent_gutters", false);
+	Dictionary img_info = manifest["image"];
+	img_info[String("alpha_bounds")] = deterministic.has("alpha_bounds") ? Dictionary(deterministic["alpha_bounds"]) : Dictionary();
+	img_info[String("transparent_gutters")] = deterministic.has("transparent_gutters") ? bool(deterministic["transparent_gutters"]) : false;
+	manifest[String("image")] = img_info;
 
 	Array grid_candidates = deterministic.get("grid_candidates", Array());
 	Array sources;
@@ -161,26 +164,27 @@ Dictionary YeetAIAssetManifest::from_image_scan(const String &p_path, const Ref<
 
 	if (best_type == "sprite_sheet" || best_type == "vfx_sheet") {
 		Dictionary sprite_sheet;
-		sprite_sheet["grid"] = best_grid;
-		sprite_sheet["animations"] = Dictionary();
-		sprite_sheet["pivot"] = Array::make(
-			best_grid.get("frame_width", 0) / 2,
-			best_grid.get("frame_height", 0)
-		);
-		sprite_sheet["collision"] = Variant();
-		manifest["sprite_sheet"] = sprite_sheet;
+		sprite_sheet[String("grid")] = best_grid;
+		sprite_sheet[String("animations")] = Dictionary();
+		Array pivot;
+		pivot.push_back(best_grid.has("frame_width") ? int(best_grid["frame_width"]) / 2 : 0);
+		pivot.push_back(best_grid.has("frame_height") ? int(best_grid["frame_height"]) : 0);
+		sprite_sheet[String("pivot")] = pivot;
+		sprite_sheet[String("collision")] = Variant();
+		manifest[String("sprite_sheet")] = sprite_sheet;
 	} else if (best_type == "tileset") {
 		Dictionary tileset;
-		tileset["tile_size"] = best_grid.get("frame_width", 0);
-		tileset["columns"] = best_grid.get("columns", 0);
-		tileset["rows"] = best_grid.get("rows", 0);
-		tileset["tiles"] = Array();
-		manifest["tileset"] = tileset;
+		tileset[String("tile_size")] = best_grid.has("frame_width") ? int(best_grid["frame_width"]) : 0;
+		tileset[String("columns")] = best_grid.has("columns") ? int(best_grid["columns"]) : 0;
+		tileset[String("rows")] = best_grid.has("rows") ? int(best_grid["rows"]) : 0;
+		tileset[String("tiles")] = Array();
+		manifest[String("tileset")] = tileset;
 	}
 
-	manifest["analysis"] = deterministic.get("analysis", Dictionary());
-	manifest["analysis"]["sources"] = sources;
-	manifest["warnings"] = deterministic.get("warnings", Array());
+	Dictionary det_analysis = deterministic.has("analysis") ? Dictionary(deterministic["analysis"]) : Dictionary();
+	det_analysis[String("sources")] = sources;
+	manifest[String("analysis")] = det_analysis;
+	manifest[String("warnings")] = deterministic.has("warnings") ? Array(deterministic["warnings"]) : Array();
 
 	return manifest;
 }
@@ -214,16 +218,17 @@ Dictionary YeetAIAssetManifest::scan_image_deterministic(const Ref<Image> &p_ima
 	if (grid_candidates.is_empty()) {
 		warnings.push_back("No grid candidates detected — may be single sprite, UI image, or irregular layout.");
 	}
-	if (alpha.get("alpha_ratio", 1.0) < 0.01 && p_image->detect_alpha()) {
+	float alpha_ratio = alpha.has("alpha_ratio") ? float(alpha["alpha_ratio"]) : 1.0f;
+	if (alpha_ratio < 0.01f && p_image->detect_alpha()) {
 		warnings.push_back("Image has alpha channel but very few transparent pixels.");
 	}
 	result["warnings"] = warnings;
 
 	// Analysis summary
 	Dictionary analysis;
-	analysis["deterministic_version"] = DETERMINISTIC_VERSION;
-	analysis["vision_version"] = 0;
-	result["analysis"] = analysis;
+	analysis[String("deterministic_version")] = DETERMINISTIC_VERSION;
+	analysis[String("vision_version")] = 0;
+	result[String("analysis")] = analysis;
 
 	return result;
 }
@@ -307,12 +312,20 @@ Array YeetAIAssetManifest::detect_grid_candidates(const Ref<Image> &p_image) {
 		}
 	}
 
-	// Sort by confidence descending
-	candidates.sort_custom(callable_mp_static([](const Variant &a, const Variant &b) -> bool {
-		Dictionary da = a;
-		Dictionary db = b;
-		return float(da.get("confidence", 0.0f)) > float(db.get("confidence", 0.0f));
-	}));
+	// Sort by confidence descending (bubble sort since Array sort_custom requires callable)
+	for (int i = 0; i < candidates.size(); i++) {
+		for (int j = i + 1; j < candidates.size(); j++) {
+			Dictionary da = candidates[i];
+			Dictionary db = candidates[j];
+			float ca = da.has("confidence") ? float(da["confidence"]) : 0.0f;
+			float cb = db.has("confidence") ? float(db["confidence"]) : 0.0f;
+			if (ca < cb) {
+				Variant tmp = candidates[i];
+				candidates[i] = candidates[j];
+				candidates[j] = tmp;
+			}
+		}
+	}
 
 	return candidates;
 }
@@ -360,11 +373,14 @@ Array YeetAIAssetManifest::detect_repeated_cells(const Ref<Image> &p_image, int 
 			int x = col * p_cell_w;
 			int y = row * p_cell_h;
 			Color c = p_image->get_pixel(x, y);
-			uint32_t hash = (uint32_t(c.r8) << 24) | (uint32_t(c.g8) << 16) | (uint32_t(c.b8) << 8) | uint32_t(c.a8);
-			Array list = cell_hashes.get(hash, Array());
+			uint32_t hash = ((uint32_t)(c.r * 255.0f) << 24) | ((uint32_t)(c.g * 255.0f) << 16) | ((uint32_t)(c.b * 255.0f) << 8) | (uint32_t)(c.a * 255.0f);
+			Array list;
+			if (cell_hashes.has(hash)) {
+				list = cell_hashes[hash];
+			}
 			Dictionary cell;
-			cell["col"] = col;
-			cell["row"] = row;
+			cell[String("col")] = col;
+			cell[String("row")] = row;
 			list.push_back(cell);
 			cell_hashes[hash] = list;
 		}
@@ -458,28 +474,38 @@ Dictionary YeetAIAssetManifest::extract_dominant_palette(const Ref<Image> &p_ima
 			uint8_t b = uint8_t(c.b * 255.0f) >> 2;
 			uint8_t a = uint8_t(c.a * 255.0f) >> 2;
 			uint32_t key = (uint32_t(r) << 24) | (uint32_t(g) << 16) | (uint32_t(b) << 8) | uint32_t(a);
-			color_counts[key] = color_counts.get(key, 0) + 1;
+			int count = 0;
+			if (color_counts.has(key)) {
+				count = color_counts[key];
+			}
+			color_counts[key] = count + 1;
 		}
 	}
 
-	// Sort by count
+	// Sort by count (manual bubble sort)
 	Array palette;
 	Vector<Pair<int, uint32_t>> sorted;
 	for (const KeyValue<uint32_t, int> &kv : color_counts) {
 		sorted.push_back(Pair<int, uint32_t>(kv.value, kv.key));
 	}
-	sorted.sort_custom([](const Pair<int, uint32_t> &a, const Pair<int, uint32_t> &b) {
-		return a.first > b.first;
-	});
+	for (int i = 0; i < sorted.size(); i++) {
+		for (int j = i + 1; j < sorted.size(); j++) {
+			if (sorted[j].first > sorted[i].first) {
+				Pair<int, uint32_t> tmp = sorted[i];
+				sorted.write[i] = sorted[j];
+				sorted.write[j] = tmp;
+			}
+		}
+	}
 
 	for (int i = 0; i < MIN(sorted.size(), p_max_colors); i++) {
 		uint32_t key = sorted[i].second;
 		Dictionary color;
-		color["r"] = ((key >> 24) & 0x3F) << 2;
-		color["g"] = ((key >> 16) & 0x3F) << 2;
-		color["b"] = ((key >> 8) & 0x3F) << 2;
-		color["a"] = (key & 0x3F) << 2;
-		color["count"] = sorted[i].first;
+		color[String("r")] = ((key >> 24) & 0x3F) << 2;
+		color[String("g")] = ((key >> 16) & 0x3F) << 2;
+		color[String("b")] = ((key >> 8) & 0x3F) << 2;
+		color[String("a")] = (key & 0x3F) << 2;
+		color[String("count")] = sorted[i].first;
 		palette.push_back(color);
 	}
 
@@ -743,7 +769,7 @@ Dictionary YeetAIAssetManifest::merge_ai_suggestions(const Dictionary &p_existin
 						ex_tile[*key] = ai_tile[*key];
 					}
 				}
-				existing_tiles.write[i] = ex_tile;
+				existing_tiles[i] = ex_tile;
 			}
 			existing_tileset["tiles"] = existing_tiles;
 			result["tileset"] = existing_tileset;
@@ -753,7 +779,8 @@ Dictionary YeetAIAssetManifest::merge_ai_suggestions(const Dictionary &p_existin
 	}
 
 	// Update sources
-	Array sources = result.get("analysis", Dictionary()).get("sources", Array());
+	Dictionary result_analysis = result.has("analysis") ? Dictionary(result["analysis"]) : Dictionary();
+	Array sources = result_analysis.has("sources") ? Array(result_analysis["sources"]) : Array();
 	bool has_vision = false;
 	for (int i = 0; i < sources.size(); i++) {
 		if (String(sources[i]) == "vision") has_vision = true;
@@ -859,7 +886,8 @@ float YeetAIAssetManifest::compute_confidence(const Dictionary &p_manifest) {
 	}
 
 	// Source bonus
-	Array sources = p_manifest.get("analysis", Dictionary()).get("sources", Array());
+	Dictionary manifest_analysis = p_manifest.has("analysis") ? Dictionary(p_manifest["analysis"]) : Dictionary();
+	Array sources = manifest_analysis.has("sources") ? Array(manifest_analysis["sources"]) : Array();
 	base += confidence_from_sources(sources);
 
 	// Status bonus

@@ -11,6 +11,7 @@
 
 #include "yeet_ai_dock.h"
 
+#include "core/config/project_settings.h"
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
 #include "core/io/json.h"
@@ -131,7 +132,9 @@ void YeetAIDock::_auto_record_tool_result(const String &p_tool_name, const Dicti
 		if (!script_path.is_empty()) {
 			entity["type"] = "script";
 			entity["name"] = script_path.get_file();
-			entity["paths"] = Array::make(script_path);
+			Array paths_arr;
+			paths_arr.push_back(script_path);
+			entity["paths"] = paths_arr;
 			should_record = true;
 		}
 	} else if (p_tool_name == "create_scene_file" || p_tool_name == "save_current_scene") {
@@ -139,7 +142,9 @@ void YeetAIDock::_auto_record_tool_result(const String &p_tool_name, const Dicti
 		if (!scene_path.is_empty()) {
 			entity["type"] = "scene";
 			entity["name"] = scene_path.get_file();
-			entity["paths"] = Array::make(scene_path);
+			Array paths_arr;
+			paths_arr.push_back(scene_path);
+			entity["paths"] = paths_arr;
 			should_record = true;
 		}
 	} else if (p_tool_name.begins_with("scaffold_")) {
@@ -148,7 +153,9 @@ void YeetAIDock::_auto_record_tool_result(const String &p_tool_name, const Dicti
 		if (!node_path.is_empty()) {
 			entity["type"] = "node";
 			entity["name"] = node_path.get_file();
-			entity["paths"] = Array::make(node_path);
+			Array paths_arr;
+			paths_arr.push_back(node_path);
+			entity["paths"] = paths_arr;
 			if (p_result.has("components")) {
 				entity["components"] = p_result["components"];
 			}
@@ -200,8 +207,8 @@ Dictionary YeetAIDock::_query_memory_entities(const Dictionary &p_query) const {
 
 	String type_filter = p_query.get("type", "");
 	String tag_filter = p_query.get("tag", "");
-	String name_filter = p_query.get("name", "").to_lower();
-	String path_filter = p_query.get("path", "").to_lower();
+	String name_filter = String(p_query.get("name", "")).to_lower();
+	String path_filter = String(p_query.get("path", "")).to_lower();
 	int max_results = CLAMP(int(p_query.get("max_results", 50)), 1, 500);
 
 	for (int i = 0; i < entities.size() && results.size() < max_results; i++) {
@@ -227,7 +234,7 @@ Dictionary YeetAIDock::_query_memory_entities(const Dictionary &p_query) const {
 			}
 		}
 		if (match && !name_filter.is_empty()) {
-			String entity_name = entity.get("name", "").to_lower();
+			String entity_name = String(entity.get("name", "")).to_lower();
 			if (!entity_name.contains(name_filter)) {
 				match = false;
 			}

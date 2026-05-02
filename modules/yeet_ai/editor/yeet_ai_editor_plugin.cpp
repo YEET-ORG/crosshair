@@ -15,7 +15,7 @@
 #include "core/object/property_info.h"
 #include "editor/docks/editor_dock.h"
 #include "editor/docks/editor_dock_manager.h"
-#include "editor/editor_file_system.h"
+#include "editor/file_system/editor_file_system.h"
 #include "editor/editor_interface.h"
 #include "editor/editor_string_names.h"
 #include "editor/settings/editor_settings.h"

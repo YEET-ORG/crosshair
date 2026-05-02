@@ -15,7 +15,7 @@
 #include "editor/editor_interface.h"
 #include "editor/editor_node.h"
 #include "editor/editor_undo_redo_manager.h"
-#include "editor/filesystem_dock.h"
+#include "editor/docks/filesystem_dock.h"
 #include "editor/scene_tree_dock.h"
 #include "editor/settings/editor_settings.h"
 

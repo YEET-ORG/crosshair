@@ -7,13 +7,13 @@
 
 #include "yeet_ai_asset_index.h"
 
+#include "core/crypto/crypto.h"
 #include "core/crypto/crypto_core.h"
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
 #include "core/io/http_client.h"
 #include "core/io/image_loader.h"
 #include "core/io/json.h"
-#include "core/io/tls_options.h"
 #include "core/os/os.h"
 #include "core/os/time.h"
 #include "core/variant/variant.h"
