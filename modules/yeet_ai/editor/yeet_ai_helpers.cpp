@@ -16,7 +16,7 @@
 #include "editor/editor_node.h"
 #include "editor/editor_undo_redo_manager.h"
 #include "editor/docks/filesystem_dock.h"
-#include "editor/scene_tree_dock.h"
+#include "editor/docks/scene_tree_dock.h"
 #include "editor/settings/editor_settings.h"
 
 bool contains_string(const Vector<String> &p_values, const String &p_value) {

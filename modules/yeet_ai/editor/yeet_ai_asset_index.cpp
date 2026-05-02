@@ -24,8 +24,7 @@
 #include "scene/2d/animated_sprite_2d.h"
 #include "scene/resources/atlas_texture.h"
 #include "scene/resources/sprite_frames.h"
-#include "scene/resources/tile_set.h"
-#include "scene/resources/tile_set_atlas_source.h"
+#include "scene/resources/2d/tile_set.h"
 
 YeetAIAssetIndex *YeetAIAssetIndex::singleton = nullptr;
 
