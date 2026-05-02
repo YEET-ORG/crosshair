@@ -64,8 +64,8 @@ private:
 	static YeetAIAssetIndex *singleton;
 
 	mutable Mutex _mutex;
-	Dictionary _project_index; // asset_id -> manifest
-	HashMap<String, String> _path_to_id; // path -> asset_id
+	mutable Dictionary _project_index; // asset_id -> manifest
+	mutable HashMap<String, String> _path_to_id; // path -> asset_id
 	HashSet<String> _pending_scan_paths;
 	bool _deep_index_enabled = false;
 	bool _scan_in_progress = false;
@@ -105,6 +105,7 @@ private:
 	};
 	static ParsedURL _parse_url(const String &p_url);
 
+public:
 	YeetAIAssetIndex() = default;
 	~YeetAIAssetIndex() = default;
 };

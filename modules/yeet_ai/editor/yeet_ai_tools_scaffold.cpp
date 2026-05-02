@@ -16,9 +16,11 @@
 #include "scene/2d/camera_2d.h"
 #include "scene/2d/canvas_modulate.h"
 #include "scene/2d/light_2d.h"
+#include "scene/2d/physics/animatable_body_2d.h"
 #include "scene/2d/physics/area_2d.h"
 #include "scene/2d/physics/character_body_2d.h"
 #include "scene/2d/physics/collision_shape_2d.h"
+#include "scene/2d/physics/ray_cast_2d.h"
 #include "scene/2d/sprite_2d.h"
 #include "scene/main/canvas_layer.h"
 #include "scene/main/timer.h"
@@ -115,16 +117,21 @@ Dictionary YeetAIDock::_tool_scaffold_platformer_player_2d(const Dictionary &p_a
 	manifest["ok"] = true;
 	manifest["node_path"] = String(player->get_path());
 	manifest["type"] = "CharacterBody2D";
-	manifest["components"] = Array::make("CollisionShape2D", "Sprite2D", include_camera ? "Camera2D" : "");
-	manifest["properties"] = Dictionary();
-	manifest["properties"]["gravity"] = gravity;
-	manifest["properties"]["jump_velocity"] = jump_velocity;
-	manifest["properties"]["speed"] = speed;
-	manifest["next_steps"] = Array::make(
-		"Create input actions: move_left (A/Left), move_right (D/Right), jump (Space/W)",
-		"Attach a GDScript with _physics_process implementing movement + jump",
-		"Set project main scene if this is the player scene"
-	);
+	Array components;
+	components.push_back("CollisionShape2D");
+	components.push_back("Sprite2D");
+	components.push_back(include_camera ? "Camera2D" : "");
+	manifest[String("components")] = components;
+	Dictionary props;
+	props[String("gravity")] = gravity;
+	props[String("jump_velocity")] = jump_velocity;
+	props[String("speed")] = speed;
+	manifest[String("properties")] = props;
+	Array next_steps;
+	next_steps.push_back("Create input actions: move_left (A/Left), move_right (D/Right), jump (Space/W)");
+	next_steps.push_back("Attach a GDScript with _physics_process implementing movement + jump");
+	next_steps.push_back("Set project main scene if this is the player scene");
+	manifest[String("next_steps")] = next_steps;
 
 	return manifest;
 }
@@ -208,16 +215,22 @@ Dictionary YeetAIDock::_tool_scaffold_patrol_enemy_2d(const Dictionary &p_args) 
 	manifest["ok"] = true;
 	manifest["node_path"] = String(enemy->get_path());
 	manifest["type"] = "CharacterBody2D";
-	manifest["components"] = Array::make("CollisionShape2D", "Sprite2D", "RayCast2D", "Area2D");
-	manifest["properties"] = Dictionary();
-	manifest["properties"]["patrol_distance"] = patrol_distance;
-	manifest["properties"]["speed"] = speed;
-	manifest["next_steps"] = Array::make(
-		"Attach a GDScript with _physics_process for patrol logic",
-		"Implement state machine: idle -> patrol -> chase",
-		"Connect PlayerDetection.body_entered to detect player",
-		"Add damage dealing on collision with player"
-	);
+	Array components2;
+	components2.push_back("CollisionShape2D");
+	components2.push_back("Sprite2D");
+	components2.push_back("RayCast2D");
+	components2.push_back("Area2D");
+	manifest[String("components")] = components2;
+	Dictionary props2;
+	props2[String("patrol_distance")] = patrol_distance;
+	props2[String("speed")] = speed;
+	manifest[String("properties")] = props2;
+	Array next_steps2;
+	next_steps2.push_back("Attach a GDScript with _physics_process for patrol logic");
+	next_steps2.push_back("Implement state machine: idle -> patrol -> chase");
+	next_steps2.push_back("Connect PlayerDetection.body_entered to detect player");
+	next_steps2.push_back("Add damage dealing on collision with player");
+	manifest[String("next_steps")] = next_steps2;
 
 	return manifest;
 }
@@ -290,14 +303,18 @@ Dictionary YeetAIDock::_tool_scaffold_collectible_2d(const Dictionary &p_args) c
 	manifest["ok"] = true;
 	manifest["node_path"] = String(item->get_path());
 	manifest["type"] = "Area2D";
-	manifest["collectible_type"] = collectible_type;
-	manifest["components"] = Array::make("CollisionShape2D", "Sprite2D", animate_bob ? "Timer" : "");
-	manifest["next_steps"] = Array::make(
-		"Connect body_entered signal to player collection logic",
-		"Add sound effect on pickup (AudioStreamPlayer2D)",
-		"Add particle effect on pickup (CPUParticles2D)",
-		"Implement score/health increment in collection handler"
-	);
+	manifest[String("collectible_type")] = collectible_type;
+	Array components3;
+	components3.push_back("CollisionShape2D");
+	components3.push_back("Sprite2D");
+	components3.push_back(animate_bob ? "Timer" : "");
+	manifest[String("components")] = components3;
+	Array next_steps3;
+	next_steps3.push_back("Connect body_entered signal to player collection logic");
+	next_steps3.push_back("Add sound effect on pickup (AudioStreamPlayer2D)");
+	next_steps3.push_back("Add particle effect on pickup (CPUParticles2D)");
+	next_steps3.push_back("Implement score/health increment in collection handler");
+	manifest[String("next_steps")] = next_steps3;
 
 	return manifest;
 }
@@ -361,15 +378,19 @@ Dictionary YeetAIDock::_tool_scaffold_moving_platform_2d(const Dictionary &p_arg
 	manifest["ok"] = true;
 	manifest["node_path"] = String(platform->get_path());
 	manifest["type"] = "AnimatableBody2D";
-	manifest["components"] = Array::make("CollisionShape2D", "Sprite2D");
-	manifest["properties"] = Dictionary();
-	manifest["properties"]["move_offset"] = move_offset;
-	manifest["properties"]["move_duration"] = move_duration;
-	manifest["next_steps"] = Array::make(
-		"Create a Tween in _ready() to animate between position and position + move_offset",
-		"Set Tween to ping-pong (set_loops() + set_trans()) for back-and-forth motion",
-		"Ensure collision layer matches player's floor detection"
-	);
+	Array components4;
+	components4.push_back("CollisionShape2D");
+	components4.push_back("Sprite2D");
+	manifest[String("components")] = components4;
+	Dictionary props4;
+	props4[String("move_offset")] = move_offset;
+	props4[String("move_duration")] = move_duration;
+	manifest[String("properties")] = props4;
+	Array next_steps4;
+	next_steps4.push_back("Create a Tween in _ready() to animate between position and position + move_offset");
+	next_steps4.push_back("Set Tween to ping-pong (set_loops() + set_trans()) for back-and-forth motion");
+	next_steps4.push_back("Ensure collision layer matches player's floor detection");
+	manifest[String("next_steps")] = next_steps4;
 
 	return manifest;
 }
@@ -455,18 +476,18 @@ Dictionary YeetAIDock::_tool_scaffold_game_hud_2d(const Dictionary &p_args) cons
 	manifest["ok"] = true;
 	manifest["node_path"] = String(hud->get_path());
 	manifest["type"] = "CanvasLayer";
-	manifest["components"] = Array::make(
-		include_health ? "TextureProgressBar" : "",
-		include_health ? "Label(Health)" : "",
-		include_score ? "Label(Score)" : "",
-		include_timer ? "Label(Timer)" : "",
-		include_pause ? "Button(Pause)" : ""
-	);
-	manifest["next_steps"] = Array::make(
-		"Attach a script to HUD that exposes update_health(), update_score(), update_timer() methods",
-		"Connect PauseButton.pressed to get_tree().paused toggle",
-		"Reference HUD from player/enemy scripts to call update methods"
-	);
+	Array components5;
+	components5.push_back(include_health ? "TextureProgressBar" : "");
+	components5.push_back(include_health ? "Label(Health)" : "");
+	components5.push_back(include_score ? "Label(Score)" : "");
+	components5.push_back(include_timer ? "Label(Timer)" : "");
+	components5.push_back(include_pause ? "Button(Pause)" : "");
+	manifest[String("components")] = components5;
+	Array next_steps5;
+	next_steps5.push_back("Attach a script to HUD that exposes update_health(), update_score(), update_timer() methods");
+	next_steps5.push_back("Connect PauseButton.pressed to get_tree().paused toggle");
+	next_steps5.push_back("Reference HUD from player/enemy scripts to call update methods");
+	manifest[String("next_steps")] = next_steps5;
 
 	return manifest;
 }
@@ -561,13 +582,20 @@ Dictionary YeetAIDock::_tool_scaffold_main_menu_2d(const Dictionary &p_args) con
 	manifest["ok"] = true;
 	manifest["node_path"] = String(menu->get_path());
 	manifest["type"] = "CanvasLayer";
-	manifest["components"] = Array::make("ColorRect", "Label", "Button(Start)", include_options ? "Button(Options)" : "", include_credits ? "Button(Credits)" : "", "Button(Quit)");
-	manifest["next_steps"] = Array::make(
-		"Attach script to MainMenu with _on_start_pressed(), _on_options_pressed(), etc.",
-		"Connect button signals to script methods",
-		"Start button should call get_tree().change_scene_to_file() for first level",
-		"Quit button should call get_tree().quit()"
-	);
+	Array components6;
+	components6.push_back("ColorRect");
+	components6.push_back("Label");
+	components6.push_back("Button(Start)");
+	components6.push_back(include_options ? "Button(Options)" : "");
+	components6.push_back(include_credits ? "Button(Credits)" : "");
+	components6.push_back("Button(Quit)");
+	manifest[String("components")] = components6;
+	Array next_steps6;
+	next_steps6.push_back("Attach script to MainMenu with _on_start_pressed(), _on_options_pressed(), etc.");
+	next_steps6.push_back("Connect button signals to script methods");
+	next_steps6.push_back("Start button should call get_tree().change_scene_to_file() for first level");
+	next_steps6.push_back("Quit button should call get_tree().quit()");
+	manifest[String("next_steps")] = next_steps6;
 
 	return manifest;
 }
@@ -650,15 +678,21 @@ Dictionary YeetAIDock::_tool_scaffold_pause_menu_2d(const Dictionary &p_args) co
 	manifest["ok"] = true;
 	manifest["node_path"] = String(menu->get_path());
 	manifest["type"] = "CanvasLayer";
-	manifest["components"] = Array::make("ColorRect(Overlay)", "Label", "Button(Resume)", "Button(Restart)", "Button(QuitToMenu)");
-	manifest["next_steps"] = Array::make(
-		"Attach script to PauseMenu with _on_resume_pressed(), _on_restart_pressed(), _on_quit_pressed()",
-		"Connect button signals to script methods",
-		"Resume: get_tree().paused = false + hide()",
-		"Restart: get_tree().reload_current_scene()",
-		"Quit: get_tree().change_scene_to_file(main_menu.tscn)",
-		"Show pause menu when ESC is pressed (Input.is_action_just_pressed('ui_cancel'))"
-	);
+	Array components7;
+	components7.push_back("ColorRect(Overlay)");
+	components7.push_back("Label");
+	components7.push_back("Button(Resume)");
+	components7.push_back("Button(Restart)");
+	components7.push_back("Button(QuitToMenu)");
+	manifest[String("components")] = components7;
+	Array next_steps7;
+	next_steps7.push_back("Attach script to PauseMenu with _on_resume_pressed(), _on_restart_pressed(), _on_quit_pressed()");
+	next_steps7.push_back("Connect button signals to script methods");
+	next_steps7.push_back("Resume: get_tree().paused = false + hide()");
+	next_steps7.push_back("Restart: get_tree().reload_current_scene()");
+	next_steps7.push_back("Quit: get_tree().change_scene_to_file(main_menu.tscn)");
+	next_steps7.push_back("Show pause menu when ESC is pressed (Input.is_action_just_pressed('ui_cancel'))");
+	manifest[String("next_steps")] = next_steps7;
 
 	return manifest;
 }
@@ -730,16 +764,21 @@ Dictionary YeetAIDock::_tool_scaffold_lighting_rig_2d(const Dictionary &p_args) 
 	manifest["ok"] = true;
 	manifest["node_path"] = String(rig->get_path());
 	manifest["type"] = "Node2D";
-	manifest["components"] = Array::make("CanvasModulate", include_directional ? "DirectionalLight2D" : "", include_point_lights ? "PointLight2D(x3)" : "");
-	manifest["properties"] = Dictionary();
-	manifest["properties"]["ambient_color"] = ambient_color;
-	manifest["properties"]["ambient_energy"] = ambient_energy;
-	manifest["next_steps"] = Array::make(
-		"Adjust CanvasModulate color for day/night cycle",
-		"Enable shadows on lights for depth",
-		"Add LightOccluder2D to walls/platforms for shadow casting",
-		"Animate DirectionalLight2D energy/color for time-of-day effects"
-	);
+	Array components8;
+	components8.push_back("CanvasModulate");
+	components8.push_back(include_directional ? "DirectionalLight2D" : "");
+	components8.push_back(include_point_lights ? "PointLight2D(x3)" : "");
+	manifest[String("components")] = components8;
+	Dictionary props8;
+	props8[String("ambient_color")] = ambient_color;
+	props8[String("ambient_energy")] = ambient_energy;
+	manifest[String("properties")] = props8;
+	Array next_steps8;
+	next_steps8.push_back("Adjust CanvasModulate color for day/night cycle");
+	next_steps8.push_back("Enable shadows on lights for depth");
+	next_steps8.push_back("Add LightOccluder2D to walls/platforms for shadow casting");
+	next_steps8.push_back("Animate DirectionalLight2D energy/color for time-of-day effects");
+	manifest[String("next_steps")] = next_steps8;
 
 	return manifest;
 }

@@ -29,13 +29,12 @@ static String _validate_gdscript_file(const String &p_path) {
 		return vformat("Failed to load source code for validation: %d", load_err);
 	}
 	script->set_path(p_path, true);
-	script->reload(true);
+	Error reload_err = script->reload(true);
+	if (reload_err != OK) {
+		return vformat("Script has parse errors (error code %d)", reload_err);
+	}
 	if (!script->is_valid()) {
-		String err = script->debug_get_error();
-		if (!err.is_empty()) {
-			return err;
-		}
-		return "Script has parse errors (unknown)";
+		return "Script has parse errors";
 	}
 	return String();
 }
