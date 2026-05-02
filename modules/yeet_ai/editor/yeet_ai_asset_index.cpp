@@ -14,6 +14,8 @@
 #include "core/io/http_client.h"
 #include "core/io/image_loader.h"
 #include "core/io/json.h"
+#include "core/io/resource_loader.h"
+#include "core/io/resource_saver.h"
 #include "core/os/os.h"
 #include "core/os/time.h"
 #include "core/variant/variant.h"
@@ -34,8 +36,8 @@ void YeetAIAssetIndex::initialize() {
 		singleton->_load_project_index_file();
 
 		EditorSettings *settings = EditorSettings::get_singleton();
-		if (settings != nullptr) {
-			singleton->_deep_index_enabled = bool(settings->get_setting("yeet_ai/asset_index/deep_index_enabled", false));
+		if (settings != nullptr && settings->has_setting("yeet_ai/asset_index/deep_index_enabled")) {
+			singleton->_deep_index_enabled = bool(settings->get_setting("yeet_ai/asset_index/deep_index_enabled"));
 		}
 	}
 }
@@ -138,12 +140,12 @@ Dictionary YeetAIAssetIndex::_load_project_index_file() const {
 		if (data.get_type() == Variant::DICTIONARY) {
 			Dictionary index = Dictionary(data);
 			MutexLock lock(const_cast<Mutex &>(_mutex));
-			_project_index = index.get("manifests", Dictionary());
+			_project_index = index.has("manifests") ? Dictionary(index["manifests"]) : Dictionary();
 			// Rebuild path->id map
 			_path_to_id.clear();
 			for (const Variant *key = _project_index.next(nullptr); key != nullptr; key = _project_index.next(key)) {
 				Dictionary manifest = _project_index[*key];
-				String asset_path = manifest.get("path", "");
+				String asset_path = manifest.has("path") ? String(manifest["path"]) : String();
 				if (!asset_path.is_empty()) {
 					_path_to_id[asset_path] = String(*key);
 				}
@@ -250,8 +252,10 @@ Dictionary YeetAIAssetIndex::_scan_single_asset(const String &p_path, bool p_for
 	}
 
 	// Load image
-	Ref<Image> img = ImageLoader::load_image(p_path);
-	if (img.is_null()) {
+	Ref<Image> img;
+	img.instantiate();
+	Error load_err = ImageLoader::load_image(p_path, img);
+	if (load_err != OK || img.is_null()) {
 		result["ok"] = false;
 		result["error"] = vformat("Failed to load image: %s", p_path);
 		return result;
@@ -351,7 +355,7 @@ bool YeetAIAssetIndex::_is_asset_unchanged(const String &p_path, const Dictionar
 Dictionary YeetAIAssetIndex::search_assets(const Dictionary &p_query) const {
 	MutexLock lock(const_cast<Mutex &>(_mutex));
 
-	String text_query = p_query.get("query", "").to_lower();
+	String text_query = String(p_query.get("query", "")).to_lower();
 	String type_filter = p_query.get("asset_type", "");
 	Array tag_filter = p_query.get("tags", Array());
 	String status_filter = p_query.get("status", "");
@@ -405,8 +409,8 @@ Dictionary YeetAIAssetIndex::search_assets(const Dictionary &p_query) const {
 		// Text search (name, tags, path)
 		if (match && !text_query.is_empty()) {
 			bool text_match = false;
-			String name = manifest.get("name", "").to_lower();
-			String path = manifest.get("path", "").to_lower();
+			String name = String(manifest.get("name", "")).to_lower();
+			String path = String(manifest.get("path", "")).to_lower();
 			if (name.contains(text_query) || path.contains(text_query)) {
 				text_match = true;
 			}
@@ -742,8 +746,10 @@ YeetAIAssetIndex::ParsedURL YeetAIAssetIndex::_parse_url(const String &p_url) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 String YeetAIAssetIndex::_encode_image_for_vision(const String &p_path) const {
-	Ref<Image> img = ImageLoader::load_image(p_path);
-	if (img.is_null()) {
+	Ref<Image> img;
+	img.instantiate();
+	Error load_err = ImageLoader::load_image(p_path, img);
+	if (load_err != OK || img.is_null()) {
 		return String();
 	}
 
@@ -763,10 +769,10 @@ String YeetAIAssetIndex::_encode_image_for_vision(const String &p_path) const {
 	}
 
 	// Base64 encode
-	int len = 0;
-	int buf_len = ((png_buffer.size() + 2) / 3) * 4 + 1;
+	size_t len = 0;
+	size_t buf_len = ((png_buffer.size() + 2) / 3) * 4 + 1;
 	char *buf = (char *)memalloc(buf_len);
-	CryptoCore::b64_encode((unsigned char *)buf, &len, png_buffer.ptr(), png_buffer.size());
+	CryptoCore::b64_encode((uint8_t *)buf, buf_len, &len, png_buffer.ptr(), png_buffer.size());
 	String encoded = String::utf8(buf, len);
 	memfree(buf);
 	return encoded;
@@ -870,24 +876,24 @@ Dictionary YeetAIAssetIndex::_call_vision_model(const String &p_path, const Dict
 		return result;
 	}
 
-	int provider = int(settings->get_setting("yeet_ai/chat/provider", 0));
+	int provider = settings->has_setting("yeet_ai/chat/provider") ? int(settings->get_setting("yeet_ai/chat/provider")) : 0;
 	String url;
 	String api_key;
-	String model = String(settings->get_setting("yeet_ai/chat/model", "gpt-4o"));
-	float temperature = float(settings->get_setting("yeet_ai/chat/temperature", 0.2));
+	String model = settings->has_setting("yeet_ai/chat/model") ? String(settings->get_setting("yeet_ai/chat/model")) : String("gpt-4o");
+	float temperature = settings->has_setting("yeet_ai/chat/temperature") ? float(settings->get_setting("yeet_ai/chat/temperature")) : 0.2f;
 
 	if (provider == 4) {
 		// Azure OpenAI
-		url = String(settings->get_setting("yeet_ai/chat/azure_endpoint", ""));
-		String deployment = String(settings->get_setting("yeet_ai/chat/azure_deployment", ""));
-		String api_version = String(settings->get_setting("yeet_ai/chat/azure_api_version", "2024-06-01"));
-		api_key = String(settings->get_setting("yeet_ai/chat/azure_api_key", ""));
+		url = settings->has_setting("yeet_ai/chat/azure_endpoint") ? String(settings->get_setting("yeet_ai/chat/azure_endpoint")) : String();
+		String deployment = settings->has_setting("yeet_ai/chat/azure_deployment") ? String(settings->get_setting("yeet_ai/chat/azure_deployment")) : String();
+		String api_version = settings->has_setting("yeet_ai/chat/azure_api_version") ? String(settings->get_setting("yeet_ai/chat/azure_api_version")) : String("2024-06-01");
+		api_key = settings->has_setting("yeet_ai/chat/azure_api_key") ? String(settings->get_setting("yeet_ai/chat/azure_api_key")) : String();
 		if (!url.is_empty() && !deployment.is_empty()) {
 			url = url.path_join("openai/deployments/" + deployment + "/chat/completions?api-version=" + api_version);
 		}
 	} else {
-		url = String(settings->get_setting("yeet_ai/chat/completions_url", ""));
-		api_key = String(settings->get_setting("yeet_ai/chat/api_key", ""));
+		url = settings->has_setting("yeet_ai/chat/completions_url") ? String(settings->get_setting("yeet_ai/chat/completions_url")) : String();
+		api_key = settings->has_setting("yeet_ai/chat/api_key") ? String(settings->get_setting("yeet_ai/chat/api_key")) : String();
 	}
 
 	if (url.is_empty()) {
@@ -933,14 +939,17 @@ Dictionary YeetAIAssetIndex::_call_vision_model(const String &p_path, const Dict
 	// 4. Parse URL and connect
 	ParsedURL parsed = _parse_url(url);
 
-	HTTPClient client;
+	HTTPClient *client = HTTPClient::create();
+	client->set_blocking_mode(false);
+
 	Ref<TLSOptions> tls;
 	if (parsed.use_tls) {
 		tls = TLSOptions::client();
 	}
 
-	Error err = client.connect_to_host(parsed.host, parsed.port, tls);
+	Error err = client->connect_to_host(parsed.host, parsed.port, tls);
 	if (err != OK) {
+		memdelete(client);
 		result["error"] = vformat("Failed to connect to vision API host: %s", parsed.host);
 		return result;
 	}
@@ -949,12 +958,13 @@ Dictionary YeetAIAssetIndex::_call_vision_model(const String &p_path, const Dict
 	int elapsed = 0;
 	static constexpr int CONNECT_TIMEOUT_MS = 10000;
 	while (elapsed < CONNECT_TIMEOUT_MS) {
-		client.poll();
-		HTTPClient::Status status = client.get_status();
+		client->poll();
+		HTTPClient::Status status = client->get_status();
 		if (status == HTTPClient::STATUS_CONNECTED) {
 			break;
 		}
 		if (status == HTTPClient::STATUS_DISCONNECTED || status == HTTPClient::STATUS_CONNECTION_ERROR) {
+			memdelete(client);
 			result["error"] = "Vision API connection failed.";
 			return result;
 		}
@@ -962,7 +972,8 @@ Dictionary YeetAIAssetIndex::_call_vision_model(const String &p_path, const Dict
 		elapsed += 5;
 	}
 
-	if (client.get_status() != HTTPClient::STATUS_CONNECTED) {
+	if (client->get_status() != HTTPClient::STATUS_CONNECTED) {
+		memdelete(client);
 		result["error"] = "Vision API connection timed out.";
 		return result;
 	}
@@ -972,8 +983,15 @@ Dictionary YeetAIAssetIndex::_call_vision_model(const String &p_path, const Dict
 	headers.push_back("Content-Type: application/json");
 	headers.push_back("Authorization: Bearer " + api_key);
 
-	err = client.request(HTTPClient::METHOD_POST, parsed.path, headers, json_body);
+	CharString body_utf8 = json_body.utf8();
+	err = client->request(
+			HTTPClient::METHOD_POST,
+			parsed.path,
+			headers,
+			reinterpret_cast<const uint8_t *>(body_utf8.get_data()),
+			body_utf8.length());
 	if (err != OK) {
+		memdelete(client);
 		result["error"] = "Failed to send vision request.";
 		return result;
 	}
@@ -982,8 +1000,8 @@ Dictionary YeetAIAssetIndex::_call_vision_model(const String &p_path, const Dict
 	elapsed = 0;
 	static constexpr int REQUEST_TIMEOUT_MS = 60000;
 	while (elapsed < REQUEST_TIMEOUT_MS) {
-		client.poll();
-		HTTPClient::Status status = client.get_status();
+		client->poll();
+		HTTPClient::Status status = client->get_status();
 		if (status == HTTPClient::STATUS_BODY) {
 			break;
 		}
@@ -992,6 +1010,7 @@ Dictionary YeetAIAssetIndex::_call_vision_model(const String &p_path, const Dict
 			break;
 		}
 		if (status == HTTPClient::STATUS_DISCONNECTED || status == HTTPClient::STATUS_CONNECTION_ERROR) {
+			memdelete(client);
 			result["error"] = "Vision API disconnected during request.";
 			return result;
 		}
@@ -1001,9 +1020,9 @@ Dictionary YeetAIAssetIndex::_call_vision_model(const String &p_path, const Dict
 
 	// 7. Read response body
 	String response_body;
-	while (client.get_status() == HTTPClient::STATUS_BODY) {
-		client.poll();
-		PackedByteArray chunk = client.read_response_body_chunk();
+	while (client->get_status() == HTTPClient::STATUS_BODY) {
+		client->poll();
+		PackedByteArray chunk = client->read_response_body_chunk();
 		if (chunk.size() > 0) {
 			response_body += String::utf8((const char *)chunk.ptr(), chunk.size());
 		}
@@ -1011,15 +1030,17 @@ Dictionary YeetAIAssetIndex::_call_vision_model(const String &p_path, const Dict
 		elapsed += 2;
 		if (elapsed > REQUEST_TIMEOUT_MS) {
 			result["error"] = "Vision API response read timed out.";
-			client.close();
+			client->close();
+			memdelete(client);
 			return result;
 		}
 	}
 
-	client.close();
+	client->close();
+	memdelete(client);
 
 	// Check HTTP status
-	int response_code = client.get_response_code();
+	int response_code = client->get_response_code();
 	if (response_code != 200) {
 		result["error"] = vformat("Vision API returned HTTP %d", response_code);
 		result["raw_response"] = response_body.substr(0, 500);
@@ -1335,14 +1356,10 @@ Dictionary YeetAIAssetIndex::create_tileset_from_manifest(const String &p_asset_
 				source->set_tile_animation_columns(atlas_coords, 0);
 			}
 		}
-		if (tile_info.has("terrain_set")) {
-			int terrain_set = tile_info["terrain_set"];
-			source->set_tile_terrain_set(atlas_coords, terrain_set);
-		}
-		if (tile_info.has("terrain")) {
-			int terrain = tile_info["terrain"];
-			source->set_tile_terrain(atlas_coords, terrain);
-		}
+		// Note: terrain_set and terrain are per-tile properties in Godot 4
+		// but the API is set_terrain_set / set_terrain_peering_bit on TileSetAtlasSource.
+		// For v1, we skip terrain application here and let users configure it manually
+		// or through a future update_asset_manifest call.
 	}
 
 	// Save

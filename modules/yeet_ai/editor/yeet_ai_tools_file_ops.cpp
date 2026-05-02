@@ -31,7 +31,7 @@ static String _validate_gdscript_file(const String &p_path) {
 	script->set_path(p_path, true);
 	script->reload(true);
 	if (!script->is_valid()) {
-		String err = script->get_script_path_invalid_error();
+		String err = script->debug_get_error();
 		if (!err.is_empty()) {
 			return err;
 		}
