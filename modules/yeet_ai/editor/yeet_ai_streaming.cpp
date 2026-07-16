@@ -108,6 +108,119 @@ static bool yeet_get_non_empty_string_field(const Dictionary &p_dict, const Stri
 	return true;
 }
 
+// Normalize a streamed tool-call slot into OpenAI chat.completions shape.
+// Returns false for empty sparse holes (Responses API uses output_index which
+// leaves gaps for reasoning/message items — those must be skipped, not rejected).
+static bool yeet_normalize_streamed_tool_call(const Dictionary &p_tc, int p_index, Dictionary &r_out) {
+	if (p_tc.is_empty()) {
+		return false;
+	}
+	const Variant fn_variant = p_tc.get("function", Variant());
+	if (fn_variant.get_type() != Variant::DICTIONARY) {
+		return false;
+	}
+	Dictionary fn = fn_variant;
+	String function_name;
+	if (!yeet_get_non_empty_string_field(fn, "name", function_name)) {
+		return false;
+	}
+
+	String args_str;
+	const Variant args_variant = fn.get("arguments", Variant());
+	if (args_variant.get_type() == Variant::STRING || args_variant.get_type() == Variant::STRING_NAME) {
+		args_str = String(args_variant).strip_edges();
+	} else if (args_variant.get_type() == Variant::DICTIONARY || args_variant.get_type() == Variant::ARRAY) {
+		// Some providers send already-parsed JSON — re-stringify.
+		args_str = JSON::stringify(args_variant, "", false);
+	}
+	if (args_str.is_empty() || args_str == "null") {
+		args_str = "{}";
+	}
+	// Validate / lightly repair arguments JSON.
+	{
+		Ref<JSON> j;
+		j.instantiate();
+		if (j->parse(args_str) != OK) {
+			// Common truncation: missing closing braces. Try one repair pass.
+			String repaired = args_str;
+			int open_braces = 0;
+			int open_brackets = 0;
+			bool in_string = false;
+			bool escape = false;
+			for (int i = 0; i < repaired.length(); i++) {
+				const char32_t c = repaired[i];
+				if (escape) {
+					escape = false;
+					continue;
+				}
+				if (c == '\\' && in_string) {
+					escape = true;
+					continue;
+				}
+				if (c == '"') {
+					in_string = !in_string;
+					continue;
+				}
+				if (in_string) {
+					continue;
+				}
+				if (c == '{') {
+					open_braces++;
+				} else if (c == '}') {
+					open_braces = MAX(0, open_braces - 1);
+				} else if (c == '[') {
+					open_brackets++;
+				} else if (c == ']') {
+					open_brackets = MAX(0, open_brackets - 1);
+				}
+			}
+			if (in_string) {
+				repaired += "\"";
+			}
+			while (open_brackets-- > 0) {
+				repaired += "]";
+			}
+			while (open_braces-- > 0) {
+				repaired += "}";
+			}
+			if (j->parse(repaired) != OK) {
+				return false; // still unusable
+			}
+			args_str = repaired;
+		}
+	}
+
+	Dictionary out_fn;
+	out_fn["name"] = function_name;
+	out_fn["arguments"] = args_str;
+
+	Dictionary out;
+	String id;
+	if (!yeet_get_non_empty_string_field(p_tc, "id", id)) {
+		id = "call_stream_" + itos(p_index);
+	}
+	out["id"] = id;
+	out["type"] = "function";
+	out["function"] = out_fn;
+	r_out = out;
+	return true;
+}
+
+static Dictionary yeet_make_function_tool_call(const Dictionary &p_item, int p_fallback_index) {
+	Dictionary tc;
+	tc["id"] = String(p_item.get("call_id", p_item.get("id", "call_" + itos(p_fallback_index))));
+	tc["type"] = "function";
+	Dictionary fn;
+	fn["name"] = String(p_item.get("name", ""));
+	String args = String(p_item.get("arguments", ""));
+	if (args.is_empty()) {
+		args = "{}";
+	}
+	fn["arguments"] = args;
+	tc["function"] = fn;
+	return tc;
+}
+
 void YeetAIDock::_stream_thread_trampoline(void *p_user) {
 	static_cast<YeetAIDock *>(p_user)->_stream_thread_body();
 }
@@ -121,6 +234,8 @@ void YeetAIDock::_start_streaming() {
 	_stream_active = true;
 	_stream_tool_call_accumulator.clear();
 	_stream_has_tool_calls = false;
+	_stream_usage = Dictionary();
+	// _stream_protocol is set by _request_model_response before start.
 
 	stream_label->clear();
 	stream_label->set_visible(true);
@@ -129,12 +244,24 @@ void YeetAIDock::_start_streaming() {
 }
 
 void YeetAIDock::_cancel_streaming() {
-	if (!_stream_active && !_stream_thread.is_started()) {
+	if (!_stream_active && !_stream_thread.is_started() && !_codex_thread.is_started() && !_claude_thread.is_started() && !_grok_thread.is_started()) {
 		return;
 	}
 	_stream_should_stop = true;
+	_codex_should_stop = true;
+	_claude_should_stop = true;
+	_grok_should_stop = true;
 	if (_stream_thread.is_started()) {
 		_stream_thread.wait_to_finish();
+	}
+	if (_codex_thread.is_started()) {
+		_codex_thread.wait_to_finish();
+	}
+	if (_claude_thread.is_started()) {
+		_claude_thread.wait_to_finish();
+	}
+	if (_grok_thread.is_started()) {
+		_grok_thread.wait_to_finish();
 	}
 	_stream_active = false;
 	{
@@ -383,6 +510,147 @@ void YeetAIDock::_stream_thread_body() {
 					continue;
 				}
 				const Dictionary d = parsed;
+
+				// ── Responses API v1 SSE (Azure Foundry / OpenAI Responses) ──────
+				if (_stream_protocol == 1) {
+					const String ev_type = String(d.get("type", ""));
+					// Usage on completed response. Prefer a *dense* rebuild of tool
+					// calls from final output[] — output_index is sparse (reasoning /
+					// message items leave holes that used to fail validation).
+					if (ev_type == "response.completed" || ev_type == "response.incomplete") {
+						const Dictionary resp = d.get("response", Dictionary());
+						const Variant usage_v = resp.get("usage", d.get("usage", Variant()));
+						if (usage_v.get_type() == Variant::DICTIONARY && !((Dictionary)usage_v).is_empty()) {
+							MutexLock lock(_stream_mutex);
+							_stream_usage = usage_v;
+						}
+						const Array output = resp.get("output", Array());
+						Array dense_tool_calls;
+						for (int oi = 0; oi < output.size(); oi++) {
+							if (output[oi].get_type() != Variant::DICTIONARY) {
+								continue;
+							}
+							const Dictionary item = output[oi];
+							if (String(item.get("type", "")) != "function_call") {
+								continue;
+							}
+							dense_tool_calls.append(yeet_make_function_tool_call(item, dense_tool_calls.size()));
+						}
+						if (!dense_tool_calls.is_empty()) {
+							MutexLock lock(_stream_mutex);
+							_stream_has_tool_calls = true;
+							_stream_tool_call_accumulator = dense_tool_calls;
+						}
+						continue;
+					}
+					if (ev_type == "response.output_text.delta") {
+						const String content_chunk = String(d.get("delta", ""));
+						if (!content_chunk.is_empty()) {
+							MutexLock lock(_stream_mutex);
+							_pending_chunks.push_back(content_chunk);
+						}
+						continue;
+					}
+					// Full item (added or done) — store by output_index for arg deltas.
+					if (ev_type == "response.output_item.added" || ev_type == "response.output_item.done") {
+						const Dictionary item = d.get("item", Dictionary());
+						if (String(item.get("type", "")) == "function_call") {
+							MutexLock lock(_stream_mutex);
+							_stream_has_tool_calls = true;
+							const int tc_idx = int(d.get("output_index", _stream_tool_call_accumulator.size()));
+							while (_stream_tool_call_accumulator.size() <= tc_idx) {
+								_stream_tool_call_accumulator.append(Dictionary());
+							}
+							Dictionary tc = yeet_make_function_tool_call(item, tc_idx);
+							// Preserve args already streamed if the item has empty arguments.
+							Dictionary prev = _stream_tool_call_accumulator[tc_idx];
+							if (!prev.is_empty()) {
+								Dictionary prev_fn = prev.get("function", Dictionary());
+								Dictionary new_fn = tc.get("function", Dictionary());
+								const String prev_args = String(prev_fn.get("arguments", ""));
+								const String new_args = String(new_fn.get("arguments", ""));
+								if ((new_args.is_empty() || new_args == "{}") && !prev_args.is_empty() && prev_args != "{}") {
+									new_fn["arguments"] = prev_args;
+									tc["function"] = new_fn;
+								}
+								if (String(new_fn.get("name", "")).is_empty() && !String(prev_fn.get("name", "")).is_empty()) {
+									new_fn["name"] = prev_fn.get("name", "");
+									tc["function"] = new_fn;
+								}
+							}
+							_stream_tool_call_accumulator[tc_idx] = tc;
+						}
+						continue;
+					}
+					if (ev_type == "response.function_call_arguments.delta") {
+						MutexLock lock(_stream_mutex);
+						_stream_has_tool_calls = true;
+						const int tc_idx = int(d.get("output_index", 0));
+						while (_stream_tool_call_accumulator.size() <= tc_idx) {
+							_stream_tool_call_accumulator.append(Dictionary());
+						}
+						Dictionary tc = _stream_tool_call_accumulator[tc_idx];
+						tc["type"] = "function";
+						if (!tc.has("id") || String(tc.get("id", "")).is_empty()) {
+							tc["id"] = String(d.get("item_id", d.get("call_id", "call_" + itos(tc_idx))));
+						}
+						Dictionary fn = tc.get("function", Dictionary());
+						// Name sometimes only appears on the done/item event — keep prior.
+						if (!fn.has("name") || String(fn.get("name", "")).is_empty()) {
+							const String n = String(d.get("name", ""));
+							if (!n.is_empty()) {
+								fn["name"] = n;
+							}
+						}
+						String args = String(fn.get("arguments", ""));
+						args += String(d.get("delta", ""));
+						fn["arguments"] = args;
+						tc["function"] = fn;
+						_stream_tool_call_accumulator[tc_idx] = tc;
+						continue;
+					}
+					if (ev_type == "response.function_call_arguments.done") {
+						MutexLock lock(_stream_mutex);
+						_stream_has_tool_calls = true;
+						const int tc_idx = int(d.get("output_index", 0));
+						while (_stream_tool_call_accumulator.size() <= tc_idx) {
+							_stream_tool_call_accumulator.append(Dictionary());
+						}
+						Dictionary tc = _stream_tool_call_accumulator[tc_idx];
+						tc["type"] = "function";
+						if (!tc.has("id") || String(tc.get("id", "")).is_empty()) {
+							tc["id"] = String(d.get("item_id", d.get("call_id", "call_" + itos(tc_idx))));
+						}
+						Dictionary fn = tc.get("function", Dictionary());
+						const String n = String(d.get("name", ""));
+						if (!n.is_empty()) {
+							fn["name"] = n;
+						}
+						const String full_args = String(d.get("arguments", ""));
+						if (!full_args.is_empty()) {
+							fn["arguments"] = full_args;
+						} else if (!fn.has("arguments") || String(fn.get("arguments", "")).is_empty()) {
+							fn["arguments"] = "{}";
+						}
+						tc["function"] = fn;
+						_stream_tool_call_accumulator[tc_idx] = tc;
+						continue;
+					}
+					// Ignore other response.* lifecycle events.
+					continue;
+				}
+
+				// ── Chat Completions SSE (choices[].delta) ───────────────────────
+				// Capture token usage — present on the final SSE chunk when
+				// stream_options.include_usage=true. This chunk usually has an empty
+				// `choices` array, so grab usage before the early-continue below.
+				{
+					const Variant usage_v = d.get("usage", Variant());
+					if (usage_v.get_type() == Variant::DICTIONARY && !((Dictionary)usage_v).is_empty()) {
+						MutexLock lock(_stream_mutex);
+						_stream_usage = usage_v;
+					}
+				}
 				const Array choices = d.get("choices", Array());
 				if (choices.is_empty()) {
 					continue;
@@ -521,6 +789,15 @@ void YeetAIDock::_drain_stream_queue() {
 		if (_stream_thread.is_started()) {
 			_stream_thread.wait_to_finish();
 		}
+		if (_codex_thread.is_started()) {
+			_codex_thread.wait_to_finish();
+		}
+		if (_claude_thread.is_started()) {
+			_claude_thread.wait_to_finish();
+		}
+		if (_grok_thread.is_started()) {
+			_grok_thread.wait_to_finish();
+		}
 		_stream_active = false;
 
 		stream_label->set_visible(false);
@@ -531,75 +808,107 @@ void YeetAIDock::_drain_stream_queue() {
 			_append_message("assistant", TTR("Streaming error: ") + error_msg);
 		} else {
 			_finalize_stream();
+			_codex_finalize_and_rescan();
+			_claude_finalize_and_rescan();
+			_grok_finalize_and_rescan();
 		}
+	}
+}
+
+void YeetAIDock::_capture_usage_from_response(const Dictionary &p_usage) {
+	if (p_usage.is_empty()) {
+		return;
+	}
+	_last_usage = p_usage;
+
+	int prompt_tokens = 0;
+	if (p_usage.has("prompt_tokens")) {
+		prompt_tokens = int(p_usage.get("prompt_tokens", 0));
+	} else if (p_usage.has("input_tokens")) { // Anthropic-style naming
+		prompt_tokens = int(p_usage.get("input_tokens", 0));
+	}
+	if (prompt_tokens > 0) {
+		_last_prompt_tokens = prompt_tokens;
+	}
+
+	if (_get_editor_setting_bool("yeet_ai/chat/debug_mode", false)) {
+		// Surface prompt-cache effectiveness when the provider reports it.
+		int cached = 0;
+		const Variant details_v = p_usage.get("prompt_tokens_details", Variant());
+		if (details_v.get_type() == Variant::DICTIONARY) {
+			cached = int(((Dictionary)details_v).get("cached_tokens", 0));
+		}
+		if (p_usage.has("cache_read_input_tokens")) { // Anthropic-style
+			cached = int(p_usage.get("cache_read_input_tokens", 0));
+		}
+		const int completion = p_usage.has("completion_tokens")
+				? int(p_usage.get("completion_tokens", 0))
+				: int(p_usage.get("output_tokens", 0));
+		WARN_PRINT(vformat("[YeetAI Usage] prompt=%d completion=%d cached=%d", prompt_tokens, completion, cached));
 	}
 }
 
 void YeetAIDock::_finalize_stream() {
 	String accumulated = _stream_accumulated;
 
+	// Pull any usage captured from the SSE stream's final chunk (set on the worker
+	// thread) and fold it in on the main thread before dispatching the response.
+	{
+		Dictionary usage_copy;
+		{
+			MutexLock lock(_stream_mutex);
+			usage_copy = _stream_usage;
+			_stream_usage = Dictionary();
+		}
+		if (!usage_copy.is_empty()) {
+			_capture_usage_from_response(usage_copy);
+			_update_token_counter();
+		}
+	}
+
 	if (_get_editor_setting_bool("yeet_ai/chat/debug_mode", false)) {
 		WARN_PRINT(vformat("[YeetAI Debug] Response (%s):\n%s", _stream_has_tool_calls ? "tool_calls" : "text", accumulated));
 	}
 
 	// Check for accumulated streaming tool calls first.
+	// Skip sparse holes (empty slots left by Responses API output_index) instead
+	// of rejecting the whole batch — that was the "incomplete or malformed" bug.
 	if (_stream_has_tool_calls && !_stream_tool_call_accumulator.is_empty()) {
 		Dictionary message;
 		message["role"] = "assistant";
 		message["content"] = accumulated;
 
 		Array tool_calls;
-		bool all_valid = true;
+		int skipped_slots = 0;
+		int malformed_slots = 0;
 		for (int i = 0; i < _stream_tool_call_accumulator.size(); i++) {
-			Dictionary tc = _stream_tool_call_accumulator[i];
-			// Ensure required fields exist.
-			if (!tc.has("id")) {
-				tc["id"] = "call_stream_" + itos(i);
+			const Dictionary raw = _stream_tool_call_accumulator[i];
+			if (raw.is_empty()) {
+				skipped_slots++;
+				continue;
 			}
-			if (!tc.has("type")) {
-				tc["type"] = "function";
-			}
-			// Validate that function name and arguments are present.
-			const Variant fn_variant = tc.get("function", Variant());
-			if (fn_variant.get_type() != Variant::DICTIONARY) {
-				all_valid = false;
-				break;
-			}
-			Dictionary fn = fn_variant;
-			String function_name;
-			if (!yeet_get_non_empty_string_field(fn, "name", function_name)) {
-				all_valid = false;
-				break;
-			}
-			fn["name"] = function_name;
-			// Validate arguments JSON if present.
-			if (fn.has("arguments")) {
-				const Variant args_variant = fn["arguments"];
-				if (args_variant.get_type() != Variant::STRING) {
-					all_valid = false;
-					break;
-				}
-				String args_str = args_variant;
-				if (!args_str.is_empty()) {
-					Ref<JSON> j;
-					j.instantiate();
-					if (j->parse(args_str) != OK) {
-						all_valid = false;
-						break;
-					}
+			Dictionary normalized;
+			if (yeet_normalize_streamed_tool_call(raw, i, normalized)) {
+				tool_calls.append(normalized);
+			} else {
+				malformed_slots++;
+				if (_get_editor_setting_bool("yeet_ai/chat/debug_mode", false)) {
+					WARN_PRINT(vformat("[YeetAI Debug] Skipping malformed tool call slot %d: %s", i, JSON::stringify(raw, "", false)));
 				}
 			}
-			tc["function"] = fn;
-			tool_calls.append(tc);
 		}
 
-		if (all_valid) {
+		if (!tool_calls.is_empty()) {
 			message["tool_calls"] = tool_calls;
 			_handle_native_tool_calls(message);
 			return;
 		}
-		// If validation failed, append a note and fall through to text handling.
-		accumulated += "\n\n[Note: model attempted tool calls but they were incomplete or malformed.]";
+		// All slots empty/malformed — surface a useful note rather than silent drop.
+		if (malformed_slots > 0) {
+			accumulated += "\n\n[Note: model attempted tool calls but they were incomplete or malformed.]";
+		} else if (skipped_slots > 0 && accumulated.strip_edges().is_empty()) {
+			// Had sparse placeholders only — treat as empty model response.
+		}
 	}
 
 	// Clean artifacts and check for empty response before processing.
@@ -617,6 +926,73 @@ void YeetAIDock::_finalize_stream() {
 			const Variant parsed_data = json->get_data();
 			if (parsed_data.get_type() == Variant::DICTIONARY) {
 				const Dictionary response = parsed_data;
+				const Variant usage_v = response.get("usage", Variant());
+				if (usage_v.get_type() == Variant::DICTIONARY) {
+					_capture_usage_from_response(usage_v);
+					_update_token_counter();
+				}
+
+				// Responses API: output_text / output[] with function_call items.
+				if (_stream_protocol == 1 || response.has("output") || response.has("output_text")) {
+					Array tool_calls;
+					const Array output = response.get("output", Array());
+					for (int i = 0; i < output.size(); i++) {
+						if (output[i].get_type() != Variant::DICTIONARY) {
+							continue;
+						}
+						const Dictionary item = output[i];
+						if (String(item.get("type", "")) != "function_call") {
+							continue;
+						}
+						Dictionary tc;
+						tc["id"] = String(item.get("call_id", item.get("id", "call_" + itos(i))));
+						tc["type"] = "function";
+						Dictionary fn;
+						fn["name"] = String(item.get("name", ""));
+						fn["arguments"] = String(item.get("arguments", "{}"));
+						tc["function"] = fn;
+						tool_calls.append(tc);
+					}
+					if (!tool_calls.is_empty()) {
+						Dictionary message;
+						message["role"] = "assistant";
+						message["content"] = String(response.get("output_text", ""));
+						message["tool_calls"] = tool_calls;
+						_handle_native_tool_calls(message);
+						return;
+					}
+					String content = String(response.get("output_text", ""));
+					if (content.is_empty()) {
+						// Flatten message items' output_text parts.
+						for (int i = 0; i < output.size(); i++) {
+							if (output[i].get_type() != Variant::DICTIONARY) {
+								continue;
+							}
+							const Dictionary item = output[i];
+							if (String(item.get("type", "")) != "message") {
+								continue;
+							}
+							const Array content_parts = item.get("content", Array());
+							for (int c = 0; c < content_parts.size(); c++) {
+								if (content_parts[c].get_type() != Variant::DICTIONARY) {
+									continue;
+								}
+								const Dictionary part = content_parts[c];
+								if (String(part.get("type", "")) == "output_text" || part.has("text")) {
+									if (!content.is_empty()) {
+										content += "\n";
+									}
+									content += String(part.get("text", ""));
+								}
+							}
+						}
+					}
+					if (!content.strip_edges().is_empty()) {
+						_handle_model_response(content);
+						return;
+					}
+				}
+
 				const Array choices = response.get("choices", Array());
 				if (!choices.is_empty() && choices[0].get_type() == Variant::DICTIONARY) {
 					const Dictionary choice = choices[0];

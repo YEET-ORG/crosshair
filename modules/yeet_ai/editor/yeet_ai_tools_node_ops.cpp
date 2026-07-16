@@ -38,11 +38,12 @@ Dictionary YeetAIDock::_tool_remove_node(const Dictionary &p_args) const {
 	}
 
 	const String removed_path = String(target->get_path());
-	target->queue_free();
-	_mark_unsaved();
+	_commit_ai_remove_node(target, "Remove Node");
 
+	result["ok"] = true;
 	result["scene_path"] = scene_root->get_scene_file_path();
 	result["removed_node_path"] = removed_path;
+	result["node_path"] = removed_path;
 	return result;
 }
 
@@ -88,9 +89,10 @@ Dictionary YeetAIDock::_tool_set_node_property(const Dictionary &p_args) const {
 		converted_value = _variant_from_json(p_args["value"], hint_type);
 	}
 
-	target->set(property_name, converted_value);
-	_mark_unsaved();
+	const Variant old_value = target->get(property_name);
+	_commit_ai_property_change(target, StringName(property_name), old_value, converted_value, "Set Node Property");
 
+	result["ok"] = true;
 	result["scene_path"] = scene_root->get_scene_file_path();
 	result["node_path"] = String(target->get_path());
 	result["property"] = property_name;
@@ -139,9 +141,9 @@ Dictionary YeetAIDock::_tool_reparent_node(const Dictionary &p_args) const {
 	}
 
 	const bool keep_global = bool(p_args.get("keep_global_transform", true));
-	target->reparent(new_parent, keep_global);
-	_mark_unsaved();
+	_commit_ai_reparent_node(target, new_parent, keep_global, "Reparent Node");
 
+	result["ok"] = true;
 	result["scene_path"] = scene_root->get_scene_file_path();
 	result["node_path"] = String(target->get_path());
 	result["new_parent_path"] = String(new_parent->get_path());
@@ -185,9 +187,9 @@ Dictionary YeetAIDock::_tool_rename_node(const Dictionary &p_args) const {
 	}
 
 	const String validated = parent->prevalidate_child_name(target, StringName(new_name));
-	target->set_name(validated);
-	_mark_unsaved();
+	_commit_ai_rename_node(target, StringName(validated), "Rename Node");
 
+	result["ok"] = true;
 	result["scene_path"] = scene_root->get_scene_file_path();
 	result["node_path"] = String(target->get_path());
 	result["new_name"] = target->get_name();
@@ -238,12 +240,11 @@ Dictionary YeetAIDock::_tool_duplicate_node(const Dictionary &p_args) const {
 	}
 
 	Node *dup = target->duplicate(Node::DUPLICATE_SIGNALS | Node::DUPLICATE_GROUPS | Node::DUPLICATE_SCRIPTS);
-	dup_parent->add_child(dup, true);
 	const String base_name = String(p_args.get("new_name", String(target->get_name()) + "Copy")).strip_edges();
 	dup->set_name(dup_parent->prevalidate_child_name(dup, StringName(base_name)));
-	_set_owner_recursive(dup, scene_root);
-	_mark_unsaved();
+	_add_to_scene(dup_parent, dup, scene_root);
 
+	result["ok"] = true;
 	result["scene_path"] = scene_root->get_scene_file_path();
 	result["node_path"] = String(dup->get_path());
 	result["duplicated_from"] = node_path;
@@ -278,9 +279,9 @@ Dictionary YeetAIDock::_tool_move_child(const Dictionary &p_args) const {
 
 	int new_index = int(p_args["new_index"]);
 	new_index = CLAMP(new_index, 0, parent->get_child_count() - 1);
-	parent->move_child(target, new_index);
-	_mark_unsaved();
+	_commit_ai_move_child(target, new_index, "Move Child");
 
+	result["ok"] = true;
 	result["scene_path"] = scene_root->get_scene_file_path();
 	result["node_path"] = String(target->get_path());
 	result["new_index"] = new_index;

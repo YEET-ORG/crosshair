@@ -86,15 +86,17 @@ Dictionary YeetAIDock::_tool_batch_set_node_property(const Dictionary &p_args) c
 			results.push_back(r);
 		} else {
 			ok_count++;
+			results.push_back(r);
 		}
 	}
 
-	result["ok"] = true;
+	result["ok"] = ok_count == entries.size();
 	result["total"] = entries.size();
 	result["succeeded"] = ok_count;
 	result["failed"] = entries.size() - ok_count;
-	if (results.size() > 0) {
-		result["errors"] = results;
+	result["results"] = results;
+	if (ok_count < entries.size()) {
+		result["partial"] = true;
 	}
 	return result;
 }
@@ -261,14 +263,31 @@ Dictionary YeetAIDock::_tool_disconnect_signal(const Dictionary &p_args) const {
 
 	const String target_node_path = p_args.get("target_node_path", "");
 	const String method_name = p_args.get("method_name", "");
+	const StringName signal_key = StringName(signal_name);
 	if (target_node_path.is_empty() || method_name.is_empty()) {
 		List<Connection> conns;
-		node->get_signal_connection_list(StringName(signal_name), &conns);
+		node->get_signal_connection_list(signal_key, &conns);
+		int disconnected = 0;
 		for (const Connection &c : conns) {
-			node->disconnect(StringName(signal_name), c.callable);
+			const uint32_t flags = c.flags;
+			if (_commit_ai_signal_disconnect(node, signal_key, c.callable, flags, "Disconnect Signal")) {
+				disconnected++;
+			} else if (node->is_connected(signal_key, c.callable)) {
+				node->disconnect(signal_key, c.callable);
+				disconnected++;
+			} else {
+				disconnected++;
+			}
+		}
+		if (disconnected > 0) {
+			_mark_unsaved();
 		}
 		result["ok"] = true;
 		result["disconnected_all"] = true;
+		result["disconnected_count"] = disconnected;
+		result["scene_path"] = scene_root->get_scene_file_path();
+		result["source_node_path"] = String(node->get_path());
+		result["signal_name"] = signal_name;
 		return result;
 	}
 
@@ -282,7 +301,9 @@ Dictionary YeetAIDock::_tool_disconnect_signal(const Dictionary &p_args) const {
 		return _make_error(vformat("Signal '%s' is not connected to %s::%s.", signal_name, target_node_path, method_name));
 	}
 
-	node->disconnect(signal_name, callable);
+	const uint32_t flags = Object::CONNECT_PERSIST;
+	_commit_ai_signal_disconnect(node, signal_key, callable, flags, "Disconnect Signal");
+
 	result["ok"] = true;
 	result["scene_path"] = scene_root->get_scene_file_path();
 	result["source_node_path"] = String(node->get_path());
@@ -507,7 +528,28 @@ Dictionary YeetAIDock::_tool_get_global_classes(const Dictionary &p_args) const 
 }
 
 Dictionary YeetAIDock::_tool_get_remote_scene_tree(const Dictionary &p_args) const {
-	return _make_error("Not yet implemented. Requires a running game session with the remote scene tree accessible via the editor debugger.");
+	// Prefer live runtime tree when a game session is available.
+	Dictionary runtime = _tool_runtime_get_scene_tree(p_args);
+	if (!runtime.has("error") && bool(runtime.get("ok", true))) {
+		runtime["source"] = "runtime";
+		runtime["ok"] = true;
+		return runtime;
+	}
+
+	Dictionary debugger_state = _tool_debugger_get_state(p_args);
+	Dictionary result;
+	result["ok"] = false;
+	result["error"] = "Remote/runtime scene tree is unavailable. Start the game (play_current_scene) and use runtime_get_scene_tree or debugger tools while a session is active.";
+	if (runtime.has("error")) {
+		result["runtime_error"] = runtime["error"];
+	}
+	if (debugger_state.has("error")) {
+		result["debugger_error"] = debugger_state["error"];
+	} else {
+		result["debugger_state"] = debugger_state;
+	}
+	result["hint"] = "Try: play_current_scene → runtime_get_scene_tree / debugger_get_sessions.";
+	return result;
 }
 
 Dictionary YeetAIDock::_tool_get_resource_dependencies(const Dictionary &p_args) const {
@@ -893,7 +935,53 @@ Dictionary YeetAIDock::_tool_reimport_project_files(const Dictionary &p_args) co
 }
 
 Dictionary YeetAIDock::_tool_rename_resource_references(const Dictionary &p_args) const {
-	return _make_error("Not yet implemented. Renaming resource references requires a full project-wide search and replace across all text-based files. Use grep_project_files + update_gdscript_file / write_project_file to manually update references.");
+	const String old_path = String(p_args.get("old_path", p_args.get("from_path", ""))).strip_edges();
+	const String new_path = String(p_args.get("new_path", p_args.get("to_path", ""))).strip_edges();
+	if (!old_path.begins_with("res://") || !new_path.begins_with("res://")) {
+		return _make_error("old_path and new_path must be res:// paths (aliases: from_path/to_path).");
+	}
+	if (old_path == new_path) {
+		Dictionary same;
+		same["ok"] = true;
+		same["old_path"] = old_path;
+		same["new_path"] = new_path;
+		same["replaced"] = 0;
+		same["note"] = "Paths are identical; nothing to do.";
+		return same;
+	}
+	if (!_get_editor_setting_bool("yeet_ai/chat/allow_replace_in_files", true)) {
+		return _make_error("Project-wide reference renames are disabled (yeet_ai/chat/allow_replace_in_files).");
+	}
+
+	// Textual project-wide replace of resource path strings (safe extensions only via replace tool).
+	Dictionary replace_args;
+	replace_args["query"] = old_path;
+	replace_args["replacement"] = new_path;
+	replace_args["path"] = p_args.get("path", "res://");
+	if (p_args.has("include_extensions")) {
+		replace_args["include_extensions"] = p_args["include_extensions"];
+	} else {
+		Array exts;
+		exts.push_back("gd");
+		exts.push_back("tscn");
+		exts.push_back("tres");
+		exts.push_back("godot");
+		exts.push_back("cfg");
+		exts.push_back("json");
+		exts.push_back("md");
+		exts.push_back("txt");
+		exts.push_back("import");
+		replace_args["include_extensions"] = exts;
+	}
+	Dictionary replace_result = _tool_replace_in_project_files(replace_args);
+	if (replace_result.has("error")) {
+		return replace_result;
+	}
+	replace_result["ok"] = true;
+	replace_result["old_path"] = old_path;
+	replace_result["new_path"] = new_path;
+	replace_result["note"] = "Textual reference rewrite only. Binary resources and some import metadata may still need a reimport/scan.";
+	return replace_result;
 }
 
 Dictionary YeetAIDock::_tool_replace_in_project_files(const Dictionary &p_args) const {
@@ -1115,21 +1203,20 @@ Dictionary YeetAIDock::_tool_set_world_environment(const Dictionary &p_args) con
 	Ref<Environment> env = we->get_environment();
 	if (env.is_null()) {
 		env.instantiate();
-		we->set_environment(env);
+		_commit_ai_property_change(we, SNAME("environment"), Variant(), env, "Set World Environment");
 	}
 	if (p_args.has("ambient_light_color")) {
-		env->set_ambient_light_color(_arg_color(p_args, "ambient_light_color"));
+		_commit_ai_property_change(env.ptr(), SNAME("ambient_light_color"), env->get(SNAME("ambient_light_color")), _arg_color(p_args, "ambient_light_color"), "Set World Environment");
 	}
 	if (p_args.has("ambient_light_energy")) {
-		env->set_ambient_light_energy(double(p_args["ambient_light_energy"]));
+		_commit_ai_property_change(env.ptr(), SNAME("ambient_light_energy"), env->get(SNAME("ambient_light_energy")), double(p_args["ambient_light_energy"]), "Set World Environment");
 	}
 	if (p_args.has("tonemap_mode")) {
-		env->set_tonemapper(Environment::ToneMapper(int(p_args["tonemap_mode"])));
+		_commit_ai_property_change(env.ptr(), SNAME("tonemap_mode"), env->get(SNAME("tonemap_mode")), Environment::ToneMapper(int(p_args["tonemap_mode"])), "Set World Environment");
 	}
 	if (p_args.has("tonemap_exposure")) {
-		env->set_tonemap_exposure(double(p_args["tonemap_exposure"]));
+		_commit_ai_property_change(env.ptr(), SNAME("tonemap_exposure"), env->get(SNAME("tonemap_exposure")), double(p_args["tonemap_exposure"]), "Set World Environment");
 	}
-	_mark_unsaved();
 	Dictionary result;
 	result["ok"] = true;
 	result["node_path"] = String(we->get_path());

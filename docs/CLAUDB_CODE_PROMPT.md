@@ -1,4 +1,6 @@
 # YEET AI — Comprehensive Development Prompt for Claude Code
+Last verified: 2026-06-30
+
 
 > Use this prompt when asking Claude Code to work on the Crosshair Engine's `yeet_ai` module. It contains full context on architecture, patterns, current state, and prioritized work items.
 

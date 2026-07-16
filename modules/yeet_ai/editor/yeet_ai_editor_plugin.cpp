@@ -8,6 +8,7 @@
 #include "yeet_ai_editor_plugin.h"
 
 #include "yeet_ai_asset_index.h"
+#include "yeet_ai_project_context_index.h"
 #include "yeet_ai_dock.h"
 
 #include "core/object/callable_mp.h"
@@ -30,7 +31,7 @@ void YeetAIEditorPlugin::_register_crosshair_editor_setting_hints() {
 
 	// Makes Crosshair keys readable in Editor → Editor Settings (same backing store as the dock panel).
 	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/enabled", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
-	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/provider", PROPERTY_HINT_ENUM, "Berry Model:0,Gemini:1,OpenRouter:2,Yeet Models:3,Azure OpenAI:4", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/provider", PROPERTY_HINT_ENUM, "Berry Model:0,Gemini:1,OpenRouter:2,Yeet Models:3,Azure OpenAI:4,Codex CLI:5,Claude Code:6,Grok CLI:7", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/completions_url", PROPERTY_HINT_PLACEHOLDER_TEXT, "https://host/v1/chat/completions", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/model", PROPERTY_HINT_PLACEHOLDER_TEXT, "berrymodel", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/api_key", PROPERTY_HINT_PASSWORD, "", PROPERTY_USAGE_DEFAULT));
@@ -39,10 +40,11 @@ void YeetAIEditorPlugin::_register_crosshair_editor_setting_hints() {
 	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/yeet_chat_url", PROPERTY_HINT_PLACEHOLDER_TEXT, "https://gpt.yeetlabs.fun/v1/chat/completions", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/yeet_tags_url", PROPERTY_HINT_PLACEHOLDER_TEXT, "https://gpt.yeetlabs.fun/api/tags", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/yeet_api_key", PROPERTY_HINT_PASSWORD, "", PROPERTY_USAGE_DEFAULT));
-	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/azure_endpoint", PROPERTY_HINT_PLACEHOLDER_TEXT, "https://crosshair-resource.services.ai.azure.com", PROPERTY_USAGE_DEFAULT));
-	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/azure_deployment", PROPERTY_HINT_PLACEHOLDER_TEXT, "gpt-4o", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/azure_endpoint", PROPERTY_HINT_PLACEHOLDER_TEXT, "https://YOUR-RESOURCE.services.ai.azure.com", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/azure_deployment", PROPERTY_HINT_PLACEHOLDER_TEXT, "gpt-5.5", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/azure_api_version", PROPERTY_HINT_PLACEHOLDER_TEXT, "2024-06-01", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::STRING, "yeet_ai/chat/azure_api_key", PROPERTY_HINT_PASSWORD, "", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/azure_api_mode", PROPERTY_HINT_ENUM, "Chat Completions (legacy):0,Responses API v1 (gpt-5.x):1", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/max_tokens", PROPERTY_HINT_RANGE, "0,262144,1", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/max_tool_round_trips", PROPERTY_HINT_RANGE, "1,500,1", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/context_token_budget", PROPERTY_HINT_RANGE, "2000,500000,100", PROPERTY_USAGE_DEFAULT));
@@ -55,6 +57,11 @@ void YeetAIEditorPlugin::_register_crosshair_editor_setting_hints() {
 	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/game_screenshot_timeout_ms", PROPERTY_HINT_RANGE, "1000,120000,100", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::FLOAT, "yeet_ai/chat/temperature", PROPERTY_HINT_RANGE, "-1,2,0.01,or_less,or_greater", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/chat/native_tools_enabled", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/chat/request_usage", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/tool_curation", PROPERTY_HINT_ENUM, "Curate by context (recommended):0,Send all tools (capped):1", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/max_advertised_tools", PROPERTY_HINT_RANGE, "0,128,1", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/chat/auto_verify", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
+	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/permission_mode", PROPERTY_HINT_ENUM, "Auto (run all):0,Ask before destructive:1,Ask before any write:2,Read-only:3", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::INT, "yeet_ai/chat/vision_default_max_dimension", PROPERTY_HINT_RANGE, "64,4096,1", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/tools/allow_project_settings_write", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
 	settings->add_property_hint(PropertyInfo(Variant::BOOL, "yeet_ai/tools/allow_editor_settings_write", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT));
@@ -75,10 +82,11 @@ void YeetAIEditorPlugin::_bind_methods() {
 YeetAIEditorPlugin::YeetAIEditorPlugin() {
 	dock = memnew(YeetAIDock);
 	editor_dock = memnew(EditorDock);
-	editor_dock->set_name(TTR("Crosshair AI"));
-	editor_dock->set_title(TTR("Crosshair AI"));
+	editor_dock->set_name(TTR("Agent"));
+	editor_dock->set_title(TTR("Agent"));
 	editor_dock->set_layout_key("CrosshairAI");
-	editor_dock->set_icon_name("Search");
+	// Use a real EditorIcons name (Search exists; "Code"/"AI" do not).
+	editor_dock->set_icon_name("Script");
 	editor_dock->set_default_slot(EditorDock::DOCK_SLOT_RIGHT_UL);
 	editor_dock->add_child(dock);
 }
@@ -135,6 +143,19 @@ void YeetAIEditorPlugin::_ensure_editor_settings() {
 	if (!settings->has_setting("yeet_ai/chat/azure_api_key")) {
 		settings->set_initial_value("yeet_ai/chat/azure_api_key", "", true);
 		settings->set_setting("yeet_ai/chat/azure_api_key", "");
+	}
+	if (!settings->has_setting("yeet_ai/chat/azure_api_mode")) {
+		// Prefer Responses API v1 for modern Foundry deployments (gpt-5.5, etc.).
+		settings->set_initial_value("yeet_ai/chat/azure_api_mode", 1, true);
+		settings->set_setting("yeet_ai/chat/azure_api_mode", 1);
+	}
+	if (!settings->has_setting("yeet_ai/chat/azure_profiles")) {
+		settings->set_initial_value("yeet_ai/chat/azure_profiles", Array(), true);
+		settings->set_setting("yeet_ai/chat/azure_profiles", Array());
+	}
+	if (!settings->has_setting("yeet_ai/chat/azure_active_profile")) {
+		settings->set_initial_value("yeet_ai/chat/azure_active_profile", "", true);
+		settings->set_setting("yeet_ai/chat/azure_active_profile", "");
 	}
 	if (!settings->has_setting("yeet_ai/chat/completions_url")) {
 		settings->set_initial_value("yeet_ai/chat/completions_url", "https://llm.adityaberry.me/v1/chat/completions", true);
@@ -240,6 +261,15 @@ void YeetAIEditorPlugin::_ensure_editor_settings() {
 		settings->set_initial_value("yeet_ai/chat/native_tools_enabled", true, true);
 		settings->set_setting("yeet_ai/chat/native_tools_enabled", true);
 	}
+	if (!settings->has_setting("yeet_ai/chat/tool_curation")) {
+		settings->set_initial_value("yeet_ai/chat/tool_curation", 0, true);
+		settings->set_setting("yeet_ai/chat/tool_curation", 0);
+	}
+	if (!settings->has_setting("yeet_ai/chat/max_advertised_tools")) {
+		// 0 = auto (provider-aware; Azure/GPT-5.x stays well under the 128 tool API cap).
+		settings->set_initial_value("yeet_ai/chat/max_advertised_tools", 0, true);
+		settings->set_setting("yeet_ai/chat/max_advertised_tools", 0);
+	}
 	if (!settings->has_setting("yeet_ai/chat/debug_mode")) {
 		settings->set_initial_value("yeet_ai/chat/debug_mode", false, true);
 		settings->set_setting("yeet_ai/chat/debug_mode", false);
@@ -287,6 +317,51 @@ void YeetAIEditorPlugin::_ensure_editor_settings() {
 	if (!settings->has_setting("yeet_ai/asset_index/deep_index_enabled")) {
 		settings->set_initial_value("yeet_ai/asset_index/deep_index_enabled", false, true);
 		settings->set_setting("yeet_ai/asset_index/deep_index_enabled", false);
+	}
+	if (!settings->has_setting("yeet_ai/rag/embeddings_enabled")) {
+		settings->set_initial_value("yeet_ai/rag/embeddings_enabled", true, true);
+		settings->set_setting("yeet_ai/rag/embeddings_enabled", true);
+	}
+	if (!settings->has_setting("yeet_ai/rag/embedding_provider")) {
+		settings->set_initial_value("yeet_ai/rag/embedding_provider", "ollama", true);
+		settings->set_setting("yeet_ai/rag/embedding_provider", "ollama");
+	}
+	if (!settings->has_setting("yeet_ai/rag/embedding_model")) {
+		settings->set_initial_value("yeet_ai/rag/embedding_model", "nomic-embed-text", true);
+		settings->set_setting("yeet_ai/rag/embedding_model", "nomic-embed-text");
+	}
+	if (!settings->has_setting("yeet_ai/rag/embedding_base_url")) {
+		settings->set_initial_value("yeet_ai/rag/embedding_base_url", "http://127.0.0.1:11434", true);
+		settings->set_setting("yeet_ai/rag/embedding_base_url", "http://127.0.0.1:11434");
+	}
+	if (!settings->has_setting("yeet_ai/rag/max_embedded_chunks")) {
+		settings->set_initial_value("yeet_ai/rag/max_embedded_chunks", 1000, true);
+		settings->set_setting("yeet_ai/rag/max_embedded_chunks", 1000);
+	}
+	if (!settings->has_setting("yeet_ai/rag/auto_context_enabled")) {
+		settings->set_initial_value("yeet_ai/rag/auto_context_enabled", false, true);
+		settings->set_setting("yeet_ai/rag/auto_context_enabled", false);
+	}
+	if (!settings->has_setting("yeet_ai/rag/auto_context_nonblocking_default_v1")) {
+		settings->set_initial_value("yeet_ai/rag/auto_context_nonblocking_default_v1", true, true);
+		settings->set_setting("yeet_ai/rag/auto_context_enabled", false);
+		settings->set_setting("yeet_ai/rag/auto_context_nonblocking_default_v1", true);
+	}
+	if (!settings->has_setting("yeet_ai/rag/auto_context_vector_enabled")) {
+		settings->set_initial_value("yeet_ai/rag/auto_context_vector_enabled", false, true);
+		settings->set_setting("yeet_ai/rag/auto_context_vector_enabled", false);
+	}
+	if (!settings->has_setting("yeet_ai/rag/auto_context_results")) {
+		settings->set_initial_value("yeet_ai/rag/auto_context_results", 6, true);
+		settings->set_setting("yeet_ai/rag/auto_context_results", 6);
+	}
+	if (!settings->has_setting("yeet_ai/rag/auto_context_chars_per_result")) {
+		settings->set_initial_value("yeet_ai/rag/auto_context_chars_per_result", 1200, true);
+		settings->set_setting("yeet_ai/rag/auto_context_chars_per_result", 1200);
+	}
+	if (!settings->has_setting("yeet_ai/rag/auto_context_max_chars")) {
+		settings->set_initial_value("yeet_ai/rag/auto_context_max_chars", 9000, true);
+		settings->set_setting("yeet_ai/rag/auto_context_max_chars", 9000);
 	}
 }
 
@@ -376,6 +451,7 @@ void YeetAIEditorPlugin::_notification(int p_what) {
 
 			// Initialize asset index and connect filesystem signals.
 			YeetAIAssetIndex::initialize();
+			YeetAIProjectContextIndex::initialize();
 			EditorFileSystem *efs = EditorFileSystem::get_singleton();
 			if (efs != nullptr) {
 				efs->connect("filesystem_changed", callable_mp(this, &YeetAIEditorPlugin::_on_filesystem_changed));
@@ -406,6 +482,7 @@ void YeetAIEditorPlugin::_notification(int p_what) {
 				}
 			}
 			YeetAIAssetIndex::finalize();
+			YeetAIProjectContextIndex::finalize();
 		} break;
 	}
 }

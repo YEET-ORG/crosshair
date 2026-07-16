@@ -7,10 +7,13 @@
 
 #include "yeet_ai_dock.h"
 
+#include "core/config/project_settings.h"
 #include "core/io/json.h"
 #include "core/io/file_access.h"
 #include "core/io/dir_access.h"
 #include "core/io/resource_loader.h"
+#include "core/os/os.h"
+#include "core/os/time.h"
 #include "core/string/string_name.h"
 #include "editor/editor_interface.h"
 #include "editor/editor_node.h"
@@ -121,6 +124,133 @@ bool YeetAIDock::_get_editor_setting_bool(const String &p_setting, bool p_defaul
 		return p_default;
 	}
 	return bool(v);
+}
+
+// ── CLI agent helpers (Codex / Claude / Grok) ────────────────────────────────
+// Windows CreateProcess argv quoting cannot safely carry multiline prompts or
+// embedded double-quotes (our project snapshot used to contain `if the user says
+// "the scene"` which truncated every follow-up task). Always write prompts to
+// temp files and pass them via --prompt-file or stdin redirection.
+
+String YeetAIDock::_cli_project_path() const {
+	String path;
+	if (ProjectSettings::get_singleton()) {
+		path = ProjectSettings::get_singleton()->get_resource_path();
+	}
+	if (path.is_empty()) {
+		path = OS::get_singleton()->get_environment("PWD");
+	}
+	if (path.is_empty()) {
+		path = OS::get_singleton()->get_executable_path().get_base_dir();
+	}
+	return path.replace("\\", "/");
+}
+
+String YeetAIDock::_cli_write_temp_text(const String &p_prefix, const String &p_text) {
+	const String dir = OS::get_singleton()->get_user_data_dir().path_join("yeet_ai_cli");
+	Ref<DirAccess> da = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
+	if (da.is_valid()) {
+		da->make_dir_recursive(dir);
+	}
+	const String path = dir.path_join(p_prefix + "_" + itos(OS::get_singleton()->get_ticks_usec()) + ".txt");
+	Ref<FileAccess> f = FileAccess::open(path, FileAccess::WRITE);
+	if (f.is_null()) {
+		return String();
+	}
+	// UTF-8 without BOM so CLIs don't treat the first char as garbage.
+	const CharString utf8 = p_text.utf8();
+	f->store_buffer((const uint8_t *)utf8.get_data(), utf8.length());
+	f->close();
+	return path;
+}
+
+void YeetAIDock::_cli_delete_temp(const String &p_path) {
+	if (p_path.is_empty()) {
+		return;
+	}
+	Ref<DirAccess> da = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
+	if (da.is_valid()) {
+		da->remove(p_path);
+	}
+}
+
+String YeetAIDock::_cli_quote_win_path(const String &p_path) {
+	// Quote for cmd.exe: wrap in double quotes; double any embedded quotes (cmd rule).
+	String p = p_path.replace("/", "\\");
+	p = p.replace("\"", "\"\"");
+	return "\"" + p + "\"";
+}
+
+String YeetAIDock::_cli_program_token(const String &p_binary_cache, const String &p_default_name) {
+	// Detection stores either a real path/name, or "cmd.exe" when only the cmd shim works.
+	if (p_binary_cache.is_empty() || p_binary_cache == "cmd.exe") {
+		return p_default_name;
+	}
+	// Prefer bare command name for .cmd shims so cmd.exe resolves via PATH.
+	if (p_binary_cache.ends_with(".cmd") || p_binary_cache.ends_with(".bat")) {
+		return p_default_name;
+	}
+	return p_binary_cache;
+}
+
+Error YeetAIDock::_cli_run_in_project(const String &p_program, const List<String> &p_args,
+		const String &p_workspace, const String &p_prompt_file, String &r_stdout, int &r_exit_code) const {
+	// Build: cmd /D /S /C "cd /d WORKSPACE && PROGRAM ARG... [ < PROMPTFILE ]"
+	// /S keeps quotes around the command string. Prompt body is NEVER on the
+	// command line (file or --prompt-file only) — Windows argv quoting mangles
+	// newlines and nested quotes and was truncating tasks.
+	auto quote_arg = [](const String &a) -> String {
+		// Simple tokens (flags, bare names) stay unquoted.
+		bool simple = true;
+		for (int i = 0; i < a.length(); i++) {
+			const char32_t c = a[i];
+			if (!(c == '-' || c == '_' || c == '.' || c == '/' || c == '\\' ||
+						(c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+						c == ':' /* drive letter */)) {
+				simple = false;
+				break;
+			}
+		}
+		// Still quote Windows paths with drive or spaces.
+		if (simple && !a.contains(" ") && a.find(":") != 1) {
+			return a;
+		}
+		String q = a.replace("\"", "\"\"");
+		return "\"" + q + "\"";
+	};
+
+	String inner;
+	if (!p_workspace.is_empty()) {
+		inner += "cd /d " + _cli_quote_win_path(p_workspace) + " && ";
+	}
+	if (p_program.contains("/") || p_program.contains("\\") || p_program.contains(" ")) {
+		inner += _cli_quote_win_path(p_program);
+	} else {
+		inner += p_program;
+	}
+	for (const String &a : p_args) {
+		inner += " ";
+		inner += quote_arg(a);
+	}
+	if (!p_prompt_file.is_empty()) {
+		// Group so stdin redirect applies to the agent, not only `cd`.
+		inner = "(" + inner + ") < " + _cli_quote_win_path(p_prompt_file);
+	}
+
+	List<String> args;
+	args.push_back("/D"); // no AutoRun
+	args.push_back("/S"); // treat rest of /C as a quoted command
+	args.push_back("/C");
+	args.push_back(inner);
+
+	r_exit_code = -1;
+	r_stdout.clear();
+	return OS::get_singleton()->execute("cmd.exe", args, &r_stdout, &r_exit_code, true, nullptr, false);
+}
+
+Error YeetAIDock::_cli_run_via_cmd_stdin(const String &p_program, const List<String> &p_args_without_prompt,
+		const String &p_workspace, const String &p_prompt_file, String &r_stdout, int &r_exit_code) const {
+	return _cli_run_in_project(p_program, p_args_without_prompt, p_workspace, p_prompt_file, r_stdout, r_exit_code);
 }
 
 Dictionary YeetAIDock::_serialize_node(Node *p_node, int p_depth, int p_max_depth, const Vector<String> &p_include_properties, int &r_node_count) const {
@@ -715,6 +845,317 @@ void YeetAIDock::_mark_unsaved() const {
 	EditorInterface::get_singleton()->mark_scene_as_unsaved();
 }
 
+EditorUndoRedoManager *YeetAIDock::_get_ai_undo_redo() const {
+	EditorInterface *ei = EditorInterface::get_singleton();
+	if (ei == nullptr) {
+		return nullptr;
+	}
+	return ei->get_editor_undo_redo();
+}
+
+bool YeetAIDock::_commit_ai_property_change(Object *p_object, const StringName &p_property, const Variant &p_old_value, const Variant &p_new_value, const String &p_action_name) const {
+	if (p_object == nullptr) {
+		return false;
+	}
+
+	EditorUndoRedoManager *urm = _get_ai_undo_redo();
+	if (urm == nullptr) {
+		p_object->set(p_property, p_new_value);
+		_mark_unsaved();
+		return false;
+	}
+
+	urm->create_action("AI: " + p_action_name);
+	urm->add_do_property(p_object, p_property, p_new_value);
+	urm->add_undo_property(p_object, p_property, p_old_value);
+	urm->commit_action();
+	_mark_unsaved();
+	return true;
+}
+
+bool YeetAIDock::_commit_ai_meta_change(Object *p_object, const StringName &p_meta, const Variant &p_old_value, bool p_old_exists, const Variant &p_new_value, bool p_new_exists, const String &p_action_name) const {
+	if (p_object == nullptr || String(p_meta).is_empty()) {
+		return false;
+	}
+
+	EditorUndoRedoManager *urm = _get_ai_undo_redo();
+	if (urm == nullptr) {
+		if (p_new_exists) {
+			p_object->set_meta(p_meta, p_new_value);
+		} else {
+			p_object->remove_meta(p_meta);
+		}
+		_mark_unsaved();
+		return false;
+	}
+
+	urm->create_action("AI: " + p_action_name);
+	if (p_new_exists) {
+		urm->add_do_method(p_object, "set_meta", p_meta, p_new_value);
+	} else {
+		urm->add_do_method(p_object, "remove_meta", p_meta);
+	}
+	if (p_old_exists) {
+		urm->add_undo_method(p_object, "set_meta", p_meta, p_old_value);
+	} else {
+		urm->add_undo_method(p_object, "remove_meta", p_meta);
+	}
+	urm->commit_action();
+	_mark_unsaved();
+	return true;
+}
+
+bool YeetAIDock::_commit_ai_remove_node(Node *p_node, const String &p_action_name) const {
+	if (p_node == nullptr || p_node->get_parent() == nullptr) {
+		return false;
+	}
+
+	Node *parent = p_node->get_parent();
+	Node *owner = p_node->get_owner();
+	const int old_index = p_node->get_index();
+
+	EditorUndoRedoManager *urm = _get_ai_undo_redo();
+	if (urm == nullptr) {
+		parent->remove_child(p_node);
+		p_node->queue_free();
+		_mark_unsaved();
+		return false;
+	}
+
+	urm->create_action("AI: " + p_action_name);
+	urm->add_do_method(parent, "remove_child", p_node);
+	urm->add_undo_method(parent, "add_child", p_node, true);
+	urm->add_undo_method(parent, "move_child", p_node, old_index);
+	urm->add_undo_method(p_node, "set_owner", owner);
+	urm->add_undo_reference(p_node);
+	urm->commit_action();
+	_mark_unsaved();
+	return true;
+}
+
+bool YeetAIDock::_commit_ai_reparent_node(Node *p_node, Node *p_new_parent, bool p_keep_global_transform, const String &p_action_name) const {
+	if (p_node == nullptr || p_new_parent == nullptr || p_node->get_parent() == nullptr) {
+		return false;
+	}
+
+	Node *old_parent = p_node->get_parent();
+	const int old_index = p_node->get_index();
+
+	EditorUndoRedoManager *urm = _get_ai_undo_redo();
+	if (urm == nullptr) {
+		p_node->reparent(p_new_parent, p_keep_global_transform);
+		_mark_unsaved();
+		return false;
+	}
+
+	urm->create_action("AI: " + p_action_name);
+	urm->add_do_method(p_node, "reparent", p_new_parent, p_keep_global_transform);
+	urm->add_undo_method(p_node, "reparent", old_parent, p_keep_global_transform);
+	urm->add_undo_method(old_parent, "move_child", p_node, old_index);
+	urm->commit_action();
+	_mark_unsaved();
+	return true;
+}
+
+bool YeetAIDock::_commit_ai_move_child(Node *p_node, int p_new_index, const String &p_action_name) const {
+	if (p_node == nullptr || p_node->get_parent() == nullptr) {
+		return false;
+	}
+
+	Node *parent = p_node->get_parent();
+	const int old_index = p_node->get_index();
+	const int clamped_index = CLAMP(p_new_index, 0, parent->get_child_count() - 1);
+
+	EditorUndoRedoManager *urm = _get_ai_undo_redo();
+	if (urm == nullptr) {
+		parent->move_child(p_node, clamped_index);
+		_mark_unsaved();
+		return false;
+	}
+
+	urm->create_action("AI: " + p_action_name);
+	urm->add_do_method(parent, "move_child", p_node, clamped_index);
+	urm->add_undo_method(parent, "move_child", p_node, old_index);
+	urm->commit_action();
+	_mark_unsaved();
+	return true;
+}
+
+bool YeetAIDock::_commit_ai_rename_node(Node *p_node, const StringName &p_new_name, const String &p_action_name) const {
+	if (p_node == nullptr || String(p_new_name).is_empty()) {
+		return false;
+	}
+
+	const StringName old_name = p_node->get_name();
+	if (old_name == p_new_name) {
+		return true;
+	}
+
+	EditorUndoRedoManager *urm = _get_ai_undo_redo();
+	if (urm == nullptr) {
+		p_node->set_name(p_new_name);
+		_mark_unsaved();
+		return false;
+	}
+
+	urm->create_action("AI: " + p_action_name);
+	urm->add_do_method(p_node, "set_name", p_new_name);
+	urm->add_undo_method(p_node, "set_name", old_name);
+	urm->commit_action();
+	_mark_unsaved();
+	return true;
+}
+
+bool YeetAIDock::_commit_ai_signal_connect(Object *p_source, const StringName &p_signal, const Callable &p_callable, uint32_t p_flags, const String &p_action_name) const {
+	if (p_source == nullptr || String(p_signal).is_empty() || !p_callable.is_valid()) {
+		return false;
+	}
+	if (p_source->is_connected(p_signal, p_callable)) {
+		return true;
+	}
+
+	EditorUndoRedoManager *urm = _get_ai_undo_redo();
+	if (urm == nullptr) {
+		const Error err = p_source->connect(p_signal, p_callable, p_flags);
+		if (err != OK) {
+			return false;
+		}
+		_mark_unsaved();
+		return false;
+	}
+
+	urm->create_action("AI: " + p_action_name);
+	urm->add_do_method(p_source, "connect", p_signal, p_callable, p_flags);
+	urm->add_undo_method(p_source, "disconnect", p_signal, p_callable);
+	urm->commit_action();
+	_mark_unsaved();
+	return true;
+}
+
+bool YeetAIDock::_commit_ai_signal_disconnect(Object *p_source, const StringName &p_signal, const Callable &p_callable, uint32_t p_flags, const String &p_action_name) const {
+	if (p_source == nullptr || String(p_signal).is_empty() || !p_callable.is_valid()) {
+		return false;
+	}
+	if (!p_source->is_connected(p_signal, p_callable)) {
+		return true;
+	}
+
+	EditorUndoRedoManager *urm = _get_ai_undo_redo();
+	if (urm == nullptr) {
+		p_source->disconnect(p_signal, p_callable);
+		_mark_unsaved();
+		return false;
+	}
+
+	urm->create_action("AI: " + p_action_name);
+	urm->add_do_method(p_source, "disconnect", p_signal, p_callable);
+	urm->add_undo_method(p_source, "connect", p_signal, p_callable, p_flags);
+	urm->commit_action();
+	_mark_unsaved();
+	return true;
+}
+
+bool YeetAIDock::_apply_ai_text_file_snapshot(const String &p_path, const String &p_contents, bool p_exists) const {
+	if (!p_path.begins_with("res://")) {
+		return false;
+	}
+
+	ProjectSettings *project_settings = ProjectSettings::get_singleton();
+	if (project_settings == nullptr) {
+		return false;
+	}
+
+	if (!p_exists) {
+		if (FileAccess::exists(p_path)) {
+			const Error remove_error = DirAccess::remove_absolute(project_settings->globalize_path(p_path));
+			if (remove_error != OK) {
+				return false;
+			}
+		}
+		EditorFileSystem *efs = EditorFileSystem::get_singleton();
+		if (efs != nullptr) {
+			efs->scan_changes();
+		}
+		return true;
+	}
+
+	const Error dir_error = DirAccess::make_dir_recursive_absolute(project_settings->globalize_path(p_path.get_base_dir()));
+	if (dir_error != OK) {
+		return false;
+	}
+
+	Ref<FileAccess> file = FileAccess::open(p_path, FileAccess::WRITE);
+	if (file.is_null()) {
+		return false;
+	}
+	file->store_string(p_contents);
+	file->flush();
+	file.unref();
+
+	EditorFileSystem *efs = EditorFileSystem::get_singleton();
+	if (efs != nullptr) {
+		efs->update_file(p_path);
+	}
+	return true;
+}
+
+bool YeetAIDock::_commit_ai_text_file_change(const String &p_path, const String &p_old_contents, bool p_old_exists, const String &p_new_contents, const String &p_action_name) const {
+	EditorUndoRedoManager *urm = _get_ai_undo_redo();
+	if (urm == nullptr) {
+		return _apply_ai_text_file_snapshot(p_path, p_new_contents, true);
+	}
+
+	urm->create_action("AI: " + p_action_name);
+	YeetAIDock *self = const_cast<YeetAIDock *>(this);
+	urm->add_do_method(self, "_apply_ai_text_file_snapshot", p_path, p_new_contents, true);
+	urm->add_undo_method(self, "_apply_ai_text_file_snapshot", p_path, p_old_contents, p_old_exists);
+	urm->commit_action();
+	return true;
+}
+
+String YeetAIDock::_get_ai_run_id() const {
+	if (_ai_run_id.is_empty()) {
+		const int64_t unix_time = Time::get_singleton()->get_unix_time_from_system();
+		const int64_t ticks = Time::get_singleton()->get_ticks_msec();
+		_ai_run_id = itos(unix_time) + "-" + itos(ticks);
+	}
+	return _ai_run_id;
+}
+
+String YeetAIDock::_get_ai_run_dir() const {
+	return "user://yeet_ai/runs/" + _get_ai_run_id();
+}
+
+void YeetAIDock::_append_ai_run_trace(const Dictionary &p_entry) const {
+	ProjectSettings *project_settings = ProjectSettings::get_singleton();
+	if (project_settings == nullptr) {
+		return;
+	}
+
+	const String run_dir = _get_ai_run_dir();
+	const String run_dir_abs = project_settings->globalize_path(run_dir);
+	if (DirAccess::make_dir_recursive_absolute(run_dir_abs) != OK) {
+		return;
+	}
+
+	const String trace_path = run_dir + "/tool_trace.jsonl";
+	Ref<FileAccess> file;
+	if (FileAccess::exists(trace_path)) {
+		file = FileAccess::open(trace_path, FileAccess::READ_WRITE);
+		if (file.is_valid()) {
+			file->seek_end();
+		}
+	} else {
+		file = FileAccess::open(trace_path, FileAccess::WRITE);
+	}
+	if (file.is_null()) {
+		return;
+	}
+
+	file->store_string(JSON::stringify(p_entry, "", false, true) + "\n");
+	file->flush();
+}
+
 void YeetAIDock::_add_to_scene(Node *p_parent, Node *p_child, Node *p_owner) const {
 	if (p_parent == nullptr || p_child == nullptr) {
 		return;
@@ -724,17 +1165,19 @@ void YeetAIDock::_add_to_scene(Node *p_parent, Node *p_child, Node *p_owner) con
 	if (!_current_tool_name_for_undo.is_empty()) {
 		EditorInterface *ei = EditorInterface::get_singleton();
 		if (ei != nullptr) {
-			EditorUndoRedoManager *urm = ei->get_editor_undo_redo();
+			EditorUndoRedoManager *urm = _get_ai_undo_redo();
 			if (urm != nullptr) {
 				String action_name = "AI: " + _current_tool_name_for_undo;
 				urm->create_action(action_name);
 				urm->add_do_method(p_parent, "add_child", p_child, true);
 				urm->add_undo_method(p_parent, "remove_child", p_child);
-				if (p_owner != nullptr) {
-					urm->add_do_method(p_child, "set_owner", p_owner);
-				}
 				urm->add_do_reference(p_child);
 				urm->commit_action();
+				// Ownership is not always undo-safe via set_owner alone for deep trees;
+				// apply after the node is in-tree so saves keep the full subtree.
+				if (p_owner != nullptr) {
+					_set_owner_recursive(p_child, p_owner);
+				}
 				_mark_unsaved();
 				return;
 			}
@@ -743,8 +1186,9 @@ void YeetAIDock::_add_to_scene(Node *p_parent, Node *p_child, Node *p_owner) con
 
 	// Fallback: direct addition without undo.
 	p_parent->add_child(p_child, true);
-	p_child->set_owner(p_owner);
-	_set_owner_recursive(p_child, p_owner);
+	if (p_owner != nullptr) {
+		_set_owner_recursive(p_child, p_owner);
+	}
 	_mark_unsaved();
 }
 
@@ -758,13 +1202,14 @@ void YeetAIDock::_refresh_editor_after_tool(const String &p_tool_name, const Dic
 		return;
 	}
 
-	const bool is_create = p_tool_name.begins_with("create_") || p_tool_name.begins_with("add_") || p_tool_name.begins_with("instantiate_");
+	const bool is_create = p_tool_name.begins_with("create_") || p_tool_name.begins_with("add_") || p_tool_name.begins_with("instantiate_") || p_tool_name.begins_with("duplicate_");
 	const bool is_remove = p_tool_name.begins_with("remove_") || p_tool_name.begins_with("delete_");
-	const bool is_modify = p_tool_name.begins_with("set_") || p_tool_name.begins_with("update_") || p_tool_name.begins_with("write_") || p_tool_name.begins_with("attach_") || p_tool_name.begins_with("assign_");
-	const bool is_file = p_tool_name.begins_with("create_gdscript_file") || p_tool_name.begins_with("update_gdscript_file") || p_tool_name.begins_with("write_project_file") || p_tool_name.begins_with("create_scene_file") || p_tool_name.begins_with("copy_project_file") || p_tool_name.begins_with("move_project_file") || p_tool_name.begins_with("delete_project_file");
+	const bool is_tree_change = is_create || is_remove || p_tool_name.begins_with("move_") || p_tool_name.begins_with("rename_") || p_tool_name.begins_with("reparent_") || p_tool_name.begins_with("replace_") || p_tool_name.begins_with("batch_reparent_");
+	const bool is_modify = p_tool_name.begins_with("set_") || p_tool_name.begins_with("update_") || p_tool_name.begins_with("write_") || p_tool_name.begins_with("attach_") || p_tool_name.begins_with("assign_") || p_tool_name.begins_with("connect_") || p_tool_name.begins_with("disconnect_") || p_tool_name.begins_with("clear_") || p_tool_name.begins_with("paint_") || p_tool_name.begins_with("repair_") || p_tool_name.begins_with("batch_set_") || p_tool_name.begins_with("resource_modify") || p_tool_name.begins_with("scene_modify");
+	const bool is_file = p_tool_name.begins_with("create_gdscript_file") || p_tool_name.begins_with("update_gdscript_file") || p_tool_name.begins_with("write_project_file") || p_tool_name.begins_with("create_scene_file") || p_tool_name.begins_with("copy_project_file") || p_tool_name.begins_with("move_project_file") || p_tool_name.begins_with("delete_project_file") || p_tool_name.begins_with("import_") || p_tool_name.begins_with("reimport_") || p_tool_name.begins_with("save_resource") || p_tool_name.begins_with("rename_resource_references") || p_tool_name.begins_with("replace_in_project_files");
 
 	// ── Scene tree refresh ─────────────────────────────────────────────────
-	if (is_create || is_remove) {
+	if (is_tree_change) {
 		// Force scene tree dock to refresh by triggering a selection update.
 		if (p_result.has("node_path")) {
 			const String node_path = p_result["node_path"];

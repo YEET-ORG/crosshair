@@ -104,6 +104,7 @@ Dictionary YeetAIDock::_tool_create_scene_file(const Dictionary &p_args) const {
 		}
 	}
 
+	result["ok"] = true;
 	result["scene_path"] = scene_path;
 	result["root_type"] = root_type;
 	result["root_name"] = root_name;
@@ -123,23 +124,20 @@ Dictionary YeetAIDock::_tool_create_gdscript_file(const Dictionary &p_args) cons
 		return result;
 	}
 
-	const Error dir_error = DirAccess::make_dir_recursive_absolute(ProjectSettings::get_singleton()->globalize_path(script_path.get_base_dir()));
-	if (dir_error != OK) {
-		result["error"] = vformat("Failed to create script directory: %d", dir_error);
-		return result;
+	const bool old_exists = FileAccess::exists(script_path);
+	String old_contents;
+	if (old_exists) {
+		Error read_error = OK;
+		old_contents = FileAccess::get_file_as_string(script_path, &read_error);
+		if (read_error != OK) {
+			result["error"] = vformat("Failed to read existing script: %d", read_error);
+			return result;
+		}
 	}
 
-	Ref<FileAccess> file = FileAccess::open(script_path, FileAccess::WRITE);
-	if (file.is_null()) {
-		result["error"] = "Failed to open script_path for writing.";
+	if (!_commit_ai_text_file_change(script_path, old_contents, old_exists, contents, "Create GDScript File")) {
+		result["error"] = "Failed to write script_path.";
 		return result;
-	}
-	file->store_string(contents);
-	file.unref();
-
-	EditorInterface *editor = EditorInterface::get_singleton();
-	if (editor != nullptr && editor->get_resource_filesystem() != nullptr) {
-		editor->get_resource_filesystem()->update_file(script_path);
 	}
 
 	// Validate the written script for parse errors.
@@ -225,23 +223,9 @@ Dictionary YeetAIDock::_tool_update_gdscript_file(const Dictionary &p_args) cons
 		return result;
 	}
 
-	const Error dir_error = DirAccess::make_dir_recursive_absolute(ProjectSettings::get_singleton()->globalize_path(script_path.get_base_dir()));
-	if (dir_error != OK) {
-		result["error"] = vformat("Failed to create script directory: %d", dir_error);
+	if (!_commit_ai_text_file_change(script_path, existing_contents, exists, final_contents, "Update GDScript File")) {
+		result["error"] = "Failed to write script_path.";
 		return result;
-	}
-
-	Ref<FileAccess> file = FileAccess::open(script_path, FileAccess::WRITE);
-	if (file.is_null()) {
-		result["error"] = "Failed to open script_path for writing.";
-		return result;
-	}
-	file->store_string(final_contents);
-	file.unref();
-
-	EditorInterface *editor = EditorInterface::get_singleton();
-	if (editor != nullptr && editor->get_resource_filesystem() != nullptr) {
-		editor->get_resource_filesystem()->update_file(script_path);
 	}
 
 	// Validate the updated script for parse errors.
@@ -316,25 +300,23 @@ Dictionary YeetAIDock::_tool_write_project_file(const Dictionary &p_args) const 
 		return result;
 	}
 
-	const Error dir_error = DirAccess::make_dir_recursive_absolute(ProjectSettings::get_singleton()->globalize_path(path.get_base_dir()));
-	if (dir_error != OK) {
-		result["error"] = vformat("Failed to create parent directory: %d", dir_error);
-		return result;
+	const bool old_exists = FileAccess::exists(path);
+	String old_contents;
+	if (old_exists) {
+		Error read_error = OK;
+		old_contents = FileAccess::get_file_as_string(path, &read_error);
+		if (read_error != OK) {
+			result["error"] = vformat("Failed to read existing file: %d", read_error);
+			return result;
+		}
 	}
 
-	Ref<FileAccess> file = FileAccess::open(path, FileAccess::WRITE);
-	if (file.is_null()) {
+	if (!_commit_ai_text_file_change(path, old_contents, old_exists, contents, "Write Project File")) {
 		result["error"] = "Failed to open file for writing.";
 		return result;
 	}
-	file->store_string(contents);
-	file->flush();
 
-	EditorInterface *editor = EditorInterface::get_singleton();
-	if (editor != nullptr && editor->get_resource_filesystem() != nullptr) {
-		editor->get_resource_filesystem()->update_file(path);
-	}
-
+	result["ok"] = true;
 	result["path"] = path;
 	result["bytes_written"] = contents.length();
 	return result;

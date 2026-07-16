@@ -7,6 +7,7 @@
 #include "yeet_ai_dock.h"
 
 #include "core/config/project_settings.h"
+#include "editor/editor_undo_redo_manager.h"
 #include "scene/2d/tile_map.h"
 #include "scene/2d/tile_map_layer.h"
 #include "scene/resources/2d/tile_set.h"
@@ -437,14 +438,13 @@ Dictionary YeetAIDock::_tool_set_collision_layer_mask(const Dictionary &p_args) 
 	}
 
 	if (is_3d) {
-		co3->set_collision_layer(layer);
-		co3->set_collision_mask(mask);
+		_commit_ai_property_change(co3, SNAME("collision_layer"), co3->get_collision_layer(), layer, "Set Collision Layer");
+		_commit_ai_property_change(co3, SNAME("collision_mask"), co3->get_collision_mask(), mask, "Set Collision Mask");
 	} else {
-		co2->set_collision_layer(layer);
-		co2->set_collision_mask(mask);
+		_commit_ai_property_change(co2, SNAME("collision_layer"), co2->get_collision_layer(), layer, "Set Collision Layer");
+		_commit_ai_property_change(co2, SNAME("collision_mask"), co2->get_collision_mask(), mask, "Set Collision Mask");
 	}
 
-	_mark_unsaved();
 	Dictionary extra;
 	extra["collision_layer"] = (int64_t)layer;
 	extra["collision_mask"] = (int64_t)mask;
@@ -472,15 +472,33 @@ Dictionary YeetAIDock::_tool_add_collision_exception(const Dictionary &p_args) c
 
 	PhysicsBody3D *pb3 = Object::cast_to<PhysicsBody3D>(node);
 	PhysicsBody2D *pb2 = Object::cast_to<PhysicsBody2D>(node);
+	EditorUndoRedoManager *urm = _get_ai_undo_redo();
 	if (pb3) {
-		pb3->add_collision_exception_with(exception_node);
+		if (urm != nullptr) {
+			urm->create_action("AI: Add Collision Exception");
+			urm->add_do_method(pb3, "add_collision_exception_with", exception_node);
+			urm->add_undo_method(pb3, "remove_collision_exception_with", exception_node);
+			urm->commit_action();
+			_mark_unsaved();
+		} else {
+			pb3->add_collision_exception_with(exception_node);
+			_mark_unsaved();
+		}
 	} else if (pb2) {
-		pb2->add_collision_exception_with(exception_node);
+		if (urm != nullptr) {
+			urm->create_action("AI: Add Collision Exception");
+			urm->add_do_method(pb2, "add_collision_exception_with", exception_node);
+			urm->add_undo_method(pb2, "remove_collision_exception_with", exception_node);
+			urm->commit_action();
+			_mark_unsaved();
+		} else {
+			pb2->add_collision_exception_with(exception_node);
+			_mark_unsaved();
+		}
 	} else {
 		return _make_error("Node is not a PhysicsBody2D or PhysicsBody3D");
 	}
 
-	_mark_unsaved();
 	Dictionary extra;
 	extra["exception_node_path"] = exception_node_path;
 	return _make_ok(extra);
@@ -506,15 +524,33 @@ Dictionary YeetAIDock::_tool_remove_collision_exception(const Dictionary &p_args
 
 	PhysicsBody3D *pb3 = Object::cast_to<PhysicsBody3D>(node);
 	PhysicsBody2D *pb2 = Object::cast_to<PhysicsBody2D>(node);
+	EditorUndoRedoManager *urm = _get_ai_undo_redo();
 	if (pb3) {
-		pb3->remove_collision_exception_with(exception_node);
+		if (urm != nullptr) {
+			urm->create_action("AI: Remove Collision Exception");
+			urm->add_do_method(pb3, "remove_collision_exception_with", exception_node);
+			urm->add_undo_method(pb3, "add_collision_exception_with", exception_node);
+			urm->commit_action();
+			_mark_unsaved();
+		} else {
+			pb3->remove_collision_exception_with(exception_node);
+			_mark_unsaved();
+		}
 	} else if (pb2) {
-		pb2->remove_collision_exception_with(exception_node);
+		if (urm != nullptr) {
+			urm->create_action("AI: Remove Collision Exception");
+			urm->add_do_method(pb2, "remove_collision_exception_with", exception_node);
+			urm->add_undo_method(pb2, "add_collision_exception_with", exception_node);
+			urm->commit_action();
+			_mark_unsaved();
+		} else {
+			pb2->remove_collision_exception_with(exception_node);
+			_mark_unsaved();
+		}
 	} else {
 		return _make_error("Node is not a PhysicsBody2D or PhysicsBody3D");
 	}
 
-	_mark_unsaved();
 	Dictionary extra;
 	extra["exception_node_path"] = exception_node_path;
 	return _make_ok(extra);
@@ -583,18 +619,23 @@ Dictionary YeetAIDock::_tool_set_physics_material(const Dictionary &p_args) cons
 		created_new = true;
 	}
 
-	mat->set_friction(friction);
-	mat->set_bounce(bounce);
-	mat->set_absorbent(absorbent);
-	mat->set_rough(rough);
-
 	if (node->has_method("set_physics_material_override")) {
-		node->call("set_physics_material_override", mat);
+		if (created_new) {
+			mat->set_friction(friction);
+			mat->set_bounce(bounce);
+			mat->set_absorbent(absorbent);
+			mat->set_rough(rough);
+			_commit_ai_property_change(node, SNAME("physics_material_override"), Variant(), mat, "Set Physics Material");
+		} else {
+			_commit_ai_property_change(mat.ptr(), SNAME("friction"), mat->get_friction(), friction, "Set Physics Material");
+			_commit_ai_property_change(mat.ptr(), SNAME("bounce"), mat->get_bounce(), bounce, "Set Physics Material");
+			_commit_ai_property_change(mat.ptr(), SNAME("absorbent"), mat->is_absorbent(), absorbent, "Set Physics Material");
+			_commit_ai_property_change(mat.ptr(), SNAME("rough"), mat->is_rough(), rough, "Set Physics Material");
+		}
 	} else {
 		return _make_error("Node does not support physics_material_override");
 	}
 
-	_mark_unsaved();
 	Dictionary extra;
 	extra["friction"] = friction;
 	extra["bounce"] = bounce;

@@ -63,8 +63,7 @@ Dictionary YeetAIDock::_tool_add_node(const Dictionary &p_args) const {
 	_add_to_scene(parent_node, new_node, scene_root);
 	new_node->set_name(parent_node->validate_child_name(new_node));
 
-	_mark_unsaved();
-
+	result["ok"] = true;
 	result["scene_path"] = scene_root->get_scene_file_path();
 	result["node_path"] = String(new_node->get_path());
 	result["node_name"] = new_node->get_name();
@@ -114,8 +113,8 @@ Dictionary YeetAIDock::_tool_instantiate_scene(const Dictionary &p_args) const {
 
 	_add_to_scene(parent_node, instance, scene_root);
 	instance->set_name(parent_node->validate_child_name(instance));
-	_mark_unsaved();
 
+	result["ok"] = true;
 	result["scene_path"] = scene_root->get_scene_file_path();
 	result["packed_scene_path"] = packed_scene_path;
 	result["node_path"] = String(instance->get_path());

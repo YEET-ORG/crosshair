@@ -6,6 +6,7 @@
 /**************************************************************************/
 
 #include "yeet_ai_settings_panel.h"
+#include "yeet_ai_azure_profiles.h"
 
 #include "core/io/http_client.h"
 #include "core/io/json.h"
@@ -79,6 +80,9 @@ void YeetAISettingsPanel::_update_provider_blocks() {
 	ERR_FAIL_NULL(openrouter_settings_block);
 	ERR_FAIL_NULL(yeet_settings_block);
 	ERR_FAIL_NULL(azure_settings_block);
+	ERR_FAIL_NULL(codex_settings_block);
+	ERR_FAIL_NULL(claude_settings_block);
+	ERR_FAIL_NULL(grok_settings_block);
 	ERR_FAIL_NULL(model_local_gemini_block);
 	ERR_FAIL_NULL(model_gemini_block);
 	ERR_FAIL_NULL(model_openrouter_block);
@@ -90,6 +94,9 @@ void YeetAISettingsPanel::_update_provider_blocks() {
 	openrouter_settings_block->set_visible(id == 2);
 	yeet_settings_block->set_visible(id == 3);
 	azure_settings_block->set_visible(id == 4);
+	codex_settings_block->set_visible(id == 5);
+	claude_settings_block->set_visible(id == 6);
+	grok_settings_block->set_visible(id == 7);
 	model_local_gemini_block->set_visible(id == 0);
 	model_gemini_block->set_visible(id == 1);
 	model_openrouter_block->set_visible(id == 2);
@@ -212,6 +219,9 @@ void YeetAISettingsPanel::_build_ui() {
 	settings_provider->add_item(TTR("OpenRouter"), 2);
 	settings_provider->add_item(TTR("Yeet Models"), 3);
 	settings_provider->add_item(TTR("Azure OpenAI"), 4);
+	settings_provider->add_item(TTR("Codex CLI"), 5);
+	settings_provider->add_item(TTR("Claude Code"), 6);
+	settings_provider->add_item(TTR("Grok CLI"), 7);
 	settings_provider->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	settings_provider->connect(SceneStringName(item_selected), callable_mp(this, &YeetAISettingsPanel::_on_provider_selected));
 	vb->add_child(settings_provider);
@@ -283,27 +293,102 @@ void YeetAISettingsPanel::_build_ui() {
 	azure_settings_block->add_theme_constant_override("separation", int(10.0f * EDSCALE));
 	vb->add_child(azure_settings_block);
 
+	// Profile picker + management
+	HBoxContainer *az_prof_row = memnew(HBoxContainer);
+	az_prof_row->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	Label *az_prof_l = memnew(Label);
+	az_prof_l->set_text(TTR("Azure profile"));
+	az_prof_l->set_custom_minimum_size(Vector2(132 * EDSCALE, 0));
+	az_prof_l->set_vertical_alignment(VERTICAL_ALIGNMENT_CENTER);
+	az_prof_l->set_tooltip_text(TTR("Multiple Azure / Foundry endpoints. Each profile is a separate provider config."));
+	az_prof_row->add_child(az_prof_l);
+	settings_azure_profile = memnew(OptionButton);
+	settings_azure_profile->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	settings_azure_profile->set_clip_text(true);
+	settings_azure_profile->connect(SceneStringName(item_selected), callable_mp(this, &YeetAISettingsPanel::_on_azure_profile_selected));
+	az_prof_row->add_child(settings_azure_profile);
+	settings_azure_profile_add = memnew(Button);
+	settings_azure_profile_add->set_text(TTR("Add"));
+	settings_azure_profile_add->set_tooltip_text(TTR("Add a new Azure profile"));
+	settings_azure_profile_add->connect(SceneStringName(pressed), callable_mp(this, &YeetAISettingsPanel::_on_azure_profile_add));
+	az_prof_row->add_child(settings_azure_profile_add);
+	settings_azure_profile_dup = memnew(Button);
+	settings_azure_profile_dup->set_text(TTR("Duplicate"));
+	settings_azure_profile_dup->set_tooltip_text(TTR("Duplicate the selected profile"));
+	settings_azure_profile_dup->connect(SceneStringName(pressed), callable_mp(this, &YeetAISettingsPanel::_on_azure_profile_duplicate));
+	az_prof_row->add_child(settings_azure_profile_dup);
+	settings_azure_profile_remove = memnew(Button);
+	settings_azure_profile_remove->set_text(TTR("Remove"));
+	settings_azure_profile_remove->set_tooltip_text(TTR("Remove the selected profile"));
+	settings_azure_profile_remove->connect(SceneStringName(pressed), callable_mp(this, &YeetAISettingsPanel::_on_azure_profile_remove));
+	az_prof_row->add_child(settings_azure_profile_remove);
+	azure_settings_block->add_child(az_prof_row);
+
+	settings_azure_profile_name = memnew(LineEdit);
+	settings_azure_profile_name->set_placeholder(TTR("Profile display name"));
+	settings_azure_profile_name->connect(SceneStringName(text_changed), callable_mp(this, &YeetAISettingsPanel::_on_azure_profile_field_changed).unbind(1));
+	settings_azure_profile_name->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
+	settings_azure_profile_name->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_on_azure_profile_field_changed));
+	_add_settings_labeled_row(azure_settings_block, TTR("Profile name"), settings_azure_profile_name, TTR("Name shown in the dock provider list (e.g. East US GPT-5.5)."));
+
+	settings_azure_api_mode = memnew(OptionButton);
+	settings_azure_api_mode->add_item(TTR("Chat Completions (legacy)"), 0);
+	settings_azure_api_mode->add_item(TTR("Responses API v1 (gpt-5.x)"), 1);
+	settings_azure_api_mode->connect(SceneStringName(item_selected), callable_mp(this, &YeetAISettingsPanel::_on_azure_profile_field_changed).unbind(1));
+	_add_settings_labeled_row(azure_settings_block, TTR("Azure API mode"), settings_azure_api_mode, TTR("Use Responses API v1 for Foundry GPT-5.x deployments (…/openai/v1/responses). Legacy Chat Completions uses /models/chat/completions."));
+
 	settings_azure_endpoint = memnew(LineEdit);
-	settings_azure_endpoint->set_placeholder(TTR("https://crosshair-resource.services.ai.azure.com"));
-	_add_settings_labeled_row(azure_settings_block, TTR("Azure endpoint"), settings_azure_endpoint, TTR("Azure OpenAI resource endpoint (e.g. https://crosshair-resource.services.ai.azure.com)."));
+	settings_azure_endpoint->set_placeholder(TTR("https://YOUR-RESOURCE.services.ai.azure.com"));
+	settings_azure_endpoint->connect(SceneStringName(text_changed), callable_mp(this, &YeetAISettingsPanel::_on_azure_profile_field_changed).unbind(1));
+	_add_settings_labeled_row(azure_settings_block, TTR("Azure endpoint"), settings_azure_endpoint, TTR("Resource base (https://…services.ai.azure.com) or full Responses URL (…/openai/v1/responses)."));
 
 	settings_azure_deployment = memnew(LineEdit);
-	settings_azure_deployment->set_placeholder(TTR("gpt-4o"));
-	_add_settings_labeled_row(azure_settings_block, TTR("Azure deployment"), settings_azure_deployment, TTR("Deployment name configured in Azure AI Foundry / OpenAI Studio."));
+	settings_azure_deployment->set_placeholder(TTR("gpt-5.5"));
+	settings_azure_deployment->connect(SceneStringName(text_changed), callable_mp(this, &YeetAISettingsPanel::_on_azure_profile_field_changed).unbind(1));
+	_add_settings_labeled_row(azure_settings_block, TTR("Azure deployment"), settings_azure_deployment, TTR("Deployment / model name in Azure AI Foundry (e.g. gpt-5.5)."));
 
 	settings_azure_api_version = memnew(LineEdit);
 	settings_azure_api_version->set_placeholder(TTR("2024-05-01-preview"));
-	_add_settings_labeled_row(azure_settings_block, TTR("API version"), settings_azure_api_version, TTR("Azure AI API version (e.g. 2024-05-01-preview)."));
+	settings_azure_api_version->connect(SceneStringName(text_changed), callable_mp(this, &YeetAISettingsPanel::_on_azure_profile_field_changed).unbind(1));
+	_add_settings_labeled_row(azure_settings_block, TTR("API version"), settings_azure_api_version, TTR("Only used for legacy Chat Completions mode. Responses v1 does not need api-version."));
 
 	settings_azure_api_key = memnew(LineEdit);
 	settings_azure_api_key->set_secret(true);
 	settings_azure_api_key->set_placeholder(TTR("Azure API key"));
-	_add_settings_labeled_row(azure_settings_block, TTR("Azure API key"), settings_azure_api_key, TTR("Key from Azure Portal or AI Foundry. Sent as Authorization: Bearer."));
+	settings_azure_api_key->connect(SceneStringName(text_changed), callable_mp(this, &YeetAISettingsPanel::_on_azure_profile_field_changed).unbind(1));
+	_add_settings_labeled_row(azure_settings_block, TTR("Azure API key"), settings_azure_api_key, TTR("Key for this profile only. Never commit keys to git."));
 
 	Label *azure_hint = memnew(Label);
 	azure_hint->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
-	azure_hint->set_text(TTR("Below, enter the model name matching your Azure deployment (e.g. gpt-4o)."));
+	azure_hint->set_text(TTR("Add multiple Azure profiles (different resources, regions, or models). Each appears as “Azure · <name>” in the dock provider list. Active profile is used when Provider = Azure."));
 	azure_settings_block->add_child(azure_hint);
+
+	codex_settings_block = memnew(VBoxContainer);
+	codex_settings_block->add_theme_constant_override("separation", int(10.0f * EDSCALE));
+	vb->add_child(codex_settings_block);
+
+	Label *codex_hint = memnew(Label);
+	codex_hint->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
+	codex_hint->set_text(TTR("Codex CLI runs `codex exec --json --sandbox workspace-write --skip-git-repo-check --cd <project>` from a worker thread and edits project files directly. Install `@openai/codex` and run `codex login` in a terminal before using this provider."));
+	codex_settings_block->add_child(codex_hint);
+
+	claude_settings_block = memnew(VBoxContainer);
+	claude_settings_block->add_theme_constant_override("separation", int(10.0f * EDSCALE));
+	vb->add_child(claude_settings_block);
+
+	Label *claude_hint = memnew(Label);
+	claude_hint->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
+	claude_hint->set_text(TTR("Claude Code runs `claude -p --output-format stream-json --permission-mode bypassPermissions --add-dir <project>` from a worker thread and edits project files directly. Install Claude Code and authenticate it in a terminal before using this provider."));
+	claude_settings_block->add_child(claude_hint);
+
+	grok_settings_block = memnew(VBoxContainer);
+	grok_settings_block->add_theme_constant_override("separation", int(10.0f * EDSCALE));
+	vb->add_child(grok_settings_block);
+
+	Label *grok_hint = memnew(Label);
+	grok_hint->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
+	grok_hint->set_text(TTR("Grok Build CLI runs `grok --no-auto-update -p <prompt> --cwd <project> --output-format streaming-json --always-approve` from a worker thread and edits project files directly. Install from https://x.ai/cli (`curl -fsSL https://x.ai/cli/install.sh | bash` or PowerShell `irm https://x.ai/cli/install.ps1 | iex`), then `grok login` or set XAI_API_KEY. Optional model override: set yeet_ai/chat/model (e.g. grok-4.5)."));
+	grok_settings_block->add_child(grok_hint);
 
 	model_local_gemini_block = memnew(VBoxContainer);
 	model_local_gemini_block->add_theme_constant_override("separation", int(10.0f * EDSCALE));
@@ -411,9 +496,9 @@ void YeetAISettingsPanel::_build_ui() {
 	vb->add_child(model_azure_block);
 
 	settings_azure_model = memnew(LineEdit);
-	settings_azure_model->set_placeholder(TTR("gpt-4o"));
-	settings_azure_model->set_tooltip_text(TTR("Model name for this Azure deployment (e.g. gpt-4o). Used in chat payload."));
-	_add_settings_labeled_row(model_azure_block, TTR("Model"), settings_azure_model, TTR("Model name matching your Azure deployment (e.g. gpt-4o)."));
+	settings_azure_model->set_placeholder(TTR("gpt-5.5"));
+	settings_azure_model->set_tooltip_text(TTR("Model / deployment name for Azure (e.g. gpt-5.5). Used in the request payload."));
+	_add_settings_labeled_row(model_azure_block, TTR("Model"), settings_azure_model, TTR("Model name matching your Azure deployment (e.g. gpt-5.5)."));
 
 	openrouter_models_http = memnew(HTTPRequest);
 	openrouter_models_http->set_use_threads(true);
@@ -583,15 +668,16 @@ void YeetAISettingsPanel::_build_ui() {
 	settings_game_screenshot_timeout_ms->connect(SceneStringName(value_changed), callable_mp(this, &YeetAISettingsPanel::_commit_spinbox_changed));
 
 	settings_azure_endpoint->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
-	settings_azure_endpoint->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_azure_endpoint->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_on_azure_profile_field_changed));
 	settings_azure_deployment->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
-	settings_azure_deployment->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_azure_deployment->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_on_azure_profile_field_changed));
 	settings_azure_api_version->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
-	settings_azure_api_version->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_azure_api_version->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_on_azure_profile_field_changed));
 	settings_azure_api_key->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
-	settings_azure_api_key->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_azure_api_key->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_on_azure_profile_field_changed));
 	settings_azure_model->connect(SceneStringName(text_submitted), callable_mp(this, &YeetAISettingsPanel::_commit_text_submitted));
-	settings_azure_model->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_commit_to_settings));
+	settings_azure_model->connect("focus_exited", callable_mp(this, &YeetAISettingsPanel::_on_azure_profile_field_changed));
+	settings_azure_model->connect(SceneStringName(text_changed), callable_mp(this, &YeetAISettingsPanel::_on_azure_profile_field_changed).unbind(1));
 }
 
 void YeetAISettingsPanel::_rebuild_openrouter_model_dropdown(const Vector<String> &p_api_slugs) {
@@ -1195,7 +1281,27 @@ String YeetAISettingsPanel::_get_model_value_for_commit() const {
 		return _get_yeet_model_slug_from_ui();
 	}
 	if (id == 4) {
-		return settings_azure_model->get_text();
+		String m = settings_azure_model != nullptr ? settings_azure_model->get_text().strip_edges() : String();
+		if (m.is_empty() && settings_azure_deployment != nullptr) {
+			m = settings_azure_deployment->get_text().strip_edges();
+		}
+		if (m.is_empty()) {
+			m = "gpt-5.5";
+		}
+		return m;
+	}
+	if (id == 5) {
+		return "codex-cli";
+	}
+	if (id == 6) {
+		return "claude-code";
+	}
+	if (id == 7) {
+		const String existing = _get_setting_string("yeet_ai/chat/model", "grok-cli");
+		if (existing.is_empty() || existing == "berrymodel") {
+			return "grok-cli";
+		}
+		return existing;
 	}
 	return String::utf8(k_berry_model_id);
 }
@@ -1283,11 +1389,7 @@ void YeetAISettingsPanel::_load_from_settings() {
 	settings_yeet_chat_url->set_text(_get_setting_string("yeet_ai/chat/yeet_chat_url", "https://gpt.yeetlabs.fun/v1/chat/completions"));
 	settings_yeet_tags_url->set_text(_get_setting_string("yeet_ai/chat/yeet_tags_url", "https://gpt.yeetlabs.fun/api/tags"));
 	settings_yeet_api_key->set_text(_get_setting_string("yeet_ai/chat/yeet_api_key", ""));
-	settings_azure_endpoint->set_text(_get_setting_string("yeet_ai/chat/azure_endpoint", "https://crosshair-resource.services.ai.azure.com"));
-	settings_azure_deployment->set_text(_get_setting_string("yeet_ai/chat/azure_deployment", ""));
-	settings_azure_api_version->set_text(_get_setting_string("yeet_ai/chat/azure_api_version", "2024-05-01-preview"));
-	settings_azure_api_key->set_text(_get_setting_string("yeet_ai/chat/azure_api_key", ""));
-	settings_azure_model->set_text(_get_setting_string("yeet_ai/chat/model", "gpt-4o"));
+	_azure_reload_profiles_into_ui();
 	_update_provider_blocks();
 	if (cached_provider_id == 1) {
 		_sync_gemini_model_ui_from_slug(model_setting);
@@ -1299,7 +1401,9 @@ void YeetAISettingsPanel::_load_from_settings() {
 		_sync_yeet_model_ui_from_slug(model_setting);
 	}
 	if (cached_provider_id == 4) {
-		settings_azure_model->set_text(model_setting);
+		// Model field is owned by the active Azure profile.
+		const Dictionary ap = yeet_ai_azure_active_profile();
+		settings_azure_model->set_text(String(ap.get("model", model_setting)));
 	}
 	settings_max_tokens->set_value_no_signal(_get_setting_int("yeet_ai/chat/max_tokens", 32768));
 	settings_temperature->set_value_no_signal((double)_get_setting_float("yeet_ai/chat/temperature", 0.25f));
@@ -1344,10 +1448,9 @@ void YeetAISettingsPanel::_commit_to_settings() {
 	s->set_setting("yeet_ai/chat/yeet_chat_url", settings_yeet_chat_url->get_text());
 	s->set_setting("yeet_ai/chat/yeet_tags_url", settings_yeet_tags_url->get_text());
 	s->set_setting("yeet_ai/chat/yeet_api_key", settings_yeet_api_key->get_text());
-	s->set_setting("yeet_ai/chat/azure_endpoint", settings_azure_endpoint->get_text());
-	s->set_setting("yeet_ai/chat/azure_deployment", settings_azure_deployment->get_text());
-	s->set_setting("yeet_ai/chat/azure_api_version", settings_azure_api_version->get_text());
-	s->set_setting("yeet_ai/chat/azure_api_key", settings_azure_api_key->get_text());
+	// Azure multi-profile: persist full list + active id (mirrors legacy keys).
+	_azure_read_fields_into_selected_profile();
+	yeet_ai_azure_profiles_save(_azure_profiles_cache, _azure_active_profile_id);
 	s->set_setting("yeet_ai/chat/max_tokens", int(settings_max_tokens->get_value()));
 	s->set_setting("yeet_ai/chat/temperature", float(settings_temperature->get_value()));
 	s->set_setting("yeet_ai/chat/max_tool_round_trips", int(settings_max_tool_round_trips->get_value()));
@@ -1423,4 +1526,198 @@ void YeetAISettingsPanel::_commit_spinbox_changed(double p_value) {
 void YeetAISettingsPanel::_commit_checkbox_toggled(bool p_pressed) {
 	(void)p_pressed;
 	_commit_to_settings();
+}
+
+void YeetAISettingsPanel::_azure_rebuild_profile_dropdown() {
+	if (settings_azure_profile == nullptr) {
+		return;
+	}
+	const String keep_id = _azure_active_profile_id;
+	settings_azure_profile->clear();
+	int select_idx = 0;
+	for (int i = 0; i < _azure_profiles_cache.size(); i++) {
+		if (_azure_profiles_cache[i].get_type() != Variant::DICTIONARY) {
+			continue;
+		}
+		const Dictionary p = _azure_profiles_cache[i];
+		const String id = String(p.get("id", ""));
+		const String name = String(p.get("name", "Azure"));
+		const int idx = settings_azure_profile->get_item_count();
+		settings_azure_profile->add_item(name);
+		settings_azure_profile->set_item_metadata(idx, id);
+		if (id == keep_id) {
+			select_idx = idx;
+		}
+	}
+	if (settings_azure_profile->get_item_count() > 0) {
+		settings_azure_profile->select(select_idx);
+		_azure_active_profile_id = String(settings_azure_profile->get_item_metadata(select_idx));
+	}
+}
+
+void YeetAISettingsPanel::_azure_apply_selected_profile_to_fields() {
+	if (settings_azure_endpoint == nullptr) {
+		return;
+	}
+	Dictionary profile;
+	for (int i = 0; i < _azure_profiles_cache.size(); i++) {
+		if (_azure_profiles_cache[i].get_type() != Variant::DICTIONARY) {
+			continue;
+		}
+		const Dictionary p = _azure_profiles_cache[i];
+		if (String(p.get("id", "")) == _azure_active_profile_id) {
+			profile = p;
+			break;
+		}
+	}
+	if (profile.is_empty() && _azure_profiles_cache.size() > 0 && _azure_profiles_cache[0].get_type() == Variant::DICTIONARY) {
+		profile = _azure_profiles_cache[0];
+		_azure_active_profile_id = String(profile.get("id", ""));
+	}
+
+	_azure_profile_ui_loading = true;
+	settings_azure_profile_name->set_text(String(profile.get("name", "Azure")));
+	settings_azure_endpoint->set_text(String(profile.get("endpoint", "")));
+	settings_azure_deployment->set_text(String(profile.get("deployment", "gpt-5.5")));
+	settings_azure_api_version->set_text(String(profile.get("api_version", "2024-05-01-preview")));
+	settings_azure_api_key->set_text(String(profile.get("api_key", "")));
+	settings_azure_model->set_text(String(profile.get("model", profile.get("deployment", "gpt-5.5"))));
+	const int mode = int(profile.get("api_mode", 1));
+	const int mode_idx = settings_azure_api_mode->get_item_index(mode);
+	settings_azure_api_mode->select(mode_idx >= 0 ? mode_idx : 1);
+	_azure_profile_ui_loading = false;
+}
+
+void YeetAISettingsPanel::_azure_read_fields_into_selected_profile() {
+	if (_azure_profile_ui_loading || settings_azure_endpoint == nullptr) {
+		return;
+	}
+	for (int i = 0; i < _azure_profiles_cache.size(); i++) {
+		if (_azure_profiles_cache[i].get_type() != Variant::DICTIONARY) {
+			continue;
+		}
+		Dictionary p = _azure_profiles_cache[i];
+		if (String(p.get("id", "")) != _azure_active_profile_id) {
+			continue;
+		}
+		p["name"] = settings_azure_profile_name->get_text().strip_edges();
+		if (String(p["name"]).is_empty()) {
+			p["name"] = "Azure";
+		}
+		p["endpoint"] = settings_azure_endpoint->get_text().strip_edges();
+		p["deployment"] = settings_azure_deployment->get_text().strip_edges();
+		p["api_version"] = settings_azure_api_version->get_text().strip_edges();
+		p["api_key"] = settings_azure_api_key->get_text();
+		p["api_mode"] = settings_azure_api_mode->get_selected_id();
+		String model = settings_azure_model->get_text().strip_edges();
+		if (model.is_empty()) {
+			model = String(p["deployment"]);
+		}
+		p["model"] = model;
+		_azure_profiles_cache[i] = p;
+		break;
+	}
+}
+
+void YeetAISettingsPanel::_azure_reload_profiles_into_ui() {
+	_azure_profiles_cache = yeet_ai_azure_profiles_load();
+	_azure_active_profile_id = yeet_ai_azure_active_profile_id();
+	_azure_rebuild_profile_dropdown();
+	_azure_apply_selected_profile_to_fields();
+}
+
+void YeetAISettingsPanel::_on_azure_profile_selected(int p_index) {
+	if (_azure_profile_ui_loading || settings_azure_profile == nullptr || p_index < 0) {
+		return;
+	}
+	// Persist current fields into the previous profile before switching.
+	_azure_read_fields_into_selected_profile();
+	_azure_active_profile_id = String(settings_azure_profile->get_item_metadata(p_index));
+	_azure_apply_selected_profile_to_fields();
+	yeet_ai_azure_profiles_save(_azure_profiles_cache, _azure_active_profile_id);
+	if (!settings_committing) {
+		_commit_to_settings();
+	}
+}
+
+void YeetAISettingsPanel::_on_azure_profile_add() {
+	_azure_read_fields_into_selected_profile();
+	const int n = _azure_profiles_cache.size() + 1;
+	Dictionary p = yeet_ai_azure_make_profile(vformat(TTR("Azure %d"), n));
+	_azure_profiles_cache.append(p);
+	_azure_active_profile_id = String(p.get("id", ""));
+	_azure_rebuild_profile_dropdown();
+	_azure_apply_selected_profile_to_fields();
+	yeet_ai_azure_profiles_save(_azure_profiles_cache, _azure_active_profile_id);
+	_commit_to_settings();
+}
+
+void YeetAISettingsPanel::_on_azure_profile_duplicate() {
+	_azure_read_fields_into_selected_profile();
+	Dictionary src;
+	for (int i = 0; i < _azure_profiles_cache.size(); i++) {
+		if (_azure_profiles_cache[i].get_type() != Variant::DICTIONARY) {
+			continue;
+		}
+		const Dictionary p = _azure_profiles_cache[i];
+		if (String(p.get("id", "")) == _azure_active_profile_id) {
+			src = p;
+			break;
+		}
+	}
+	if (src.is_empty()) {
+		_on_azure_profile_add();
+		return;
+	}
+	Dictionary copy = src.duplicate(true);
+	copy["id"] = yeet_ai_azure_make_profile()["id"]; // new unique id
+	copy["name"] = String(src.get("name", "Azure")) + " (copy)";
+	_azure_profiles_cache.append(copy);
+	_azure_active_profile_id = String(copy.get("id", ""));
+	_azure_rebuild_profile_dropdown();
+	_azure_apply_selected_profile_to_fields();
+	yeet_ai_azure_profiles_save(_azure_profiles_cache, _azure_active_profile_id);
+	_commit_to_settings();
+}
+
+void YeetAISettingsPanel::_on_azure_profile_remove() {
+	if (_azure_profiles_cache.size() <= 1) {
+		// Keep at least one profile; clear fields instead of deleting the last.
+		return;
+	}
+	Array next;
+	for (int i = 0; i < _azure_profiles_cache.size(); i++) {
+		if (_azure_profiles_cache[i].get_type() != Variant::DICTIONARY) {
+			continue;
+		}
+		const Dictionary p = _azure_profiles_cache[i];
+		if (String(p.get("id", "")) == _azure_active_profile_id) {
+			continue;
+		}
+		next.append(p);
+	}
+	_azure_profiles_cache = next;
+	_azure_active_profile_id = String(((Dictionary)_azure_profiles_cache[0]).get("id", ""));
+	_azure_rebuild_profile_dropdown();
+	_azure_apply_selected_profile_to_fields();
+	yeet_ai_azure_profiles_save(_azure_profiles_cache, _azure_active_profile_id);
+	_commit_to_settings();
+}
+
+void YeetAISettingsPanel::_on_azure_profile_field_changed() {
+	if (_azure_profile_ui_loading || settings_committing) {
+		return;
+	}
+	_azure_read_fields_into_selected_profile();
+	// Keep dropdown label in sync with name field.
+	if (settings_azure_profile != nullptr && settings_azure_profile_name != nullptr) {
+		const int idx = settings_azure_profile->get_selected();
+		if (idx >= 0) {
+			const String name = settings_azure_profile_name->get_text().strip_edges();
+			if (!name.is_empty()) {
+				settings_azure_profile->set_item_text(idx, name);
+			}
+		}
+	}
+	yeet_ai_azure_profiles_save(_azure_profiles_cache, _azure_active_profile_id);
 }

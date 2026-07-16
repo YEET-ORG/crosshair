@@ -6,6 +6,7 @@
 /**************************************************************************/
 
 #include "yeet_ai_asset_index.h"
+#include "yeet_ai_azure_profiles.h"
 
 #include "core/crypto/crypto.h"
 #include "core/crypto/crypto_core.h"
@@ -883,13 +884,34 @@ Dictionary YeetAIAssetIndex::_call_vision_model(const String &p_path, const Dict
 	float temperature = settings->has_setting("yeet_ai/chat/temperature") ? float(settings->get_setting("yeet_ai/chat/temperature")) : 0.2f;
 
 	if (provider == 4) {
-		// Azure OpenAI
-		url = settings->has_setting("yeet_ai/chat/azure_endpoint") ? String(settings->get_setting("yeet_ai/chat/azure_endpoint")) : String();
-		String deployment = settings->has_setting("yeet_ai/chat/azure_deployment") ? String(settings->get_setting("yeet_ai/chat/azure_deployment")) : String();
-		String api_version = settings->has_setting("yeet_ai/chat/azure_api_version") ? String(settings->get_setting("yeet_ai/chat/azure_api_version")) : String("2024-06-01");
-		api_key = settings->has_setting("yeet_ai/chat/azure_api_key") ? String(settings->get_setting("yeet_ai/chat/azure_api_key")) : String();
-		if (!url.is_empty() && !deployment.is_empty()) {
-			url = url.path_join("openai/deployments/" + deployment + "/chat/completions?api-version=" + api_version);
+		// Azure — use active multi-profile config.
+		const Dictionary ap = yeet_ai_azure_active_profile();
+		url = String(ap.get("endpoint", ""));
+		String deployment = String(ap.get("deployment", ""));
+		String api_version = String(ap.get("api_version", "2024-06-01"));
+		api_key = String(ap.get("api_key", ""));
+		const String profile_model = String(ap.get("model", ""));
+		if (!profile_model.is_empty()) {
+			model = profile_model;
+		} else if (!deployment.is_empty()) {
+			model = deployment;
+		}
+		const int api_mode = int(ap.get("api_mode", 1));
+		if (!url.is_empty()) {
+			if (api_mode == 1) {
+				if (!url.contains("/responses")) {
+					if (url.contains("/openai/v1")) {
+						url = url.trim_suffix("/");
+						if (!url.ends_with("/responses")) {
+							url += "/responses";
+						}
+					} else {
+						url = url.trim_suffix("/") + "/openai/v1/responses";
+					}
+				}
+			} else if (!deployment.is_empty()) {
+				url = url.path_join("openai/deployments/" + deployment + "/chat/completions?api-version=" + api_version);
+			}
 		}
 	} else {
 		url = settings->has_setting("yeet_ai/chat/completions_url") ? String(settings->get_setting("yeet_ai/chat/completions_url")) : String();

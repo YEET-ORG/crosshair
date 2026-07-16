@@ -336,13 +336,13 @@ Dictionary YeetAIDock::_tool_set_animation_blend_amount(const Dictionary &p_args
 
 	const double value = _arg_float(p_args, "value", 0.0);
 
-	StringName param_name = "parameters/" + parameter_name;
+	const StringName param_name = StringName("parameters/" + parameter_name);
 	bool valid = false;
-	tree->set(param_name, value, &valid);
+	const Variant old_value = tree->get(param_name, &valid);
 	if (!valid) {
-		tree->set(param_name, value);
+		return _make_error("AnimationTree parameter not found: " + String(param_name));
 	}
 
-	_mark_unsaved();
+	_commit_ai_property_change(tree, param_name, old_value, value, "Set Animation Blend Amount");
 	return _make_ok();
 }

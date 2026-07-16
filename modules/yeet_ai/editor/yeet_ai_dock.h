@@ -24,6 +24,8 @@
 
 class Button;
 class ColorRect;
+class ConfirmationDialog;
+class EditorUndoRedoManager;
 class HSeparator;
 class HTTPRequest;
 class InputEvent;
@@ -46,6 +48,8 @@ class Image;
 class EditorInterface;
 
 Array coerce_json_array_from_variant(const Variant &p_v);
+// Shared with tools.cpp — tools registered but never advertised.
+bool yeet_ai_is_disabled_advertised_tool(const String &p_name);
 Dictionary coerce_json_dictionary_from_variant(const Variant &p_v);
 bool contains_string(const Vector<String> &p_values, const String &p_value);
 
@@ -80,6 +84,7 @@ class YeetAIDock : public VBoxContainer {
 	// ── Core UI ──────────────────────────────────────────────────────────────
 	ColorRect *_status_dot = nullptr;
 	Label *status_label = nullptr;
+	Label *_title_label = nullptr;
 	RichTextLabel *chat_log = nullptr;
 	RichTextLabel *stream_label = nullptr;
 	ScrollContainer *chat_scroll = nullptr;
@@ -92,9 +97,18 @@ class YeetAIDock : public VBoxContainer {
 	PanelContainer *header_panel = nullptr;
 	PanelContainer *chat_panel = nullptr;
 	PanelContainer *input_panel = nullptr;
+	PanelContainer *_files_strip_panel = nullptr;
 	MarginContainer *outer_margin = nullptr;
+	HBoxContainer *_composer_bar = nullptr;
+	HBoxContainer *_header_title_row = nullptr;
+	HBoxContainer *_header_controls_row = nullptr;
+	HSeparator *_header_sep = nullptr;
+	Label *_composer_hint_label = nullptr;
 
 	void _apply_dock_theme();
+	void _apply_dock_icons();
+	void _style_flat_control(Control *p_control);
+	Ref<Texture2D> _editor_icon(const StringName &p_name, const StringName &p_fallback = StringName()) const;
 
 	// ── Token counter ─────────────────────────────────────────────────────────
 	Label *_token_count_label = nullptr;
@@ -115,6 +129,7 @@ class YeetAIDock : public VBoxContainer {
 	void _on_files_meta_clicked(const Variant &p_meta);
 
 	// ── Model selector ────────────────────────────────────────────────────────
+	OptionButton *_provider_selector = nullptr;
 	Button *_model_selector_button = nullptr;
 	PopupPanel *_model_popup = nullptr;
 	LineEdit *_model_search_edit = nullptr;
@@ -122,6 +137,8 @@ class YeetAIDock : public VBoxContainer {
 	HTTPRequest *_model_tags_request = nullptr;
 	Vector<String> _fetched_model_tags;
 
+	void _populate_provider_selector();
+	void _on_provider_quick_selected(int p_index);
 	void _on_model_selector_pressed();
 	void _populate_model_list(const String &p_filter = String());
 	void _on_model_search_changed(const String &p_text);
@@ -168,6 +185,10 @@ class YeetAIDock : public VBoxContainer {
 	String turn_context_prompt;
 	String _context_summary;
 	int _context_summary_message_count = 0;
+	// Live task plan maintained by the model via the update_plan tool. Mutable so
+	// the const tool handler can update it; surfaced to the model each turn.
+	mutable Array _current_plan; // Array of { "step": String, "status": pending|in_progress|done }
+	String _build_plan_prompt() const;
 	bool _suppress_chat_recording = false;
 	
 	// ── Conversation Window Management ─────────────────────────────────────────
@@ -188,6 +209,11 @@ class YeetAIDock : public VBoxContainer {
 	void _trim_to_fit(int new_message_tokens);
 	int _get_windowed_messages_count() const;
 	void _ensure_context_summary();
+	// Summarize conversation_messages[p_from, p_until) into the rolling
+	// _context_summary and advance _context_summary_message_count. Shared by the
+	// rolling summarizer and the in-request trim path so trimmed messages are
+	// never silently lost.
+	void _fold_messages_into_summary(int p_from, int p_until);
 	String _build_context_summary_prompt() const;
 	String _message_content_to_text(const Variant &p_content) const;
 	int _estimate_message_tokens(const Variant &p_message) const;
@@ -222,10 +248,14 @@ class YeetAIDock : public VBoxContainer {
 	
 	mutable HashMap<String, ToolMetrics> _tool_metrics;
 	mutable SessionMetrics _session_metrics;
+	mutable String _ai_run_id;
 	
 	void _record_tool_execution(const String &tool_name, int64_t duration_ms, bool success, bool was_retry, bool was_cached = false);
 	Dictionary _export_metrics_summary() const;
 	void _reset_metrics();
+	String _get_ai_run_id() const;
+	String _get_ai_run_dir() const;
+	void _append_ai_run_trace(const Dictionary &p_entry) const;
 	
 	// ── Cache Eviction ─────────────────────────────────────────────────────────
 	void _evict_expired_cache_entries();
@@ -279,11 +309,87 @@ class YeetAIDock : public VBoxContainer {
 	// ── Native tool calling (OpenAI tools parameter) ──────────────────────────
 	bool _native_tools_enabled = true;
 	Array _build_tools_payload() const;
+
+	// ── Tool curation ──────────────────────────────────────────────────────────
+	// Advertise a small, context-ranked subset so providers with hard tool limits
+	// (Azure/OpenAI: 128 tools max) and GPT-5.x quality aren't flooded with 400+.
+	// Curation only affects ADVERTISING for native tools; request_tool_pack can
+	// expand packs mid-turn for the next model request.
+	enum ToolPack {
+		PACK_CORE = 0, // essential ops + high-value create/mutate
+		PACK_2D,
+		PACK_3D,
+		PACK_UI,
+		PACK_ANIM,
+		PACK_AUDIO,
+		PACK_SHADER,
+		PACK_PHYSICS,
+		PACK_DEBUG, // runtime builders, breakpoints, profiling
+		PACK_MULTIPLAYER,
+		PACK_COUNT,
+	};
+	ToolPack _tool_pack_for(const String &p_tool_name) const;
+	int _resolve_max_advertised_tools() const;
+	Vector<String> _build_active_tool_names() const;
+	// Cached for the duration of one user turn so the advertised tool set is
+	// byte-identical across that turn's round-trips (maximizes prompt-prefix cache
+	// reuse) and we don't re-classify the whole table on every request.
+	// Invalidated when request_tool_pack expands the set mid-turn.
+	mutable Vector<String> _turn_active_tools;
+	mutable bool _turn_active_tools_valid = false;
+	// Extra packs requested via request_tool_pack this turn (bit i = ToolPack i).
+	mutable uint32_t _turn_extra_pack_mask = 0;
 	Dictionary _convert_native_tool_call_to_envelope(const Dictionary &p_tool_call) const;
 	bool _response_has_native_tool_calls(const Dictionary &p_response) const;
 	Array _extract_native_tool_calls(const Dictionary &p_response) const;
 	void _handle_native_tool_calls(const Dictionary &p_message);
-	
+
+	// Shared single-tool execution used by BOTH the native tool-call path and the
+	// JSON-envelope path: emits the UI running/result rows, runs the tool, records
+	// modified files, and feeds stuck-loop detection. Message formatting (role:tool
+	// vs. user envelope) stays in the caller since it differs per protocol.
+	ToolExecutionResult _run_single_tool(const String &p_tool_name, const Dictionary &p_args);
+
+	// ── Stuck-loop detection ───────────────────────────────────────────────────
+	// Detects the model repeating the same failing tool call so we can nudge it
+	// (once) or break the loop instead of burning round-trips against the cap.
+	struct ToolAttemptRecord {
+		String signature; // tool_name + "|" + hash(args)
+		bool ok = false;
+	};
+	Vector<ToolAttemptRecord> _turn_tool_attempts;
+	String _last_stuck_nudge_signature; // avoid nudging twice for the same call
+	void _reset_turn_tool_tracking();
+	String _tool_call_signature(const String &p_tool_name, const Dictionary &p_args) const;
+	void _note_tool_attempt(const String &p_tool_name, const Dictionary &p_args, bool p_ok);
+	// 0 = continue, 1 = inject a nudge (r_message set), 2 = break the loop (r_message set).
+	int _evaluate_stuck_state(String &r_message) const;
+
+	// ── Permission / approval model ────────────────────────────────────────────
+	// Tiers gate which tools run freely vs. require confirmation.
+	// permission_mode: 0 auto, 1 ask_destructive (default), 2 ask_writes, 3 read_only.
+	enum ToolRiskTier { TIER_READ, TIER_WRITE, TIER_DESTRUCTIVE };
+	ToolRiskTier _tool_risk_tier(const String &p_tool_name) const;
+	int _permission_mode() const;
+	bool _tool_needs_approval(const String &p_tool_name) const; // for the ask_* modes
+	HashSet<String> _session_allowed_tools; // "always allow" choices for this session
+	// One suspended tool batch awaiting the user's approval (native tool path).
+	struct PendingApproval {
+		bool active = false;
+		Array tool_calls;
+	};
+	PendingApproval _pending_approval;
+	ConfirmationDialog *_approval_dialog = nullptr;
+	// Factored-out execution loop so it can be re-entered after an approval choice.
+	void _run_tool_calls(const Array &p_tool_calls, bool p_approval_granted);
+	Vector<int> _tool_calls_needing_approval(const Array &p_tool_calls) const;
+	String _approval_summary(const Array &p_tool_calls, const Vector<int> &p_need) const;
+	void _show_approval_dialog(const Array &p_tool_calls, const Vector<int> &p_need);
+	void _on_approval_confirmed();
+	void _on_approval_denied();
+	void _on_approval_always_allow();
+	Array _build_denial_results(const Array &p_tool_calls) const;
+
 	// ── Retry logic ───────────────────────────────────────────────────────────
 	struct RetryState {
 		String tool_name;
@@ -341,10 +447,21 @@ class YeetAIDock : public VBoxContainer {
 	Vector<String> _stream_req_headers;
 	String _stream_req_body;
 	bool _stream_expects_sse = true;
+	// 0 = OpenAI chat.completions SSE (choices[].delta), 1 = Responses API SSE (response.* events).
+	int _stream_protocol = 0;
 
 	// Streaming tool call accumulation (delta.tool_calls SSE parsing)
 	Array _stream_tool_call_accumulator; // Accumulates partial tool_calls by index
 	bool _stream_has_tool_calls = false;
+
+	// Real token usage parsed from the API response (OpenAI `usage` object, present
+	// in the final SSE chunk when stream_options.include_usage=true, or on the
+	// non-stream body). Written on the stream thread under _stream_mutex, copied to
+	// _last_usage on the main thread in _finalize_stream.
+	Dictionary _stream_usage; // mutex-protected scratch
+	Dictionary _last_usage; // last finalized usage (main thread)
+	int _last_prompt_tokens = 0; // prompt_tokens from _last_usage, 0 if unknown
+	void _capture_usage_from_response(const Dictionary &p_obj); // extracts/stores usage if present
 
 	void _start_streaming();
 	void _cancel_streaming();
@@ -353,7 +470,61 @@ class YeetAIDock : public VBoxContainer {
 	void _drain_stream_queue();
 	void _finalize_stream();
 
-	// ── Typing indicator ──────────────────────────────────────────────────────
+	// ── Codex CLI provider (provider id 5) ──────────────────────────────────────
+	// Shells out to the `codex` CLI (`codex exec --json --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check`)
+	// from a worker thread, captures JSONL stdout, and feeds the assistant reply back
+	// through the existing streaming infrastructure. Codex performs its own file edits
+	// in the open Godot project, so Crosshair just relays the conversation and rescans
+	// EditorFileSystem when the turn finishes. Auth is handled by the user via
+	// `codex login` outside the editor (`~/.codex/auth.json`).
+	String _codex_binary_cache;
+	String _codex_active_prompt;
+	String _codex_workspace_path;
+	Thread _codex_thread;
+	volatile bool _codex_active = false;
+	volatile bool _codex_should_stop = false;
+	bool _codex_pending_rescan = false;
+
+	String _detect_codex_binary(); // returns the resolved binary path or "" if not found.
+	Error _run_codex_turn(const String &p_task_prompt, const String &p_system_prompt);
+	static void _codex_thread_trampoline(void *p_user);
+	void _codex_thread_body();
+	void _codex_finalize_and_rescan();
+
+	// -- Claude Code provider (provider id 6) -----------------------------------
+	String _claude_binary_cache;
+	String _claude_active_prompt;
+	String _claude_system_prompt; // passed via --append-system-prompt
+	String _claude_workspace_path;
+	Thread _claude_thread;
+	volatile bool _claude_active = false;
+	volatile bool _claude_should_stop = false;
+	bool _claude_pending_rescan = false;
+
+	String _detect_claude_binary();
+	Error _run_claude_turn(const String &p_task_prompt, const String &p_system_prompt);
+	static void _claude_thread_trampoline(void *p_user);
+	void _claude_thread_body();
+	void _claude_finalize_and_rescan();
+
+	// -- Grok Build CLI provider (provider id 7) --------------------------------
+	// Official xAI Grok Build: `grok -p ... --cwd <project> --output-format streaming-json --always-approve`
+	// Auth via `grok login` or XAI_API_KEY. Install: https://x.ai/cli
+	String _grok_binary_cache;
+	String _grok_active_prompt;
+	String _grok_workspace_path;
+	Thread _grok_thread;
+	volatile bool _grok_active = false;
+	volatile bool _grok_should_stop = false;
+	bool _grok_pending_rescan = false;
+
+	String _detect_grok_binary();
+	Error _run_grok_turn(const String &p_task_prompt, const String &p_system_prompt);
+	static void _grok_thread_trampoline(void *p_user);
+	void _grok_thread_body();
+	void _grok_finalize_and_rescan();
+
+	// ── Typing indicator ────────────────────────────────────────────────────────
 	bool _typing_indicator_active = false;
 	float _typing_dot_time = 0.0f;
 
@@ -388,6 +559,7 @@ class YeetAIDock : public VBoxContainer {
 	void _append_status_row(const String &p_text);
 	String _humanize_tool_name(const String &p_tool) const;
 	String _icon_for_tool(const String &p_tool_name) const;
+	String _icon_for_role(const String &p_role) const;
 	Vector<String> _collect_relevant_paths(const Dictionary &p_args, const Dictionary &p_payload) const;
 	String _truncate_preview(const String &p_text, int p_max_chars) const;
 	String _apply_gdscript_highlighting(const String &p_text) const;
@@ -401,22 +573,75 @@ class YeetAIDock : public VBoxContainer {
 	void _request_model_response();
 	void _handle_model_response(const String &p_content);
 
+public:
+	// ── Tool dispatch table (single source of truth) ───────────────────────────
+	// Every callable tool is registered exactly once in tool_dispatch_table().
+	// Both _execute_tool (dispatch) and tool advertising derive from it, so the
+	// advertised tool list can never drift from what is actually executable.
+	using ToolHandler = Dictionary (YeetAIDock::*)(const Dictionary &) const;
+	struct ToolEntry {
+		const char *name;
+		ToolHandler handler;
+	};
+	static const ToolEntry *tool_dispatch_table(int &r_count);
+	static Vector<String> get_registered_tool_names();
+
 protected:
 	// Tool methods are protected so yeet_ai_tools.cpp can take their
 	// addresses for the dispatch table.
 	ToolExecutionResult _execute_tool(const String &p_tool_name, const Dictionary &p_args);
 	String _build_runtime_context_prompt() const;
+	String _build_rag_context_prompt(const String &p_user_prompt) const;
 	String _build_task_hints_for_user_prompt(const String &p_user_prompt) const;
+
+	// ── CLI agent providers (Codex / Claude Code / Grok Build) prompt building ─
+	// These run as autonomous file-editing agents with their own tools, so they
+	// get a focused, Godot-aware operating prompt — NOT the API-loop / JSON
+	// tool-call framing the in-editor model path uses. Splitting system vs. task
+	// lets Claude take the system half via --append-system-prompt-file while
+	// Codex/Grok combine into a prompt *file* (never argv — Windows quoting
+	// mangles newlines and embedded quotes, which was truncating tasks).
+	String _build_cli_agent_system_prompt() const; // operating instructions / steering
+	String _build_cli_agent_context() const; // compact project snapshot (reference only)
+	String _build_cli_agent_task_prompt() const; // the actual task + recent dialogue
+	String _cli_project_path() const;
+	static String _cli_write_temp_text(const String &p_prefix, const String &p_text);
+	static void _cli_delete_temp(const String &p_path);
+	static String _cli_quote_win_path(const String &p_path);
+	// Resolve binary cache ("cmd.exe" / "codex.cmd" / full path) to a program token for cmd.
+	static String _cli_program_token(const String &p_binary_cache, const String &p_default_name);
+	// Run via cmd so we can set cwd + optional stdin file without mangling prompt bodies:
+	//   cmd /D /C "cd /d WORKSPACE && PROGRAM ARG... [ < PROMPTFILE ]"
+	// p_prompt_file empty => no stdin redirect (use for Grok --prompt-file).
+	Error _cli_run_in_project(const String &p_program, const List<String> &p_args,
+			const String &p_workspace, const String &p_prompt_file, String &r_stdout, int &r_exit_code) const;
+	// Back-compat alias used by existing call sites.
+	Error _cli_run_via_cmd_stdin(const String &p_program, const List<String> &p_args_without_prompt,
+			const String &p_workspace, const String &p_prompt_file, String &r_stdout, int &r_exit_code) const;
 	Node *_resolve_scene_root(const String &p_scene_path, String &r_error) const;
 	Node *_resolve_node_target(Node *p_scene_root, const String &p_node_path, String &r_error) const;
 	void _set_owner_recursive(Node *p_node, Node *p_owner) const;
 	void _mark_unsaved() const;
 	void _add_to_scene(Node *p_parent, Node *p_child, Node *p_owner) const;
+	EditorUndoRedoManager *_get_ai_undo_redo() const;
+	bool _commit_ai_property_change(Object *p_object, const StringName &p_property, const Variant &p_old_value, const Variant &p_new_value, const String &p_action_name) const;
+	bool _commit_ai_meta_change(Object *p_object, const StringName &p_meta, const Variant &p_old_value, bool p_old_exists, const Variant &p_new_value, bool p_new_exists, const String &p_action_name) const;
+	bool _commit_ai_remove_node(Node *p_node, const String &p_action_name) const;
+	bool _commit_ai_reparent_node(Node *p_node, Node *p_new_parent, bool p_keep_global_transform, const String &p_action_name) const;
+	bool _commit_ai_move_child(Node *p_node, int p_new_index, const String &p_action_name) const;
+	bool _commit_ai_rename_node(Node *p_node, const StringName &p_new_name, const String &p_action_name) const;
+	bool _commit_ai_signal_connect(Object *p_source, const StringName &p_signal, const Callable &p_callable, uint32_t p_flags, const String &p_action_name) const;
+	bool _commit_ai_signal_disconnect(Object *p_source, const StringName &p_signal, const Callable &p_callable, uint32_t p_flags, const String &p_action_name) const;
+	bool _apply_ai_text_file_snapshot(const String &p_path, const String &p_contents, bool p_exists) const;
+	bool _commit_ai_text_file_change(const String &p_path, const String &p_old_contents, bool p_old_exists, const String &p_new_contents, const String &p_action_name) const;
 
 	// ── Editor refresh ────────────────────────────────────────────────────────
 	// Refreshes SceneTree dock, Inspector, and FileSystem dock after mutations.
 	// tool_name is used to decide which panels need refreshing.
 	void _refresh_editor_after_tool(const String &p_tool_name, const Dictionary &p_result) const;
+	Dictionary _tool_update_plan(const Dictionary &p_args) const;
+	Dictionary _tool_search_tool_catalog(const Dictionary &p_args) const;
+	Dictionary _tool_request_tool_pack(const Dictionary &p_args) const;
 	Dictionary _tool_get_project_tree(const Dictionary &p_args) const;
 	Dictionary _tool_read_project_file(const Dictionary &p_args) const;
 	Dictionary _tool_get_open_scenes(const Dictionary &p_args) const;
@@ -724,6 +949,142 @@ protected:
 	Dictionary _tool_monitor_runtime_performance(const Dictionary &p_args) const;
 	Dictionary _tool_inspect_runtime_node(const Dictionary &p_args) const;
 
+	// ── Phase 1: Runtime Game Manipulation ───────────────────────────────────
+	Dictionary _tool_runtime_get_scene_tree(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_eval(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_create_node(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_remove_node(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_instantiate_scene(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_duplicate_node(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_reparent_node(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_set_property(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_send_message(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_pause(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_inspect_object(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_break(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_step(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_time_scale(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_connect_signal(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_disconnect_signal(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_emit_signal(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_play_animation(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_tween_property(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_key_press(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_key_hold(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_key_release(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_mouse_click(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_mouse_move(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_get_camera(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_set_camera(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_change_scene(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_get_nodes_in_group(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_manage_group(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_get_node_property(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_set_node_property(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_call_method(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_window(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_get_performance(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_raycast(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_serialize_state(const Dictionary &p_args) const;
+
+	// ── Phase 2: Deep Debugger Tools ─────────────────────────────────────────
+	Dictionary _tool_debugger_get_sessions(const Dictionary &p_args) const;
+	Dictionary _tool_debugger_get_state(const Dictionary &p_args) const;
+	Dictionary _tool_debugger_get_stack(const Dictionary &p_args) const;
+	Dictionary _tool_debugger_get_variables(const Dictionary &p_args) const;
+	Dictionary _tool_debugger_step_out(const Dictionary &p_args) const;
+	Dictionary _tool_debugger_toggle_profiler(const Dictionary &p_args) const;
+	Dictionary _tool_debugger_evaluate(const Dictionary &p_args) const;
+	Dictionary _tool_debugger_await_condition(const Dictionary &p_args) const;
+	Dictionary _tool_debugger_assert_condition(const Dictionary &p_args) const;
+	Dictionary _tool_debugger_get_errors(const Dictionary &p_args) const;
+	Dictionary _tool_debugger_send_custom_message(const Dictionary &p_args) const;
+	Dictionary _tool_debugger_get_performance_snapshot(const Dictionary &p_args) const;
+	Dictionary _tool_debugger_get_memory_info(const Dictionary &p_args) const;
+	Dictionary _tool_debugger_reload_scripts(const Dictionary &p_args) const;
+
+	// ── Phase 3: Headless Scene/Resource + Project Health ─────────────────────
+	Dictionary _tool_scene_read(const Dictionary &p_args) const;
+	Dictionary _tool_scene_modify_node(const Dictionary &p_args) const;
+	Dictionary _tool_scene_remove_node(const Dictionary &p_args) const;
+	Dictionary _tool_resource_create(const Dictionary &p_args) const;
+	Dictionary _tool_resource_read(const Dictionary &p_args) const;
+	Dictionary _tool_resource_modify(const Dictionary &p_args) const;
+	Dictionary _tool_scene_get_signals(const Dictionary &p_args) const;
+	Dictionary _tool_project_detect_broken_scripts(const Dictionary &p_args) const;
+	Dictionary _tool_project_scan_missing_deps(const Dictionary &p_args) const;
+	Dictionary _tool_project_scan_cyclic_deps(const Dictionary &p_args) const;
+	Dictionary _tool_project_audit_health(const Dictionary &p_args) const;
+	Dictionary _tool_project_get_class_api(const Dictionary &p_args) const;
+
+	// ── Phase 4: Advanced Runtime Ops ────────────────────────────────────────
+	Dictionary _tool_runtime_mesh_instance(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_light_3d(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_gridmap(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_environment(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_sky(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_debug_draw(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_canvas_draw(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_parallax(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_audio_play(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_audio_bus(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_audio_effect(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_ui_control(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_ui_text(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_ui_popup(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_ui_range(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_shader_param(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_theme_override(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_physics_body(const Dictionary &p_args) const;
+
+	// ── Remaining 46 tools (networking, input, animation, 3D/2D, audio, UI) ──
+	Dictionary _tool_runtime_http_request(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_websocket(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_navigate_path(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_tilemap_cells(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_create_timer(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_particles(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_animation_tree(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_animation_control(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_process_mode(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_world_settings(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_os_info(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_gamepad(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_mouse_drag(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_scroll(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_touch(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_input_state(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_csg(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_multimesh(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_procedural_mesh(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_3d_effects(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_gi(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_path_3d(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_camera_attributes(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_navigation_3d(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_physics_3d_query(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_light_2d(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_shape_2d(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_physics_2d_query(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_audio_spatial(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_audio_bus_layout(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_skeleton_ik(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_create_joint(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_bone_pose(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_viewport(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_render_settings(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_resource_load(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_locale(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_ui_tree(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_ui_item_list(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_ui_tabs(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_ui_menu(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_script_attach(const Dictionary &p_args) const;
+	Dictionary _tool_manage_layers(const Dictionary &p_args) const;
+	Dictionary _tool_manage_translations(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_multiplayer(const Dictionary &p_args) const;
+	Dictionary _tool_runtime_rpc(const Dictionary &p_args) const;
+
 	// ── N. Editor Workflow ────────────────────────────────────────────────────
 	Dictionary _tool_manage_editor_plugins(const Dictionary &p_args) const;
 	Dictionary _tool_run_scene_script(const Dictionary &p_args) const;
@@ -742,6 +1103,8 @@ protected:
 	Dictionary _tool_list_asset_index_issues(const Dictionary &p_args) const;
 	Dictionary _tool_create_sprite_frames_from_manifest(const Dictionary &p_args) const;
 	Dictionary _tool_create_tileset_from_manifest(const Dictionary &p_args) const;
+	Dictionary _tool_index_project_context(const Dictionary &p_args) const;
+	Dictionary _tool_search_project_context(const Dictionary &p_args) const;
 	Dictionary _tool_export_project(const Dictionary &p_args) const;
 	Dictionary _tool_add_custom_class(const Dictionary &p_args) const;
 	Dictionary _tool_set_default_import_presets(const Dictionary &p_args) const;
@@ -815,6 +1178,7 @@ protected:
 	int _get_editor_setting_int(const String &p_setting, int p_default) const;
 	float _get_editor_setting_float(const String &p_setting, float p_default) const;
 	bool _get_editor_setting_bool(const String &p_setting, bool p_default) const;
+	bool _current_chat_model_supports_vision() const;
 	Dictionary _make_user_message_with_optional_vision(const String &p_tool_name, const Dictionary &p_tool_payload) const;
 
 	// ── GDScript auto-fix ─────────────────────────────────────────────────────

@@ -1,5 +1,7 @@
 # Crosshair AI Fine-Tuning Dataset
 
+Last verified: 2026-06-30
+
 Dataset for fine-tuning LLMs on Crosshair AI tool-calling in the Godot editor.
 Built from 24 open-source Godot repos (9.4k+ stars) containing 2,152 .gd, 1,431 .tscn, 632 .tres, 190 project.godot files.
 

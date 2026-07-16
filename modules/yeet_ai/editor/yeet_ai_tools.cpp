@@ -18,18 +18,17 @@
 #include "core/io/json.h"
 #include "core/string/translation.h"
 
+// Defined later in this file; used by catalog tools above the definition site.
+Vector<String> yeet_ai_get_all_tool_names();
+
 // ═══════════════════════════════════════════════════════════════════════════
 // _execute_tool — dispatch table
 // ═══════════════════════════════════════════════════════════════════════════
 
-YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_name, const Dictionary &p_args) {
-	using ToolHandler = Dictionary (YeetAIDock::*)(const Dictionary &) const;
-
-	struct ToolEntry {
-		const char *name;
-		ToolHandler handler;
-	};
-
+// Single source of truth for every callable tool. Defined as a static member so
+// it can take the address of the protected _tool_* handlers; exposed via the
+// header so both dispatch and advertising read the same list.
+const YeetAIDock::ToolEntry *YeetAIDock::tool_dispatch_table(int &r_count) {
 	// Static lookup table. No file-scope member pointer access.
 	static const ToolEntry table[] = {
 		// ═══════════════════════════════════════════════════════════════════════
@@ -170,6 +169,7 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 		{ "create_tab_container",                &YeetAIDock::_tool_create_tab_container },
 		{ "create_texture_2d",                   &YeetAIDock::_tool_create_texture_2d },
 		{ "create_texture_progress_bar",         &YeetAIDock::_tool_create_texture_progress_bar },
+		{ "create_texture_rect",                 &YeetAIDock::_tool_create_texture_rect },
 		{ "create_text_edit",                    &YeetAIDock::_tool_create_text_edit },
 		{ "create_theme",                        &YeetAIDock::_tool_create_theme },
 		{ "create_tile_map",                     &YeetAIDock::_tool_create_tile_map },
@@ -183,6 +183,20 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 		{ "create_v_separator",                  &YeetAIDock::_tool_create_v_separator },
 		{ "create_visible_on_screen_notifier_2d", &YeetAIDock::_tool_create_visible_on_screen_notifier_2d },
 		{ "debugger_continue",                   &YeetAIDock::_tool_debugger_continue },
+		{ "debugger_assert_condition",           &YeetAIDock::_tool_debugger_assert_condition },
+		{ "debugger_await_condition",            &YeetAIDock::_tool_debugger_await_condition },
+		{ "debugger_evaluate",                   &YeetAIDock::_tool_debugger_evaluate },
+		{ "debugger_get_errors",                 &YeetAIDock::_tool_debugger_get_errors },
+		{ "debugger_get_memory_info",            &YeetAIDock::_tool_debugger_get_memory_info },
+		{ "debugger_get_performance_snapshot",   &YeetAIDock::_tool_debugger_get_performance_snapshot },
+		{ "debugger_get_sessions",               &YeetAIDock::_tool_debugger_get_sessions },
+		{ "debugger_get_stack",                  &YeetAIDock::_tool_debugger_get_stack },
+		{ "debugger_get_state",                  &YeetAIDock::_tool_debugger_get_state },
+		{ "debugger_get_variables",              &YeetAIDock::_tool_debugger_get_variables },
+		{ "debugger_reload_scripts",             &YeetAIDock::_tool_debugger_reload_scripts },
+		{ "debugger_send_custom_message",        &YeetAIDock::_tool_debugger_send_custom_message },
+		{ "debugger_step_out",                   &YeetAIDock::_tool_debugger_step_out },
+		{ "debugger_toggle_profiler",            &YeetAIDock::_tool_debugger_toggle_profiler },
 		{ "delete_project_file",                 &YeetAIDock::_tool_delete_project_file },
 		{ "disconnect_signal",                   &YeetAIDock::_tool_disconnect_signal },
 		{ "duplicate_node",                      &YeetAIDock::_tool_duplicate_node },
@@ -268,6 +282,8 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 		{ "list_asset_index_issues",             &YeetAIDock::_tool_list_asset_index_issues },
 		{ "create_sprite_frames_from_manifest",  &YeetAIDock::_tool_create_sprite_frames_from_manifest },
 		{ "create_tileset_from_manifest",        &YeetAIDock::_tool_create_tileset_from_manifest },
+		{ "index_project_context",               &YeetAIDock::_tool_index_project_context },
+		{ "search_project_context",              &YeetAIDock::_tool_search_project_context },
 		{ "merge_scenes",                        &YeetAIDock::_tool_merge_scenes },
 		{ "monitor_runtime_performance",         &YeetAIDock::_tool_monitor_runtime_performance },
 		{ "move_child",                          &YeetAIDock::_tool_move_child },
@@ -281,6 +297,11 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 		{ "play_current_scene",                  &YeetAIDock::_tool_play_current_scene },
 		{ "play_main_scene",                     &YeetAIDock::_tool_play_main_scene },
 		{ "profile_frame",                       &YeetAIDock::_tool_profile_frame },
+		{ "project_audit_health",                &YeetAIDock::_tool_project_audit_health },
+		{ "project_detect_broken_scripts",       &YeetAIDock::_tool_project_detect_broken_scripts },
+		{ "project_get_class_api",               &YeetAIDock::_tool_project_get_class_api },
+		{ "project_scan_cyclic_deps",            &YeetAIDock::_tool_project_scan_cyclic_deps },
+		{ "project_scan_missing_deps",           &YeetAIDock::_tool_project_scan_missing_deps },
 		{ "query_physics",                       &YeetAIDock::_tool_query_physics },
 		{ "query_raycast_2d",                    &YeetAIDock::_tool_query_raycast_2d },
 		{ "raycast_query",                       &YeetAIDock::_tool_raycast_query },
@@ -297,6 +318,109 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 		{ "repair_game_physics",                 &YeetAIDock::_tool_repair_game_physics },
 		{ "replace_in_project_files",            &YeetAIDock::_tool_replace_in_project_files },
 		{ "replace_node_with_scene",              &YeetAIDock::_tool_replace_node_with_scene },
+		{ "resource_create",                     &YeetAIDock::_tool_resource_create },
+		{ "resource_modify",                     &YeetAIDock::_tool_resource_modify },
+		{ "resource_read",                       &YeetAIDock::_tool_resource_read },
+		{ "runtime_break",                       &YeetAIDock::_tool_runtime_break },
+		{ "runtime_call_method",                 &YeetAIDock::_tool_runtime_call_method },
+		{ "runtime_change_scene",                &YeetAIDock::_tool_runtime_change_scene },
+		{ "runtime_connect_signal",              &YeetAIDock::_tool_runtime_connect_signal },
+		{ "runtime_create_node",                 &YeetAIDock::_tool_runtime_create_node },
+		{ "runtime_disconnect_signal",           &YeetAIDock::_tool_runtime_disconnect_signal },
+		{ "runtime_audio_bus",                   &YeetAIDock::_tool_runtime_audio_bus },
+		{ "runtime_audio_effect",                &YeetAIDock::_tool_runtime_audio_effect },
+		{ "runtime_audio_play",                  &YeetAIDock::_tool_runtime_audio_play },
+		{ "runtime_canvas_draw",                 &YeetAIDock::_tool_runtime_canvas_draw },
+		{ "runtime_debug_draw",                  &YeetAIDock::_tool_runtime_debug_draw },
+		{ "runtime_duplicate_node",              &YeetAIDock::_tool_runtime_duplicate_node },
+		{ "runtime_emit_signal",                 &YeetAIDock::_tool_runtime_emit_signal },
+		{ "runtime_environment",                 &YeetAIDock::_tool_runtime_environment },
+		{ "runtime_eval",                        &YeetAIDock::_tool_runtime_eval },
+		{ "runtime_get_camera",                  &YeetAIDock::_tool_runtime_get_camera },
+		{ "runtime_get_node_property",           &YeetAIDock::_tool_runtime_get_node_property },
+		{ "runtime_get_nodes_in_group",          &YeetAIDock::_tool_runtime_get_nodes_in_group },
+		{ "runtime_get_performance",             &YeetAIDock::_tool_runtime_get_performance },
+		{ "runtime_get_scene_tree",              &YeetAIDock::_tool_runtime_get_scene_tree },
+		{ "runtime_gridmap",                     &YeetAIDock::_tool_runtime_gridmap },
+		{ "runtime_inspect_object",              &YeetAIDock::_tool_runtime_inspect_object },
+		{ "runtime_instantiate_scene",           &YeetAIDock::_tool_runtime_instantiate_scene },
+		{ "runtime_key_hold",                    &YeetAIDock::_tool_runtime_key_hold },
+		{ "runtime_key_press",                   &YeetAIDock::_tool_runtime_key_press },
+		{ "runtime_key_release",                 &YeetAIDock::_tool_runtime_key_release },
+		{ "runtime_light_3d",                    &YeetAIDock::_tool_runtime_light_3d },
+		{ "runtime_manage_group",                &YeetAIDock::_tool_runtime_manage_group },
+		{ "runtime_mesh_instance",               &YeetAIDock::_tool_runtime_mesh_instance },
+		{ "runtime_mouse_click",                 &YeetAIDock::_tool_runtime_mouse_click },
+		{ "runtime_mouse_move",                  &YeetAIDock::_tool_runtime_mouse_move },
+		{ "runtime_parallax",                    &YeetAIDock::_tool_runtime_parallax },
+		{ "runtime_pause",                       &YeetAIDock::_tool_runtime_pause },
+		{ "runtime_physics_body",                &YeetAIDock::_tool_runtime_physics_body },
+		{ "runtime_play_animation",              &YeetAIDock::_tool_runtime_play_animation },
+		{ "runtime_raycast",                     &YeetAIDock::_tool_runtime_raycast },
+		{ "runtime_reparent_node",               &YeetAIDock::_tool_runtime_reparent_node },
+		{ "runtime_remove_node",                 &YeetAIDock::_tool_runtime_remove_node },
+		{ "runtime_send_message",                &YeetAIDock::_tool_runtime_send_message },
+		{ "runtime_serialize_state",             &YeetAIDock::_tool_runtime_serialize_state },
+		{ "runtime_set_camera",                  &YeetAIDock::_tool_runtime_set_camera },
+		{ "runtime_set_node_property",           &YeetAIDock::_tool_runtime_set_node_property },
+		{ "runtime_set_property",                &YeetAIDock::_tool_runtime_set_property },
+		{ "runtime_shader_param",                &YeetAIDock::_tool_runtime_shader_param },
+		{ "runtime_sky",                         &YeetAIDock::_tool_runtime_sky },
+		{ "runtime_step",                        &YeetAIDock::_tool_runtime_step },
+		{ "runtime_theme_override",              &YeetAIDock::_tool_runtime_theme_override },
+		{ "runtime_time_scale",                  &YeetAIDock::_tool_runtime_time_scale },
+		{ "runtime_tween_property",              &YeetAIDock::_tool_runtime_tween_property },
+		{ "runtime_ui_control",                  &YeetAIDock::_tool_runtime_ui_control },
+		{ "runtime_ui_popup",                    &YeetAIDock::_tool_runtime_ui_popup },
+		{ "runtime_ui_range",                    &YeetAIDock::_tool_runtime_ui_range },
+		{ "runtime_ui_text",                     &YeetAIDock::_tool_runtime_ui_text },
+		{ "runtime_window",                      &YeetAIDock::_tool_runtime_window },
+		{ "runtime_3d_effects",                  &YeetAIDock::_tool_runtime_3d_effects },
+		{ "runtime_animation_control",           &YeetAIDock::_tool_runtime_animation_control },
+		{ "runtime_animation_tree",              &YeetAIDock::_tool_runtime_animation_tree },
+		{ "runtime_bone_pose",                   &YeetAIDock::_tool_runtime_bone_pose },
+		{ "runtime_camera_attributes",           &YeetAIDock::_tool_runtime_camera_attributes },
+		{ "runtime_create_joint",                &YeetAIDock::_tool_runtime_create_joint },
+		{ "runtime_create_timer",                &YeetAIDock::_tool_runtime_create_timer },
+		{ "runtime_csg",                         &YeetAIDock::_tool_runtime_csg },
+		{ "runtime_gamepad",                     &YeetAIDock::_tool_runtime_gamepad },
+		{ "runtime_gi",                          &YeetAIDock::_tool_runtime_gi },
+		{ "runtime_http_request",                &YeetAIDock::_tool_runtime_http_request },
+		{ "runtime_input_state",                 &YeetAIDock::_tool_runtime_input_state },
+		{ "runtime_light_2d",                    &YeetAIDock::_tool_runtime_light_2d },
+		{ "runtime_locale",                      &YeetAIDock::_tool_runtime_locale },
+		{ "runtime_mouse_drag",                  &YeetAIDock::_tool_runtime_mouse_drag },
+		{ "runtime_multimesh",                   &YeetAIDock::_tool_runtime_multimesh },
+		{ "runtime_multiplayer",                 &YeetAIDock::_tool_runtime_multiplayer },
+		{ "runtime_navigate_path",               &YeetAIDock::_tool_runtime_navigate_path },
+		{ "runtime_navigation_3d",               &YeetAIDock::_tool_runtime_navigation_3d },
+		{ "runtime_os_info",                     &YeetAIDock::_tool_runtime_os_info },
+		{ "runtime_particles",                   &YeetAIDock::_tool_runtime_particles },
+		{ "runtime_path_3d",                     &YeetAIDock::_tool_runtime_path_3d },
+		{ "runtime_physics_2d_query",            &YeetAIDock::_tool_runtime_physics_2d_query },
+		{ "runtime_physics_3d_query",            &YeetAIDock::_tool_runtime_physics_3d_query },
+		{ "runtime_procedural_mesh",             &YeetAIDock::_tool_runtime_procedural_mesh },
+		{ "runtime_process_mode",                &YeetAIDock::_tool_runtime_process_mode },
+		{ "runtime_render_settings",             &YeetAIDock::_tool_runtime_render_settings },
+		{ "runtime_resource_load",               &YeetAIDock::_tool_runtime_resource_load },
+		{ "runtime_rpc",                         &YeetAIDock::_tool_runtime_rpc },
+		{ "runtime_scroll",                      &YeetAIDock::_tool_runtime_scroll },
+		{ "runtime_script_attach",               &YeetAIDock::_tool_runtime_script_attach },
+		{ "runtime_shape_2d",                    &YeetAIDock::_tool_runtime_shape_2d },
+		{ "runtime_skeleton_ik",                 &YeetAIDock::_tool_runtime_skeleton_ik },
+		{ "runtime_tilemap_cells",               &YeetAIDock::_tool_runtime_tilemap_cells },
+		{ "runtime_touch",                       &YeetAIDock::_tool_runtime_touch },
+		{ "runtime_ui_item_list",                &YeetAIDock::_tool_runtime_ui_item_list },
+		{ "runtime_ui_menu",                     &YeetAIDock::_tool_runtime_ui_menu },
+		{ "runtime_ui_tabs",                     &YeetAIDock::_tool_runtime_ui_tabs },
+		{ "runtime_ui_tree",                     &YeetAIDock::_tool_runtime_ui_tree },
+		{ "runtime_viewport",                    &YeetAIDock::_tool_runtime_viewport },
+		{ "runtime_websocket",                   &YeetAIDock::_tool_runtime_websocket },
+		{ "runtime_world_settings",              &YeetAIDock::_tool_runtime_world_settings },
+		{ "runtime_audio_bus_layout",            &YeetAIDock::_tool_runtime_audio_bus_layout },
+		{ "runtime_audio_spatial",               &YeetAIDock::_tool_runtime_audio_spatial },
+		{ "manage_layers",                       &YeetAIDock::_tool_manage_layers },
+		{ "manage_translations",                 &YeetAIDock::_tool_manage_translations },
 		{ "resolve_resource_uid",                &YeetAIDock::_tool_resolve_resource_uid },
 		{ "run_gdscript_expression",             &YeetAIDock::_tool_run_gdscript_expression },
 		{ "run_gdscript_test",                   &YeetAIDock::_tool_run_gdscript_test },
@@ -305,6 +429,10 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 		{ "save_current_scene",                  &YeetAIDock::_tool_save_current_scene },
 		{ "save_resource",                       &YeetAIDock::_tool_save_resource },
 		{ "scan_project_filesystem",             &YeetAIDock::_tool_scan_project_filesystem },
+		{ "scene_get_signals",                   &YeetAIDock::_tool_scene_get_signals },
+		{ "scene_modify_node",                   &YeetAIDock::_tool_scene_modify_node },
+		{ "scene_read",                          &YeetAIDock::_tool_scene_read },
+		{ "scene_remove_node",                   &YeetAIDock::_tool_scene_remove_node },
 		{ "search_class_db",                     &YeetAIDock::_tool_search_class_db },
 		{ "search_project_settings_keys",        &YeetAIDock::_tool_search_project_settings_keys },
 		{ "select_file",                         &YeetAIDock::_tool_select_file },
@@ -340,8 +468,236 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 		{ "update_shader_code",                  &YeetAIDock::_tool_update_shader_code },
 		{ "validate_scene",                      &YeetAIDock::_tool_validate_scene },
 		{ "write_project_file",                  &YeetAIDock::_tool_write_project_file },
+		{ "update_plan",                         &YeetAIDock::_tool_update_plan },
+		{ "search_tool_catalog",                 &YeetAIDock::_tool_search_tool_catalog },
+		{ "request_tool_pack",                   &YeetAIDock::_tool_request_tool_pack },
 	};
-	static const int table_size = sizeof(table) / sizeof(table[0]);
+	r_count = (int)(sizeof(table) / sizeof(table[0]));
+	return table;
+}
+
+Vector<String> YeetAIDock::get_registered_tool_names() {
+	int count = 0;
+	const ToolEntry *table = tool_dispatch_table(count);
+	Vector<String> names;
+	names.resize(count);
+	for (int i = 0; i < count; i++) {
+		names.write[i] = String::utf8(table[i].name);
+	}
+	return names;
+}
+
+Dictionary YeetAIDock::_tool_update_plan(const Dictionary &p_args) const {
+	Dictionary result;
+	// Accept either "plan" or "steps"; each item may be an object {step,status} or
+	// a bare string (treated as a pending step). Full overwrite, like TodoWrite.
+	Variant steps_v = p_args.has("plan") ? p_args.get("plan", Variant()) : p_args.get("steps", Variant());
+	if (steps_v.get_type() != Variant::ARRAY) {
+		result["ok"] = false;
+		result["error"] = "update_plan requires a 'plan' (or 'steps') array of {step, status} objects (status: pending|in_progress|done).";
+		return result;
+	}
+
+	const Array in = steps_v;
+	Array plan;
+	int done_count = 0;
+	for (int i = 0; i < in.size(); i++) {
+		Dictionary item;
+		if (in[i].get_type() == Variant::DICTIONARY) {
+			const Dictionary d = in[i];
+			String step = String(d.get("step", d.get("title", d.get("text", ""))));
+			if (step.strip_edges().is_empty()) {
+				continue;
+			}
+			String status = String(d.get("status", "pending")).to_lower().strip_edges();
+			if (status == "completed" || status == "complete") {
+				status = "done";
+			} else if (status == "active" || status == "doing" || status == "in-progress") {
+				status = "in_progress";
+			}
+			if (status != "in_progress" && status != "done") {
+				status = "pending";
+			}
+			item["step"] = step.strip_edges();
+			item["status"] = status;
+		} else if (in[i].get_type() == Variant::STRING) {
+			const String step = String(in[i]).strip_edges();
+			if (step.is_empty()) {
+				continue;
+			}
+			item["step"] = step;
+			item["status"] = "pending";
+		} else {
+			continue;
+		}
+		if (String(item["status"]) == "done") {
+			done_count++;
+		}
+		plan.push_back(item);
+	}
+
+	_current_plan = plan; // mutable
+
+	result["ok"] = true;
+	result["plan"] = plan;
+	result["steps_total"] = plan.size();
+	result["steps_done"] = done_count;
+	result["note"] = "Plan recorded. Keep exactly one step in_progress and mark steps done as you complete them. Call update_plan again whenever the plan changes.";
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_search_tool_catalog(const Dictionary &p_args) const {
+	Dictionary result;
+	const String query = String(p_args.get("query", "")).strip_edges().to_lower();
+	const String pack_filter = String(p_args.get("pack", "")).strip_edges().to_lower();
+	const int max_results = CLAMP(int(p_args.get("max_results", 40)), 1, 200);
+
+	const Vector<String> all = yeet_ai_get_all_tool_names();
+	Array matches;
+	for (const String &name : all) {
+		if (yeet_ai_is_disabled_advertised_tool(name)) {
+			continue;
+		}
+		const ToolPack pack = _tool_pack_for(name);
+		String pack_name = "core";
+		switch (pack) {
+			case PACK_2D:
+				pack_name = "2d";
+				break;
+			case PACK_3D:
+				pack_name = "3d";
+				break;
+			case PACK_UI:
+				pack_name = "ui";
+				break;
+			case PACK_ANIM:
+				pack_name = "anim";
+				break;
+			case PACK_AUDIO:
+				pack_name = "audio";
+				break;
+			case PACK_SHADER:
+				pack_name = "shader";
+				break;
+			case PACK_PHYSICS:
+				pack_name = "physics";
+				break;
+			case PACK_DEBUG:
+				pack_name = "debug";
+				break;
+			case PACK_MULTIPLAYER:
+				pack_name = "multiplayer";
+				break;
+			default:
+				pack_name = "core";
+				break;
+		}
+		if (!pack_filter.is_empty() && pack_name != pack_filter && !(pack_filter == "core" && pack == PACK_CORE)) {
+			continue;
+		}
+		if (!query.is_empty() && !name.to_lower().contains(query) && !pack_name.contains(query)) {
+			continue;
+		}
+		Dictionary row;
+		row["name"] = name;
+		row["pack"] = pack_name;
+		matches.push_back(row);
+		if (matches.size() >= max_results) {
+			break;
+		}
+	}
+
+	result["ok"] = true;
+	result["query"] = query;
+	result["pack"] = pack_filter;
+	result["count"] = matches.size();
+	result["tools"] = matches;
+	result["note"] = "Catalog search only. To advertise a domain pack on the next model turn, call request_tool_pack with packs like [\"2d\",\"debug\"].";
+	Array pack_names;
+	pack_names.push_back("core");
+	pack_names.push_back("2d");
+	pack_names.push_back("3d");
+	pack_names.push_back("ui");
+	pack_names.push_back("anim");
+	pack_names.push_back("audio");
+	pack_names.push_back("shader");
+	pack_names.push_back("physics");
+	pack_names.push_back("debug");
+	pack_names.push_back("multiplayer");
+	result["packs"] = pack_names;
+	return result;
+}
+
+Dictionary YeetAIDock::_tool_request_tool_pack(const Dictionary &p_args) const {
+	Dictionary result;
+	Array packs = p_args.get("packs", Array());
+	if (packs.is_empty() && p_args.has("pack")) {
+		packs.push_back(p_args.get("pack", ""));
+	}
+	if (packs.is_empty()) {
+		result["ok"] = false;
+		result["error"] = "request_tool_pack requires 'packs' (array of pack names: 2d,3d,ui,anim,audio,shader,physics,debug,multiplayer).";
+		return result;
+	}
+
+	Array accepted;
+	Array unknown;
+	for (int i = 0; i < packs.size(); i++) {
+		const String p = String(packs[i]).strip_edges().to_lower();
+		ToolPack pack = PACK_CORE;
+		bool ok = true;
+		if (p == "2d") {
+			pack = PACK_2D;
+		} else if (p == "3d") {
+			pack = PACK_3D;
+		} else if (p == "ui") {
+			pack = PACK_UI;
+		} else if (p == "anim" || p == "animation") {
+			pack = PACK_ANIM;
+		} else if (p == "audio") {
+			pack = PACK_AUDIO;
+		} else if (p == "shader" || p == "material") {
+			pack = PACK_SHADER;
+		} else if (p == "physics" || p == "collision") {
+			pack = PACK_PHYSICS;
+		} else if (p == "debug" || p == "runtime") {
+			pack = PACK_DEBUG;
+		} else if (p == "multiplayer" || p == "network") {
+			pack = PACK_MULTIPLAYER;
+		} else if (p == "core") {
+			pack = PACK_CORE;
+		} else {
+			ok = false;
+			unknown.push_back(p);
+		}
+		if (ok) {
+			_turn_extra_pack_mask |= (1u << int(pack));
+			accepted.push_back(p);
+		}
+	}
+
+	// Expand advertised tools for the next model request in this turn.
+	_turn_active_tools_valid = false;
+	const Vector<String> expanded = _build_active_tool_names();
+
+	result["ok"] = !accepted.is_empty();
+	result["accepted_packs"] = accepted;
+	if (!unknown.is_empty()) {
+		result["unknown_packs"] = unknown;
+	}
+	result["advertised_tool_count"] = expanded.size();
+	result["max_advertised_tools"] = _resolve_max_advertised_tools();
+	result["extra_pack_mask"] = int(_turn_extra_pack_mask);
+	result["note"] = "Pack(s) unlocked for this turn. The expanded tool list is sent on the next model round-trip. Prefer search_tool_catalog first if unsure which pack you need.";
+	if (accepted.is_empty()) {
+		result["error"] = "No valid packs requested.";
+	}
+	return result;
+}
+
+YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_name, const Dictionary &p_args) {
+	int table_size = 0;
+	const ToolEntry *table = tool_dispatch_table(table_size);
 
 	const CharString tool_name_utf8 = p_tool_name.utf8();
 	const ToolEntry *found = nullptr;
@@ -506,7 +862,22 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 	}
 
 	result.payload = payload;
-	result.display_text = JSON::stringify(payload, "\t", false, true);
+
+	// ── Auto-verification ────────────────────────────────────────────────────
+	// After a successful script write, surface GDScript parse errors in the SAME
+	// tool result so the model reacts in this turn instead of relying on it to
+	// remember to ask. get_gdscript_errors reads the editor log (no path needed).
+	if (_get_editor_setting_bool("yeet_ai/chat/auto_verify", true) &&
+			(p_tool_name == "create_gdscript_file" || p_tool_name == "update_gdscript_file" ||
+					p_tool_name == "edit_script" || p_tool_name == "attach_script")) {
+		const Dictionary diag = _tool_get_gdscript_errors(Dictionary());
+		if (int(diag.get("error_count", 0)) > 0) {
+			result.payload["auto_diagnostics"] = diag;
+			result.payload["auto_diagnostics_hint"] = "GDScript errors were detected after this edit. Fix them before continuing.";
+		}
+	}
+
+	result.display_text = JSON::stringify(result.payload, "\t", false, true);
 	result.duration_ms = tool_duration;
 
 	// Record successful tool execution metric
@@ -524,7 +895,13 @@ YeetAIDock::ToolExecutionResult YeetAIDock::_execute_tool(const String &p_tool_n
 // ── Tool name enumeration ───────────────────────────────────────────────────
 
 Vector<String> yeet_ai_get_all_tool_names() {
-	static const char *names[] = {
+	// Derived from the single source of truth (tool_dispatch_table) so the
+	// advertised tool list can never drift from what is actually executable.
+	// Previously a hand-maintained list that had silently fallen 127 tools behind.
+	return YeetAIDock::get_registered_tool_names();
+}
+
+/* Legacy hand-maintained tool-name list — superseded by tool_dispatch_table().
 		"add_2d_collision_shape", "add_animation_track", "add_animation_transition",
 		"add_audio_bus_effect", "add_collision_exception", "add_collision_shape", "add_collision_shape_2d",
 		"add_csg_primitive", "add_custom_class", "add_node", "add_primitive_mesh",
@@ -611,12 +988,4 @@ Vector<String> yeet_ai_get_all_tool_names() {
 		"set_tilemap_cells", "fill_tilemap_rect", "set_world_environment", "shape_cast_query",
 		"stop_audio", "stop_playing_scene", "update_gdscript_file",
 		"update_shader_code", "validate_scene", "write_project_file",
-	};
-	static const int count = sizeof(names) / sizeof(names[0]);
-	Vector<String> out;
-	out.resize(count);
-	for (int i = 0; i < count; i++) {
-		out.write[i] = String(names[i]);
-	}
-	return out;
-}
+*/

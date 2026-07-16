@@ -1,3 +1,7 @@
+# yeet_ai dev tooling (local helper scripts / generated reports)
+/check_schemas.py
+/tools_list.txt
+
 # Godot .gitignore config
 #
 # Aims to encompass the most commonly found files that we don't want committed

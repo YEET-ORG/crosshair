@@ -72,9 +72,11 @@ Dictionary YeetAIDock::_tool_assign_resource_to_property(const Dictionary &p_arg
 		return result;
 	}
 
-	target->set(property_name, resource);
-	_mark_unsaved();
+	const StringName property_key = StringName(property_name);
+	const Variant old_value = target->get(property_key);
+	_commit_ai_property_change(target, property_key, old_value, resource, "Assign Resource To Property");
 
+	result["ok"] = true;
 	result["scene_path"] = scene_root->get_scene_file_path();
 	result["node_path"] = String(target->get_path());
 	result["property"] = property_name;
@@ -123,6 +125,7 @@ Dictionary YeetAIDock::_tool_connect_signal(const Dictionary &p_args) const {
 
 	const Callable callable(target, method_name);
 	if (source->is_connected(signal_name, callable)) {
+		result["ok"] = true;
 		result["scene_path"] = scene_root->get_scene_file_path();
 		result["source_node_path"] = String(source->get_path());
 		result["target_node_path"] = String(target->get_path());
@@ -133,13 +136,19 @@ Dictionary YeetAIDock::_tool_connect_signal(const Dictionary &p_args) const {
 	}
 
 	const uint32_t flags = uint32_t(int(p_args.get("flags", Object::CONNECT_PERSIST)));
-	const Error connect_error = source->connect(signal_name, callable, flags);
-	if (connect_error != OK) {
-		result["error"] = vformat("Failed to connect signal: %d", connect_error);
-		return result;
+	if (!_commit_ai_signal_connect(source, StringName(signal_name), callable, flags, "Connect Signal")) {
+		// Fallback: connect may have failed when undo manager is missing.
+		if (!source->is_connected(signal_name, callable)) {
+			const Error connect_error = source->connect(signal_name, callable, flags);
+			if (connect_error != OK) {
+				result["error"] = vformat("Failed to connect signal: %d", connect_error);
+				return result;
+			}
+			_mark_unsaved();
+		}
 	}
 
-	_mark_unsaved();
+	result["ok"] = true;
 	result["scene_path"] = scene_root->get_scene_file_path();
 	result["source_node_path"] = String(source->get_path());
 	result["target_node_path"] = String(target->get_path());
@@ -448,6 +457,7 @@ Dictionary YeetAIDock::_tool_connect_ui_signal(const Dictionary &p_args) const {
 	}
 
 	if (source->is_connected(signal_name, callable)) {
+		result["ok"] = true;
 		result["already_connected"] = true;
 		result["signal_name"] = signal_name;
 		result["method_name"] = method_name;
@@ -459,12 +469,16 @@ Dictionary YeetAIDock::_tool_connect_ui_signal(const Dictionary &p_args) const {
 	}
 
 	const uint32_t flags = uint32_t(_arg_int(p_args, "flags", Object::CONNECT_PERSIST));
-	const Error connect_err = source->connect(signal_name, callable, flags);
-	if (connect_err != OK) {
-		return _make_error(vformat("Failed to connect signal: error %d", connect_err));
+	if (!_commit_ai_signal_connect(source, StringName(signal_name), callable, flags, "Connect UI Signal")) {
+		if (!source->is_connected(signal_name, callable)) {
+			const Error connect_err = source->connect(signal_name, callable, flags);
+			if (connect_err != OK) {
+				return _make_error(vformat("Failed to connect signal: error %d", connect_err));
+			}
+			_mark_unsaved();
+		}
 	}
 
-	_mark_unsaved();
 	result["ok"] = true;
 	result["signal_name"] = signal_name;
 	result["method_name"] = method_name;

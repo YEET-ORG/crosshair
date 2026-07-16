@@ -366,16 +366,13 @@ Dictionary YeetAIDock::_tool_batch_reparent_nodes(const Dictionary &p_args) cons
 		if (node == scene_root) {
 			continue;
 		}
-		Node *old_parent = node->get_parent();
-		if (old_parent == nullptr) {
+		if (node->get_parent() == nullptr) {
 			continue;
 		}
-		old_parent->remove_child(node);
-		new_parent->add_child(node, true);
+		_commit_ai_reparent_node(node, new_parent, true, "Batch Reparent Node");
 		reparented.push_back(path);
 	}
 
-	_mark_unsaved();
 	result["reparented"] = reparented;
 	result["count"] = reparented.size();
 	return result;
@@ -397,8 +394,10 @@ Dictionary YeetAIDock::_tool_set_node_meta(const Dictionary &p_args) const {
 			return _make_error("meta_name is required for set action");
 		}
 		const Variant meta_value = p_args.get("meta_value", Variant());
-		node->set_meta(meta_name, meta_value);
-		_mark_unsaved();
+		const StringName meta_key = StringName(meta_name);
+		const bool old_exists = node->has_meta(meta_key);
+		const Variant old_value = old_exists ? node->get_meta(meta_key) : Variant();
+		_commit_ai_meta_change(node, meta_key, old_value, old_exists, meta_value, true, "Set Node Metadata");
 		result["set"] = true;
 		result["meta_name"] = meta_name;
 		return result;
@@ -413,6 +412,21 @@ Dictionary YeetAIDock::_tool_set_node_meta(const Dictionary &p_args) const {
 		}
 		result["meta_name"] = meta_name;
 		result["meta_value"] = _json_safe_variant(node->get_meta(meta_name));
+		return result;
+	}
+
+	if (action == "remove") {
+		if (meta_name.is_empty()) {
+			return _make_error("meta_name is required for remove action");
+		}
+		const StringName meta_key = StringName(meta_name);
+		if (!node->has_meta(meta_key)) {
+			return _make_error("Node has no meta named: " + meta_name);
+		}
+		const Variant old_value = node->get_meta(meta_key);
+		_commit_ai_meta_change(node, meta_key, old_value, true, Variant(), false, "Remove Node Metadata");
+		result["removed"] = true;
+		result["meta_name"] = meta_name;
 		return result;
 	}
 
@@ -495,10 +509,14 @@ Dictionary YeetAIDock::_tool_create_sky(const Dictionary &p_args) const {
 	if (we == nullptr) {
 		return _make_error("Failed to create WorldEnvironment");
 	}
-	we->get_environment()->set_sky(sky);
-	we->get_environment()->set_sky_custom_fov(_arg_float(p_args, "sky_custom_fov", 0.0));
+	Ref<Environment> env = we->get_environment();
+	if (env.is_null()) {
+		env.instantiate();
+		_commit_ai_property_change(we, SNAME("environment"), Variant(), env, "Create Sky");
+	}
+	_commit_ai_property_change(env.ptr(), SNAME("sky"), env->get(SNAME("sky")), sky, "Create Sky");
+	_commit_ai_property_change(env.ptr(), SNAME("sky_custom_fov"), env->get(SNAME("sky_custom_fov")), _arg_float(p_args, "sky_custom_fov", 0.0), "Create Sky");
 
-	_mark_unsaved();
 	result["ok"] = true;
 	result["sky_type"] = sky_type;
 	return result;
@@ -519,45 +537,47 @@ Dictionary YeetAIDock::_tool_set_environment_fog(const Dictionary &p_args) const
 	Ref<Environment> env = we->get_environment();
 
 	const String fog_type = _arg_string(p_args, "fog_type", "depth").to_lower();
+	auto commit_env_property = [&](const StringName &p_property, const Variant &p_value) {
+		_commit_ai_property_change(env.ptr(), p_property, env->get(p_property), p_value, "Set Environment Fog");
+	};
 
 	if (fog_type == "depth" || fog_type == "volumetric") {
-		env->set_fog_enabled(_arg_bool(p_args, "enabled", true));
-		env->set_fog_mode(Environment::FOG_MODE_DEPTH);
-		env->set_fog_light_color(_arg_color(p_args, "light_color", Color(0.518, 0.553, 0.612)));
-		env->set_fog_light_energy(_arg_float(p_args, "light_energy", 1.0));
-		env->set_fog_depth_begin(_arg_float(p_args, "depth_begin", 10.0));
-		env->set_fog_depth_end(_arg_float(p_args, "depth_end", 100.0));
-		env->set_fog_depth_curve(_arg_float(p_args, "depth_curve", 1.0));
+		commit_env_property(SNAME("fog_enabled"), _arg_bool(p_args, "enabled", true));
+		commit_env_property(SNAME("fog_mode"), Environment::FOG_MODE_DEPTH);
+		commit_env_property(SNAME("fog_light_color"), _arg_color(p_args, "light_color", Color(0.518, 0.553, 0.612)));
+		commit_env_property(SNAME("fog_light_energy"), _arg_float(p_args, "light_energy", 1.0));
+		commit_env_property(SNAME("fog_depth_begin"), _arg_float(p_args, "depth_begin", 10.0));
+		commit_env_property(SNAME("fog_depth_end"), _arg_float(p_args, "depth_end", 100.0));
+		commit_env_property(SNAME("fog_depth_curve"), _arg_float(p_args, "depth_curve", 1.0));
 	}
 
 	if (fog_type == "height" || fog_type == "volumetric") {
 		if (fog_type == "height") {
-			env->set_fog_enabled(_arg_bool(p_args, "enabled", true));
+			commit_env_property(SNAME("fog_enabled"), _arg_bool(p_args, "enabled", true));
 		}
 		const bool height_on = _arg_bool(p_args, "height_fog_enabled", true);
 		const float hmin = _arg_float(p_args, "height_min", 0.0);
 		const float hmax = _arg_float(p_args, "height_max", 100.0);
 		const float hcurve = _arg_float(p_args, "height_curve", 1.0);
-		env->set_fog_height(hmin);
+		commit_env_property(SNAME("fog_height"), hmin);
 		if (height_on) {
 			float hd = (float)_arg_float(p_args, "height_density", 0.0);
 			if (!p_args.has("height_density")) {
 				hd = (0.02f / MAX(hmax - hmin, 0.01f)) * (float)hcurve;
 			}
-			env->set_fog_height_density(hd);
+			commit_env_property(SNAME("fog_height_density"), hd);
 		} else {
-			env->set_fog_height_density(0.0f);
+			commit_env_property(SNAME("fog_height_density"), 0.0f);
 		}
 	}
 
 	if (fog_type == "volumetric") {
-		env->set_volumetric_fog_enabled(_arg_bool(p_args, "volumetric_enabled", true));
-		env->set_volumetric_fog_density(_arg_float(p_args, "volumetric_fog_density", 0.01));
-		env->set_volumetric_fog_albedo(_arg_color(p_args, "volumetric_fog_albedo", Color(1, 1, 1)));
-		env->set_volumetric_fog_emission(_arg_color(p_args, "volumetric_fog_emission", Color(0, 0, 0)));
+		commit_env_property(SNAME("volumetric_fog_enabled"), _arg_bool(p_args, "volumetric_enabled", true));
+		commit_env_property(SNAME("volumetric_fog_density"), _arg_float(p_args, "volumetric_fog_density", 0.01));
+		commit_env_property(SNAME("volumetric_fog_albedo"), _arg_color(p_args, "volumetric_fog_albedo", Color(1, 1, 1)));
+		commit_env_property(SNAME("volumetric_fog_emission"), _arg_color(p_args, "volumetric_fog_emission", Color(0, 0, 0)));
 	}
 
-	_mark_unsaved();
 	result["ok"] = true;
 	result["fog_type"] = fog_type;
 	return result;
@@ -578,20 +598,19 @@ Dictionary YeetAIDock::_tool_set_environment_tonemap(const Dictionary &p_args) c
 	Ref<Environment> env = we->get_environment();
 
 	const String mapper = _arg_string(p_args, "tone_mapper", "aces").to_lower();
+	Environment::ToneMapper tone_mapper = Environment::TONE_MAPPER_ACES;
 	if (mapper == "linear") {
-		env->set_tonemapper(Environment::TONE_MAPPER_LINEAR);
+		tone_mapper = Environment::TONE_MAPPER_LINEAR;
 	} else if (mapper == "reinhard") {
-		env->set_tonemapper(Environment::TONE_MAPPER_REINHARDT);
+		tone_mapper = Environment::TONE_MAPPER_REINHARDT;
 	} else if (mapper == "filmic") {
-		env->set_tonemapper(Environment::TONE_MAPPER_FILMIC);
-	} else {
-		env->set_tonemapper(Environment::TONE_MAPPER_ACES);
+		tone_mapper = Environment::TONE_MAPPER_FILMIC;
 	}
 
-	env->set_tonemap_exposure(_arg_float(p_args, "exposure", 1.0));
-	env->set_tonemap_white(_arg_float(p_args, "white", 1.0));
+	_commit_ai_property_change(env.ptr(), SNAME("tonemap_mode"), env->get(SNAME("tonemap_mode")), tone_mapper, "Set Environment Tonemap");
+	_commit_ai_property_change(env.ptr(), SNAME("tonemap_exposure"), env->get(SNAME("tonemap_exposure")), _arg_float(p_args, "exposure", 1.0), "Set Environment Tonemap");
+	_commit_ai_property_change(env.ptr(), SNAME("tonemap_white"), env->get(SNAME("tonemap_white")), _arg_float(p_args, "white", 1.0), "Set Environment Tonemap");
 
-	_mark_unsaved();
 	result["ok"] = true;
 	result["tone_mapper"] = mapper;
 	return result;
@@ -612,23 +631,22 @@ Dictionary YeetAIDock::_tool_set_environment_ss_effects(const Dictionary &p_args
 	Ref<Environment> env = we->get_environment();
 
 	if (p_args.has("ssao_enabled")) {
-		env->set_ssao_enabled(_arg_bool(p_args, "ssao_enabled", false));
-		env->set_ssao_radius(_arg_float(p_args, "ssao_radius", 1.0));
-		env->set_ssao_intensity(_arg_float(p_args, "ssao_intensity", 1.0));
+		_commit_ai_property_change(env.ptr(), SNAME("ssao_enabled"), env->get(SNAME("ssao_enabled")), _arg_bool(p_args, "ssao_enabled", false), "Set Environment Screen-Space Effects");
+		_commit_ai_property_change(env.ptr(), SNAME("ssao_radius"), env->get(SNAME("ssao_radius")), _arg_float(p_args, "ssao_radius", 1.0), "Set Environment Screen-Space Effects");
+		_commit_ai_property_change(env.ptr(), SNAME("ssao_intensity"), env->get(SNAME("ssao_intensity")), _arg_float(p_args, "ssao_intensity", 1.0), "Set Environment Screen-Space Effects");
 	}
 
 	if (p_args.has("ssr_enabled")) {
-		env->set_ssr_enabled(_arg_bool(p_args, "ssr_enabled", false));
-		env->set_ssr_max_steps(_arg_int(p_args, "ssr_max_steps", 64));
+		_commit_ai_property_change(env.ptr(), SNAME("ssr_enabled"), env->get(SNAME("ssr_enabled")), _arg_bool(p_args, "ssr_enabled", false), "Set Environment Screen-Space Effects");
+		_commit_ai_property_change(env.ptr(), SNAME("ssr_max_steps"), env->get(SNAME("ssr_max_steps")), _arg_int(p_args, "ssr_max_steps", 64), "Set Environment Screen-Space Effects");
 	}
 
 	if (p_args.has("glow_enabled")) {
-		env->set_glow_enabled(_arg_bool(p_args, "glow_enabled", false));
-		env->set_glow_intensity(_arg_float(p_args, "glow_intensity", 0.8));
-		env->set_glow_hdr_bleed_threshold(_arg_float(p_args, "glow_threshold", 1.0));
+		_commit_ai_property_change(env.ptr(), SNAME("glow_enabled"), env->get(SNAME("glow_enabled")), _arg_bool(p_args, "glow_enabled", false), "Set Environment Screen-Space Effects");
+		_commit_ai_property_change(env.ptr(), SNAME("glow_intensity"), env->get(SNAME("glow_intensity")), _arg_float(p_args, "glow_intensity", 0.8), "Set Environment Screen-Space Effects");
+		_commit_ai_property_change(env.ptr(), SNAME("glow_hdr_threshold"), env->get(SNAME("glow_hdr_threshold")), _arg_float(p_args, "glow_threshold", 1.0), "Set Environment Screen-Space Effects");
 	}
 
-	_mark_unsaved();
 	result["ok"] = true;
 	result["updated"] = true;
 	return result;

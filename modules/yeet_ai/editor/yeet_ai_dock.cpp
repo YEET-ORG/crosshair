@@ -6,7 +6,9 @@
 /**************************************************************************/
 
 #include "yeet_ai_dock.h"
+#include "yeet_ai_azure_profiles.h"
 
+#include "yeet_ai_project_context_index.h"
 #include "yeet_ai_tool_schema.h"
 
 #include "core/config/project_settings.h"
@@ -44,6 +46,7 @@
 #include "editor/themes/editor_scale.h"
 #include "scene/gui/box_container.h"
 #include "scene/gui/button.h"
+#include "scene/gui/dialogs.h"
 #include "scene/gui/label.h"
 #include "scene/gui/margin_container.h"
 #include "scene/gui/panel_container.h"
@@ -75,6 +78,8 @@
 #include "scene/gui/scroll_container.h"
 #include "scene/gui/separator.h"
 #include "scene/main/http_request.h"
+#include "scene/resources/style_box.h"
+#include "scene/resources/style_box_flat.h"
 #include "scene/main/viewport.h"
 #include "scene/animation/animation_player.h"
 #include "scene/resources/3d/box_shape_3d.h"
@@ -518,6 +523,7 @@ void YeetAIDock::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("_cancel_tool_call_timeout"), &YeetAIDock::_cancel_tool_call_timeout);
 
 	ClassDB::bind_method(D_METHOD("_normalize_tool_arguments", "tool_name", "args"), &YeetAIDock::_normalize_tool_arguments);
+	ClassDB::bind_method(D_METHOD("_apply_ai_text_file_snapshot", "path", "contents", "exists"), &YeetAIDock::_apply_ai_text_file_snapshot);
 
  	ClassDB::bind_method(D_METHOD("_get_rate_limit_for_tool", "tool_name"), &YeetAIDock::_get_rate_limit_for_tool);
  	ClassDB::bind_method(D_METHOD("_check_rate_limit", "tool_name"), &YeetAIDock::_check_rate_limit);
@@ -527,27 +533,229 @@ void YeetAIDock::_bind_methods() {
  	ClassDB::bind_method(D_METHOD("_generate_recovery_context", "tool_name", "args", "error"), &YeetAIDock::_generate_recovery_context);
  }
 
- void YeetAIDock::_apply_dock_theme() {
+Ref<Texture2D> YeetAIDock::_editor_icon(const StringName &p_name, const StringName &p_fallback) const {
+	if (!is_inside_tree() || p_name == StringName()) {
+		return Ref<Texture2D>();
+	}
+	Ref<Texture2D> icon = get_editor_theme_icon(p_name);
+	if (icon.is_valid()) {
+		// Godot returns a placeholder for unknown EditorIcons names; reject zero-size textures.
+		if (icon->get_width() > 0 && icon->get_height() > 0) {
+			return icon;
+		}
+	}
+	if (p_fallback != StringName() && p_fallback != p_name) {
+		Ref<Texture2D> fb = get_editor_theme_icon(p_fallback);
+		if (fb.is_valid() && fb->get_width() > 0 && fb->get_height() > 0) {
+			return fb;
+		}
+	}
+	return Ref<Texture2D>();
+}
+
+void YeetAIDock::_apply_dock_icons() {
+	if (!is_inside_tree()) {
+		return;
+	}
+	if (_header_icon_rect) {
+		_header_icon_rect->set_texture(_editor_icon(SNAME("Crosshair"), SNAME("Script")));
+	}
+	if (send_button) {
+		// Cursor uses an arrow/send glyph; Play is the most recognizable EditorIcon.
+		send_button->set_button_icon(_editor_icon(SNAME("Play"), SNAME("ArrowRight")));
+		send_button->set_text(String());
+	}
+	if (stop_button) {
+		stop_button->set_button_icon(_editor_icon(SNAME("Stop"), SNAME("Close")));
+		stop_button->set_text(String());
+	}
+	if (clear_button) {
+		clear_button->set_button_icon(_editor_icon(SNAME("Clear"), SNAME("Remove")));
+		clear_button->set_text(String());
+	}
+	if (_new_chat_button) {
+		_new_chat_button->set_button_icon(_editor_icon(SNAME("Add"), SNAME("New")));
+		_new_chat_button->set_text(String());
+	}
+	if (_delete_chat_button) {
+		_delete_chat_button->set_button_icon(_editor_icon(SNAME("Remove"), SNAME("Close")));
+		_delete_chat_button->set_text(String());
+	}
+	if (_model_selector_button) {
+		_model_selector_button->set_button_icon(_editor_icon(SNAME("GuiOptionArrow"), SNAME("ArrowDown")));
+		_update_model_button_label();
+	}
+}
+
+void YeetAIDock::_style_flat_control(Control *p_control) {
+	if (!p_control || !is_inside_tree()) {
+		return;
+	}
+	const int font_size = get_theme_font_size(SNAME("main_size"), EditorStringName(EditorFonts));
+	const Color font_muted = get_theme_color(SNAME("font_disabled_color"), EditorStringName(Editor));
+	const Color font_color = get_theme_color(SNAME("font_color"), EditorStringName(Editor));
+	const Color dark2 = get_theme_color(SNAME("dark_color_2"), EditorStringName(Editor));
+
+	Button *btn = Object::cast_to<Button>(p_control);
+	if (btn) {
+		btn->set_flat(true);
+		if (font_size > 0) {
+			btn->add_theme_font_size_override(SNAME("font_size"), MAX(10, font_size - 1));
+		}
+		// Soft pill hover for compact toolbar controls.
+		Ref<StyleBoxFlat> normal;
+		normal.instantiate();
+		normal->set_bg_color(Color(0, 0, 0, 0));
+		normal->set_corner_radius_all(int(5.0f * EDSCALE));
+		normal->set_content_margin_individual(int(6 * EDSCALE), int(3 * EDSCALE), int(6 * EDSCALE), int(3 * EDSCALE));
+		Ref<StyleBoxFlat> hover = normal->duplicate();
+		hover->set_bg_color(Color(font_color.r, font_color.g, font_color.b, 0.08f));
+		Ref<StyleBoxFlat> pressed = normal->duplicate();
+		pressed->set_bg_color(Color(font_color.r, font_color.g, font_color.b, 0.14f));
+		btn->add_theme_style_override(SNAME("normal"), normal);
+		btn->add_theme_style_override(SNAME("hover"), hover);
+		btn->add_theme_style_override(SNAME("pressed"), pressed);
+		btn->add_theme_style_override(SNAME("focus"), normal);
+		btn->add_theme_color_override(SNAME("font_color"), font_muted);
+		btn->add_theme_color_override(SNAME("font_hover_color"), font_color);
+		btn->add_theme_color_override(SNAME("font_pressed_color"), font_color);
+	}
+
+	OptionButton *ob = Object::cast_to<OptionButton>(p_control);
+	if (ob) {
+		// Subtle filled chip for selectors.
+		Ref<StyleBoxFlat> chip;
+		chip.instantiate();
+		chip->set_bg_color(Color(dark2.r, dark2.g, dark2.b, 0.55f));
+		chip->set_corner_radius_all(int(5.0f * EDSCALE));
+		chip->set_content_margin_individual(int(8 * EDSCALE), int(3 * EDSCALE), int(6 * EDSCALE), int(3 * EDSCALE));
+		ob->add_theme_style_override(SNAME("normal"), chip);
+		Ref<StyleBoxFlat> chip_h = chip->duplicate();
+		chip_h->set_bg_color(Color(dark2.r, dark2.g, dark2.b, 0.75f));
+		ob->add_theme_style_override(SNAME("hover"), chip_h);
+		ob->add_theme_style_override(SNAME("pressed"), chip_h);
+		if (font_size > 0) {
+			ob->add_theme_font_size_override(SNAME("font_size"), MAX(10, font_size - 1));
+		}
+	}
+}
+
+void YeetAIDock::_apply_dock_theme() {
 	if (!is_inside_tree()) {
 		return; // Theme is not available before the dock enters the tree.
 	}
-	const Ref<StyleBox> panel_fg = get_theme_stylebox(SNAME("PanelForeground"), EditorStringName(EditorStyles));
-	if (panel_fg.is_valid()) {
-		if (header_panel) {
-			header_panel->add_theme_style_override(SNAME("panel"), panel_fg);
+
+	const Color dark = get_theme_color(SNAME("dark_color_1"), EditorStringName(Editor));
+	const Color dark2 = get_theme_color(SNAME("dark_color_2"), EditorStringName(Editor));
+	const Color base = get_theme_color(SNAME("base_color"), EditorStringName(Editor));
+	const Color accent = get_theme_color(SNAME("accent_color"), EditorStringName(Editor));
+	const Color font_color = get_theme_color(SNAME("font_color"), EditorStringName(Editor));
+	const Color font_muted = get_theme_color(SNAME("font_disabled_color"), EditorStringName(Editor));
+	const int font_size = get_theme_font_size(SNAME("main_size"), EditorStringName(EditorFonts));
+	const real_t r = 8.0f * EDSCALE;
+
+	auto make_flat = [&](const Color &bg, float border_a = 0.0f, const Color &border_c = Color(), int radius = -1) -> Ref<StyleBoxFlat> {
+		Ref<StyleBoxFlat> sb;
+		sb.instantiate();
+		sb->set_bg_color(bg);
+		sb->set_corner_radius_all(radius >= 0 ? radius : int(r));
+		sb->set_content_margin_all(int(8.0f * EDSCALE));
+		if (border_a > 0.001f) {
+			sb->set_border_width_all(MAX(1, int(EDSCALE)));
+			Color bc = border_c;
+			if (bc == Color()) {
+				bc = Color(font_color.r, font_color.g, font_color.b, border_a);
+			} else {
+				bc.a = border_a;
+			}
+			sb->set_border_color(bc);
 		}
-		if (chat_panel) {
-			chat_panel->add_theme_style_override(SNAME("panel"), panel_fg);
-		}
-		if (input_panel) {
-			input_panel->add_theme_style_override(SNAME("panel"), panel_fg);
-		}
+		return sb;
+	};
+
+	// Header: glass-like strip
+	if (header_panel) {
+		Ref<StyleBoxFlat> hs = make_flat(Color(dark.r, dark.g, dark.b, 0.65f), 0.06f);
+		hs->set_content_margin_individual(int(10.0f * EDSCALE), int(8.0f * EDSCALE), int(10.0f * EDSCALE), int(8.0f * EDSCALE));
+		header_panel->add_theme_style_override(SNAME("panel"), hs);
+	}
+	if (_header_sep) {
+		_header_sep->add_theme_constant_override(SNAME("separation"), int(1 * EDSCALE));
+		_header_sep->set_modulate(Color(1, 1, 1, 0.35f));
 	}
 
-	const int font_size = get_theme_font_size(SNAME("main_size"), EditorStringName(EditorFonts));
-	const Color font_color = get_theme_color(SNAME("font_color"), EditorStringName(Editor));
-	const Color accent = get_theme_color(SNAME("accent_color"), EditorStringName(Editor));
-	const Color font_muted = get_theme_color(SNAME("font_disabled_color"), EditorStringName(Editor));
+	// Chat: transparent so transcript feels full-bleed
+	if (chat_panel) {
+		Ref<StyleBoxEmpty> empty;
+		empty.instantiate();
+		chat_panel->add_theme_style_override(SNAME("panel"), empty);
+	}
+
+	// Files strip: muted chip bar
+	if (_files_strip_panel) {
+		Ref<StyleBoxFlat> fs = make_flat(Color(dark2.r, dark2.g, dark2.b, 0.45f), 0.06f, Color(), int(6 * EDSCALE));
+		fs->set_content_margin_individual(int(8 * EDSCALE), int(4 * EDSCALE), int(8 * EDSCALE), int(4 * EDSCALE));
+		_files_strip_panel->add_theme_style_override(SNAME("panel"), fs);
+	}
+
+	// Composer: primary focus card (Cursor-style)
+	if (input_panel) {
+		Color composer_bg = Color(dark2.r, dark2.g, dark2.b, 0.92f);
+		if (composer_bg.a < 0.1f) {
+			composer_bg = Color(base.r, base.g, base.b, 0.95f);
+		}
+		Ref<StyleBoxFlat> cs = make_flat(composer_bg, 0.18f, accent, int(10 * EDSCALE));
+		cs->set_content_margin_individual(int(12.0f * EDSCALE), int(10.0f * EDSCALE), int(10.0f * EDSCALE), int(8.0f * EDSCALE));
+		input_panel->add_theme_style_override(SNAME("panel"), cs);
+	}
+
+	// Flatten TextEdit so the panel is the only chrome
+	if (prompt_input) {
+		Ref<StyleBoxEmpty> te_empty;
+		te_empty.instantiate();
+		prompt_input->add_theme_style_override(SNAME("normal"), te_empty);
+		prompt_input->add_theme_style_override(SNAME("focus"), te_empty);
+		prompt_input->add_theme_style_override(SNAME("read_only"), te_empty);
+		if (font_size > 0) {
+			prompt_input->add_theme_font_size_override(SNAME("font_size"), font_size);
+		}
+		prompt_input->add_theme_color_override(SNAME("font_placeholder_color"), Color(font_muted.r, font_muted.g, font_muted.b, 0.7f));
+	}
+
+	// Accent send / stop as filled pills
+	auto style_primary = [&](Button *btn, const Color &fill) {
+		if (!btn) {
+			return;
+		}
+		Ref<StyleBoxFlat> n;
+		n.instantiate();
+		n->set_bg_color(fill);
+		n->set_corner_radius_all(int(6 * EDSCALE));
+		n->set_content_margin_individual(int(8 * EDSCALE), int(4 * EDSCALE), int(8 * EDSCALE), int(4 * EDSCALE));
+		Ref<StyleBoxFlat> h = n->duplicate();
+		h->set_bg_color(fill.lightened(0.12f));
+		Ref<StyleBoxFlat> p = n->duplicate();
+		p->set_bg_color(fill.darkened(0.08f));
+		btn->add_theme_style_override(SNAME("normal"), n);
+		btn->add_theme_style_override(SNAME("hover"), h);
+		btn->add_theme_style_override(SNAME("pressed"), p);
+		btn->add_theme_style_override(SNAME("focus"), n);
+		btn->add_theme_color_override(SNAME("icon_normal_color"), Color(1, 1, 1, 0.95f));
+		btn->add_theme_color_override(SNAME("icon_hover_color"), Color(1, 1, 1, 1));
+		btn->add_theme_color_override(SNAME("icon_pressed_color"), Color(1, 1, 1, 0.9f));
+		btn->set_flat(false);
+	};
+	style_primary(send_button, accent);
+	const Color error_c = get_theme_color(SNAME("error_color"), EditorStringName(Editor));
+	style_primary(stop_button, error_c);
+
+	_style_flat_control(clear_button);
+	_style_flat_control(_new_chat_button);
+	_style_flat_control(_delete_chat_button);
+	_style_flat_control(_model_selector_button);
+	_style_flat_control(_chat_selector);
+	_style_flat_control(_provider_selector);
+	_style_flat_control(_agent_selector);
 
 	auto apply_log_theme = [&](RichTextLabel *log) {
 		if (!log) {
@@ -561,189 +769,215 @@ void YeetAIDock::_bind_methods() {
 		}
 		log->add_theme_color_override(SNAME("default_color"), font_color);
 		log->add_theme_color_override(SNAME("link_color"), accent);
-		// Tight chat density: tighter baseline rhythm.
-		log->add_theme_constant_override(SNAME("line_separation"), int(2.0f * EDSCALE));
-		log->add_theme_constant_override(SNAME("paragraph_separation"), int(4.0f * EDSCALE));
+		log->add_theme_constant_override(SNAME("line_separation"), int(3.0f * EDSCALE));
+		log->add_theme_constant_override(SNAME("paragraph_separation"), int(8.0f * EDSCALE));
 	};
 	apply_log_theme(chat_log);
 	apply_log_theme(stream_label);
+	apply_log_theme(_files_modified_label);
 
-	if (prompt_input && font_size > 0) {
-		prompt_input->add_theme_font_size_override(SNAME("font_size"), font_size);
+	if (_title_label) {
+		if (font_size > 0) {
+			_title_label->add_theme_font_size_override(SNAME("font_size"), MAX(12, font_size));
+		}
+		_title_label->add_theme_color_override(SNAME("font_color"), font_color);
 	}
 
 	if (status_label) {
 		if (font_size > 0) {
-			status_label->add_theme_font_size_override(SNAME("font_size"), MAX(10, font_size - 1));
+			status_label->add_theme_font_size_override(SNAME("font_size"), MAX(10, font_size - 2));
 		}
 		status_label->add_theme_color_override(SNAME("font_color"), font_muted);
 	}
 
 	if (_token_count_label) {
 		if (font_size > 0) {
-			_token_count_label->add_theme_font_size_override(SNAME("font_size"), MAX(10, font_size - 1));
+			_token_count_label->add_theme_font_size_override(SNAME("font_size"), MAX(10, font_size - 2));
 		}
 		_token_count_label->add_theme_color_override(SNAME("font_color"), font_muted);
 	}
+
+	if (_composer_hint_label) {
+		if (font_size > 0) {
+			_composer_hint_label->add_theme_font_size_override(SNAME("font_size"), MAX(9, font_size - 3));
+		}
+		_composer_hint_label->add_theme_color_override(SNAME("font_color"), Color(font_muted.r, font_muted.g, font_muted.b, 0.75f));
+	}
+
+	if (_tool_progress_bar) {
+		// Thin accent activity line
+		_tool_progress_bar->set_modulate(Color(accent.r, accent.g, accent.b, 0.9f));
+	}
+
+	_apply_dock_icons();
 }
 
 YeetAIDock::YeetAIDock() {
-	set_name(TTR("Crosshair AI"));
+	set_name(TTR("Agent"));
 	set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	set_v_size_flags(Control::SIZE_EXPAND_FILL);
-	set_custom_minimum_size(Size2(430, 0) * EDSCALE);
+	set_custom_minimum_size(Size2(340, 0) * EDSCALE);
 
+	// Cursor-like agent sidebar: tight chrome · roomy transcript · floating composer.
 	outer_margin = memnew(MarginContainer);
 	outer_margin->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	outer_margin->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-	outer_margin->add_theme_constant_override("margin_left", int(10.0f * EDSCALE));
-	outer_margin->add_theme_constant_override("margin_right", int(10.0f * EDSCALE));
-	outer_margin->add_theme_constant_override("margin_top", int(8.0f * EDSCALE));
-	outer_margin->add_theme_constant_override("margin_bottom", int(10.0f * EDSCALE));
+	outer_margin->add_theme_constant_override("margin_left", int(6.0f * EDSCALE));
+	outer_margin->add_theme_constant_override("margin_right", int(6.0f * EDSCALE));
+	outer_margin->add_theme_constant_override("margin_top", int(6.0f * EDSCALE));
+	outer_margin->add_theme_constant_override("margin_bottom", int(6.0f * EDSCALE));
 	add_child(outer_margin);
 
 	VBoxContainer *main_column = memnew(VBoxContainer);
 	main_column->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	main_column->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-	main_column->add_theme_constant_override("separation", int(10.0f * EDSCALE));
+	main_column->add_theme_constant_override("separation", int(6.0f * EDSCALE));
 	outer_margin->add_child(main_column);
 
+	// ── Header ───────────────────────────────────────────────────────────────
 	header_panel = memnew(PanelContainer);
 	header_panel->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	main_column->add_child(header_panel);
 
-	// Thin progress bar below header, visible during multi-tool round trips
+	VBoxContainer *header_vb = memnew(VBoxContainer);
+	header_vb->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	header_vb->add_theme_constant_override("separation", int(6.0f * EDSCALE));
+	header_panel->add_child(header_vb);
+
+	// Row 1: icon · Agent · session · + · trash · status
+	_header_title_row = memnew(HBoxContainer);
+	_header_title_row->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	_header_title_row->add_theme_constant_override("separation", int(6.0f * EDSCALE));
+	header_vb->add_child(_header_title_row);
+
+	_header_icon_rect = memnew(TextureRect);
+	_header_icon_rect->set_custom_minimum_size(Size2(16, 16) * EDSCALE);
+	_header_icon_rect->set_v_size_flags(Control::SIZE_SHRINK_CENTER);
+	_header_icon_rect->set_stretch_mode(TextureRect::STRETCH_KEEP_ASPECT_CENTERED);
+	_header_icon_rect->set_expand_mode(TextureRect::EXPAND_IGNORE_SIZE);
+	_header_title_row->add_child(_header_icon_rect);
+
+	_title_label = memnew(Label);
+	_title_label->set_text(TTR("Agent"));
+	_title_label->set_vertical_alignment(VERTICAL_ALIGNMENT_CENTER);
+	_title_label->set_mouse_filter(Control::MOUSE_FILTER_IGNORE);
+	_header_title_row->add_child(_title_label);
+
+	_chat_selector = memnew(OptionButton);
+	_chat_selector->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	_chat_selector->set_custom_minimum_size(Size2(72, 0) * EDSCALE);
+	_chat_selector->set_clip_text(true);
+	_chat_selector->set_tooltip_text(TTR("Chat sessions"));
+	_chat_selector->set_flat(true);
+	_chat_selector->connect("item_selected", callable_mp(this, &YeetAIDock::_on_chat_selected));
+	_header_title_row->add_child(_chat_selector);
+
+	_new_chat_button = memnew(Button);
+	_new_chat_button->set_theme_type_variation("FlatButton");
+	_new_chat_button->set_flat(true);
+	_new_chat_button->set_tooltip_text(TTR("New Chat (Ctrl+Shift+N)"));
+	_new_chat_button->set_custom_minimum_size(Size2(26, 26) * EDSCALE);
+	_new_chat_button->connect(SceneStringName(pressed), callable_mp(this, &YeetAIDock::_on_new_chat_pressed));
+	_header_title_row->add_child(_new_chat_button);
+
+	_delete_chat_button = memnew(Button);
+	_delete_chat_button->set_theme_type_variation("FlatButton");
+	_delete_chat_button->set_flat(true);
+	_delete_chat_button->set_tooltip_text(TTR("Delete Chat"));
+	_delete_chat_button->set_custom_minimum_size(Size2(26, 26) * EDSCALE);
+	_delete_chat_button->connect(SceneStringName(pressed), callable_mp(this, &YeetAIDock::_on_delete_chat_pressed));
+	_header_title_row->add_child(_delete_chat_button);
+
+	_status_dot = memnew(ColorRect);
+	_status_dot->set_custom_minimum_size(Size2(8, 8) * EDSCALE);
+	_status_dot->set_v_size_flags(Control::SIZE_SHRINK_CENTER);
+	_status_dot->set_color(Color(0.45f, 0.45f, 0.45f, 0.4f));
+	_header_title_row->add_child(_status_dot);
+
+	status_label = memnew(Label);
+	status_label->set_horizontal_alignment(HORIZONTAL_ALIGNMENT_RIGHT);
+	status_label->set_vertical_alignment(VERTICAL_ALIGNMENT_CENTER);
+	status_label->set_clip_text(true);
+	status_label->set_custom_minimum_size(Size2(42, 0) * EDSCALE);
+	status_label->set_text(TTR("Ready"));
+	_header_title_row->add_child(status_label);
+
+	_header_sep = memnew(HSeparator);
+	header_vb->add_child(_header_sep);
+
+	// Row 2: provider · agent · model
+	_header_controls_row = memnew(HBoxContainer);
+	_header_controls_row->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	_header_controls_row->add_theme_constant_override("separation", int(4.0f * EDSCALE));
+	header_vb->add_child(_header_controls_row);
+
+	_provider_selector = memnew(OptionButton);
+	_provider_selector->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	_provider_selector->set_custom_minimum_size(Size2(64, 0) * EDSCALE);
+	_provider_selector->set_clip_text(true);
+	_provider_selector->set_flat(true);
+	_provider_selector->set_tooltip_text(TTR("AI provider"));
+	_provider_selector->connect(SceneStringName(item_selected), callable_mp(this, &YeetAIDock::_on_provider_quick_selected));
+	_header_controls_row->add_child(_provider_selector);
+	_populate_provider_selector();
+
+	_agent_selector = memnew(OptionButton);
+	_agent_selector->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	_agent_selector->set_custom_minimum_size(Size2(56, 0) * EDSCALE);
+	_agent_selector->set_clip_text(true);
+	_agent_selector->set_flat(true);
+	_agent_selector->set_tooltip_text(TTR("Agent preset"));
+	_agent_selector->connect("item_selected", callable_mp(this, &YeetAIDock::_on_agent_selected));
+	_header_controls_row->add_child(_agent_selector);
+
+	_model_selector_button = memnew(Button);
+	_model_selector_button->set_theme_type_variation("FlatButton");
+	_model_selector_button->set_flat(true);
+	_model_selector_button->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	_model_selector_button->set_clip_text(true);
+	_model_selector_button->set_text_overrun_behavior(TextServer::OVERRUN_TRIM_ELLIPSIS);
+	_model_selector_button->set_custom_minimum_size(Size2(56, 0) * EDSCALE);
+	_model_selector_button->set_tooltip_text(TTR("Model"));
+	_model_selector_button->set_text_alignment(HORIZONTAL_ALIGNMENT_LEFT);
+	_model_selector_button->connect(SceneStringName(pressed), callable_mp(this, &YeetAIDock::_on_model_selector_pressed));
+	_header_controls_row->add_child(_model_selector_button);
+
+	// Thin activity bar under header
 	_tool_progress_bar = memnew(ProgressBar);
 	_tool_progress_bar->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-	_tool_progress_bar->set_custom_minimum_size(Size2(0, 3) * EDSCALE);
+	_tool_progress_bar->set_custom_minimum_size(Size2(0, 2) * EDSCALE);
 	_tool_progress_bar->set_show_percentage(false);
 	_tool_progress_bar->set_min(0.0);
 	_tool_progress_bar->set_max(1.0);
 	_tool_progress_bar->set_value(0.0);
 	_tool_progress_bar->set_visible(false);
-	_tool_progress_bar->set_modulate(Color(1, 1, 1, 0.8));
 	main_column->add_child(_tool_progress_bar);
 
-	MarginContainer *header_mc = memnew(MarginContainer);
-	header_mc->add_theme_constant_override("margin_left", int(12.0f * EDSCALE));
-	header_mc->add_theme_constant_override("margin_right", int(12.0f * EDSCALE));
-	header_mc->add_theme_constant_override("margin_top", int(10.0f * EDSCALE));
-	header_mc->add_theme_constant_override("margin_bottom", int(10.0f * EDSCALE));
-	header_panel->add_child(header_mc);
-
-	// Title row: icon + title on the left, controls on the right
-	HBoxContainer *title_row = memnew(HBoxContainer);
-	title_row->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-	title_row->add_theme_constant_override("separation", int(8.0f * EDSCALE));
-	header_mc->add_child(title_row);
-
-	_header_icon_rect = memnew(TextureRect);
-	_header_icon_rect->set_custom_minimum_size(Size2(18, 18) * EDSCALE);
-	_header_icon_rect->set_v_size_flags(Control::SIZE_SHRINK_CENTER);
-	_header_icon_rect->set_stretch_mode(TextureRect::STRETCH_KEEP_ASPECT_CENTERED);
-	title_row->add_child(_header_icon_rect);
-
-	// Title label
-	Label *title_label = memnew(Label);
-	title_label->set_text(TTR("Crosshair AI"));
-	title_label->set_horizontal_alignment(HORIZONTAL_ALIGNMENT_LEFT);
-	title_label->add_theme_font_size_override("font_size", int(14 * EDSCALE));
-	title_row->add_child(title_label);
-
-	// Spacer
-	Node *title_spacer = memnew(Node);
-	title_spacer->set_name("TitleSpacer");
-	title_row->add_child(title_spacer);
-
-	// Right controls
-	HBoxContainer *controls_row = memnew(HBoxContainer);
-	controls_row->add_theme_constant_override("separation", int(4.0f * EDSCALE));
-	header_mc->add_child(controls_row);
-
-	// Chat selector dropdown
-	_chat_selector = memnew(OptionButton);
-	_chat_selector->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-	_chat_selector->set_custom_minimum_size(Size2(110, 0) * EDSCALE);
-	_chat_selector->set_clip_text(true);
-	_chat_selector->connect("item_selected", callable_mp(this, &YeetAIDock::_on_chat_selected));
-	controls_row->add_child(_chat_selector);
-
-	// New chat button
-	_new_chat_button = memnew(Button);
-	_new_chat_button->set_theme_type_variation("FlatButton");
-	_new_chat_button->set_tooltip_text(TTR("New Chat (Ctrl+Shift+N)"));
-	_new_chat_button->connect(SceneStringName(pressed), callable_mp(this, &YeetAIDock::_on_new_chat_pressed));
-	controls_row->add_child(_new_chat_button);
-
-	// Delete chat button
-	_delete_chat_button = memnew(Button);
-	_delete_chat_button->set_theme_type_variation("FlatButton");
-	_delete_chat_button->set_tooltip_text(TTR("Delete Chat"));
-	_delete_chat_button->connect(SceneStringName(pressed), callable_mp(this, &YeetAIDock::_on_delete_chat_pressed));
-	controls_row->add_child(_delete_chat_button);
-
-	// Agent selector
-	_agent_selector = memnew(OptionButton);
-	_agent_selector->set_custom_minimum_size(Size2(90, 0) * EDSCALE);
-	_agent_selector->set_clip_text(true);
-	_agent_selector->connect("item_selected", callable_mp(this, &YeetAIDock::_on_agent_selected));
-	controls_row->add_child(_agent_selector);
-
-	// Model selector button
-	_model_selector_button = memnew(Button);
-	_model_selector_button->set_theme_type_variation("FlatButton");
-	_model_selector_button->set_tooltip_text(TTR("Select Model"));
-	_model_selector_button->set_clip_text(true);
-	_model_selector_button->set_custom_minimum_size(Size2(70, 0) * EDSCALE);
-	_model_selector_button->connect(SceneStringName(pressed), callable_mp(this, &YeetAIDock::_on_model_selector_pressed));
-	controls_row->add_child(_model_selector_button);
-
-	// Status dot + label on the right
-	_status_dot = memnew(ColorRect);
-	_status_dot->set_custom_minimum_size(Size2(8, 8) * EDSCALE);
-	_status_dot->set_v_size_flags(Control::SIZE_SHRINK_CENTER);
-	_status_dot->set_color(Color(0.5f, 0.5f, 0.5f, 0.35f));
-	controls_row->add_child(_status_dot);
-
-	status_label = memnew(Label);
-	status_label->set_horizontal_alignment(HORIZONTAL_ALIGNMENT_RIGHT);
-	status_label->set_clip_text(true);
-	status_label->set_text(TTR("Ready"));
-	controls_row->add_child(status_label);
-
+	// ── Chat transcript ──────────────────────────────────────────────────────
 	chat_panel = memnew(PanelContainer);
 	chat_panel->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	chat_panel->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 	main_column->add_child(chat_panel);
-
-	MarginContainer *chat_panel_mc = memnew(MarginContainer);
-	chat_panel_mc->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-	chat_panel_mc->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-	chat_panel_mc->add_theme_constant_override("margin_left", int(10.0f * EDSCALE));
-	chat_panel_mc->add_theme_constant_override("margin_right", int(10.0f * EDSCALE));
-	chat_panel_mc->add_theme_constant_override("margin_top", int(8.0f * EDSCALE));
-	chat_panel_mc->add_theme_constant_override("margin_bottom", int(10.0f * EDSCALE));
-	chat_panel->add_child(chat_panel_mc);
 
 	chat_scroll = memnew(ScrollContainer);
 	chat_scroll->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 	chat_scroll->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	chat_scroll->set_vertical_scroll_mode(ScrollContainer::SCROLL_MODE_AUTO);
 	chat_scroll->set_horizontal_scroll_mode(ScrollContainer::SCROLL_MODE_SHOW_NEVER);
-	chat_panel_mc->add_child(chat_scroll);
+	chat_panel->add_child(chat_scroll);
 
-	MarginContainer *chat_margin = memnew(MarginContainer);
-	chat_margin->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-	chat_margin->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-	chat_scroll->add_child(chat_margin);
-
-	// MarginContainer places every child in the same rect; two RichTextLabels would fully overlap.
-	// Stack history + live stream vertically so prior messages and tool output stay visible.
 	VBoxContainer *chat_column = memnew(VBoxContainer);
 	chat_column->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	chat_column->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-	chat_column->add_theme_constant_override("separation", int(6.0f * EDSCALE));
-	chat_margin->add_child(chat_column);
+	chat_column->add_theme_constant_override("separation", int(2.0f * EDSCALE));
+	// Side padding so message text doesn't hug the scrollbar.
+	MarginContainer *chat_pad = memnew(MarginContainer);
+	chat_pad->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	chat_pad->set_v_size_flags(Control::SIZE_EXPAND_FILL);
+	chat_pad->add_theme_constant_override("margin_left", int(2 * EDSCALE));
+	chat_pad->add_theme_constant_override("margin_right", int(4 * EDSCALE));
+	chat_scroll->add_child(chat_pad);
+	chat_pad->add_child(chat_column);
 
 	chat_log = memnew(RichTextLabel);
 	chat_log->set_h_size_flags(Control::SIZE_EXPAND_FILL);
@@ -755,7 +989,6 @@ YeetAIDock::YeetAIDock() {
 	chat_log->set_use_bbcode(true);
 	chat_column->add_child(chat_log);
 
-	// Live streaming label — in-progress assistant tokens; sits below chat history while active
 	stream_label = memnew(RichTextLabel);
 	stream_label->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	stream_label->set_v_size_flags(Control::SIZE_SHRINK_BEGIN);
@@ -765,97 +998,82 @@ YeetAIDock::YeetAIDock() {
 	stream_label->set_visible(false);
 	chat_column->add_child(stream_label);
 
-	// Files-modified tracker label (RichTextLabel for meta links)
+	// Files touched this session
+	_files_strip_panel = memnew(PanelContainer);
+	_files_strip_panel->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	_files_strip_panel->set_visible(false);
+	main_column->add_child(_files_strip_panel);
+
 	_files_modified_label = memnew(RichTextLabel);
 	_files_modified_label->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	_files_modified_label->set_fit_content(true);
 	_files_modified_label->set_scroll_active(false);
 	_files_modified_label->set_use_bbcode(true);
 	_files_modified_label->set_selection_enabled(false);
-	_files_modified_label->set_visible(false);
 	_files_modified_label->connect("meta_clicked", callable_mp(this, &YeetAIDock::_on_files_meta_clicked));
-	main_column->add_child(_files_modified_label);
+	_files_strip_panel->add_child(_files_modified_label);
 
+	// ── Composer ─────────────────────────────────────────────────────────────
 	input_panel = memnew(PanelContainer);
 	input_panel->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	main_column->add_child(input_panel);
 
-	MarginContainer *input_mc = memnew(MarginContainer);
-	input_mc->add_theme_constant_override("margin_left", int(12.0f * EDSCALE));
-	input_mc->add_theme_constant_override("margin_right", int(12.0f * EDSCALE));
-	input_mc->add_theme_constant_override("margin_top", int(10.0f * EDSCALE));
-	input_mc->add_theme_constant_override("margin_bottom", int(12.0f * EDSCALE));
-	input_panel->add_child(input_mc);
-
-	VBoxContainer *input_column = memnew(VBoxContainer);
-	input_column->add_theme_constant_override("separation", int(8.0f * EDSCALE));
-	input_mc->add_child(input_column);
-
-	// Input area with bordered text box
-	MarginContainer *input_inner_mc = memnew(MarginContainer);
-	input_inner_mc->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-	input_inner_mc->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-	input_inner_mc->add_theme_constant_override("margin_left", int(4.0f * EDSCALE));
-	input_inner_mc->add_theme_constant_override("margin_right", int(4.0f * EDSCALE));
-	input_inner_mc->add_theme_constant_override("margin_top", int(4.0f * EDSCALE));
-	input_inner_mc->add_theme_constant_override("margin_bottom", int(4.0f * EDSCALE));
-	input_column->add_child(input_inner_mc);
-
 	VBoxContainer *input_vb = memnew(VBoxContainer);
 	input_vb->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-	input_vb->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-	input_inner_mc->add_child(input_vb);
+	input_vb->add_theme_constant_override("separation", int(6.0f * EDSCALE));
+	input_panel->add_child(input_vb);
 
 	prompt_input = memnew(TextEdit);
-	prompt_input->set_custom_minimum_size(Size2(0, 96) * EDSCALE);
-	prompt_input->set_placeholder(TTR("Ask Crosshair AI..."));
+	prompt_input->set_custom_minimum_size(Size2(0, 56) * EDSCALE);
+	prompt_input->set_placeholder(TTR("Ask the agent to build, edit, or inspect…"));
+	prompt_input->set_fit_content_height_enabled(true);
 	prompt_input->connect("gui_input", callable_mp(this, &YeetAIDock::_on_prompt_gui_input));
+	prompt_input->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	prompt_input->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 	input_vb->add_child(prompt_input);
 
-	// Button row with prominent send button
-	HBoxContainer *button_row = memnew(HBoxContainer);
-	button_row->add_theme_constant_override("separation", int(6.0f * EDSCALE));
-	button_row->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-	input_vb->add_child(button_row);
+	_composer_bar = memnew(HBoxContainer);
+	_composer_bar->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	_composer_bar->add_theme_constant_override("separation", int(4.0f * EDSCALE));
+	input_vb->add_child(_composer_bar);
+
+	_composer_hint_label = memnew(Label);
+	_composer_hint_label->set_text(TTR("Ctrl+Enter to send"));
+	_composer_hint_label->set_vertical_alignment(VERTICAL_ALIGNMENT_CENTER);
+	_composer_hint_label->set_mouse_filter(Control::MOUSE_FILTER_IGNORE);
+	_composer_bar->add_child(_composer_hint_label);
 
 	_token_count_label = memnew(Label);
-	_token_count_label->set_h_size_flags(Control::SIZE_SHRINK_END);
 	_token_count_label->set_vertical_alignment(VERTICAL_ALIGNMENT_CENTER);
+	_token_count_label->set_clip_text(true);
 	_token_count_label->set_visible(false);
-	button_row->add_child(_token_count_label);
+	_composer_bar->add_child(_token_count_label);
 
-	// Send button with icon
-	send_button = memnew(Button);
-	send_button->set_text(TTR("Send"));
-	send_button->set_h_size_flags(Control::SIZE_SHRINK_END);
-	send_button->set_theme_type_variation("FlatButton");
-	send_button->set_tooltip_text(TTR("Send prompt (Ctrl+Enter)"));
-	send_button->connect(SceneStringName(pressed), callable_mp(this, &YeetAIDock::_send_prompt));
-	button_row->add_child(send_button);
-
-	// Stop button — visible only while the AI is generating
-	stop_button = memnew(Button);
-	stop_button->set_text(TTR("Stop"));
-	stop_button->set_h_size_flags(Control::SIZE_SHRINK_END);
-	stop_button->set_theme_type_variation("FlatButton");
-	stop_button->set_tooltip_text(TTR("Stop generation (Escape)"));
-	stop_button->set_visible(false);
-	stop_button->connect(SceneStringName(pressed), callable_mp(this, &YeetAIDock::_on_stop_pressed));
-	button_row->add_child(stop_button);
-
-	// Spacer to push clear button to the right
-	Node *btn_spacer = memnew(Node);
-	btn_spacer->set_name("BtnSpacer");
-	button_row->add_child(btn_spacer);
+	Control *composer_spacer = memnew(Control);
+	composer_spacer->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	composer_spacer->set_mouse_filter(Control::MOUSE_FILTER_IGNORE);
+	_composer_bar->add_child(composer_spacer);
 
 	clear_button = memnew(Button);
 	clear_button->set_theme_type_variation("FlatButton");
-	clear_button->set_text(TTR("Clear"));
+	clear_button->set_flat(true);
 	clear_button->set_tooltip_text(TTR("Clear conversation (Ctrl+L)"));
-	clear_button->set_h_size_flags(Control::SIZE_SHRINK_END);
+	clear_button->set_custom_minimum_size(Size2(28, 28) * EDSCALE);
 	clear_button->connect(SceneStringName(pressed), callable_mp(this, &YeetAIDock::_clear_chat));
-	button_row->add_child(clear_button);
+	_composer_bar->add_child(clear_button);
+
+	send_button = memnew(Button);
+	send_button->set_tooltip_text(TTR("Send (Ctrl+Enter)"));
+	send_button->set_custom_minimum_size(Size2(34, 28) * EDSCALE);
+	send_button->connect(SceneStringName(pressed), callable_mp(this, &YeetAIDock::_send_prompt));
+	_composer_bar->add_child(send_button);
+
+	stop_button = memnew(Button);
+	stop_button->set_tooltip_text(TTR("Stop (Escape)"));
+	stop_button->set_custom_minimum_size(Size2(34, 28) * EDSCALE);
+	stop_button->set_visible(false);
+	stop_button->connect(SceneStringName(pressed), callable_mp(this, &YeetAIDock::_on_stop_pressed));
+	_composer_bar->add_child(stop_button);
 
 	_model_tags_request = memnew(HTTPRequest);
 	_model_tags_request->set_use_threads(true);
@@ -868,7 +1086,6 @@ YeetAIDock::YeetAIDock() {
 	_create_new_chat();
 	_update_chat_selector();
 
-	// Initialize new architecture features
 	_init_conversation_window();
 	_build_default_prompt_sections();
 	_reset_metrics();
@@ -1130,9 +1347,15 @@ void YeetAIDock::_ensure_context_summary() {
 	if (summarize_until <= _context_summary_message_count) {
 		return;
 	}
+	_fold_messages_into_summary(_context_summary_message_count, summarize_until);
+}
 
+void YeetAIDock::_fold_messages_into_summary(int p_from, int p_until) {
+	if (p_until <= p_from) {
+		return;
+	}
 	String addition;
-	for (int i = _context_summary_message_count; i < summarize_until; i++) {
+	for (int i = p_from; i < p_until && i < conversation_messages.size(); i++) {
 		if (conversation_messages[i].get_type() != Variant::DICTIONARY) {
 			continue;
 		}
@@ -1144,7 +1367,9 @@ void YeetAIDock::_ensure_context_summary() {
 		addition += line + "\n";
 	}
 
-	_context_summary_message_count = summarize_until;
+	if (p_until > _context_summary_message_count) {
+		_context_summary_message_count = p_until;
+	}
 	if (addition.is_empty()) {
 		return;
 	}
@@ -1165,6 +1390,29 @@ String YeetAIDock::_build_context_summary_prompt() const {
 			"Long-running conversation memory follows. It summarizes older user messages, assistant decisions, tool calls, tool results, errors, and files touched that may be omitted from the request window.\n"
 			"Use it as continuity context, but prefer current live editor/tool state when there is a conflict.\n"
 			+ _context_summary;
+}
+
+String YeetAIDock::_build_plan_prompt() const {
+	if (_current_plan.is_empty()) {
+		return String();
+	}
+	String out = "Your current task plan (maintained via update_plan). Keep it accurate as you work:\n";
+	for (int i = 0; i < _current_plan.size(); i++) {
+		if (_current_plan[i].get_type() != Variant::DICTIONARY) {
+			continue;
+		}
+		const Dictionary d = _current_plan[i];
+		const String status = String(d.get("status", "pending"));
+		const String step = String(d.get("step", ""));
+		String mark = "[ ]";
+		if (status == "in_progress") {
+			mark = "[~]";
+		} else if (status == "done") {
+			mark = "[x]";
+		}
+		out += vformat("%s %s\n", mark, step);
+	}
+	return out;
 }
 
 int YeetAIDock::_adjust_context_start_for_tool_messages(int p_start) const {
@@ -1220,6 +1468,21 @@ void YeetAIDock::_record_tool_execution(const String &tool_name, int64_t duratio
 	if (!success) {
 		_session_metrics.total_api_errors++;
 	}
+
+	Dictionary trace_entry;
+	trace_entry["event"] = "tool_execution";
+	trace_entry["run_id"] = _get_ai_run_id();
+	trace_entry["tool"] = tool_name;
+	trace_entry["ok"] = success;
+	trace_entry["duration_ms"] = duration_ms;
+	trace_entry["was_retry"] = was_retry;
+	trace_entry["was_cached"] = was_cached;
+	trace_entry["time_unix"] = Time::get_singleton()->get_unix_time_from_system();
+	trace_entry["calls"] = metrics.calls;
+	trace_entry["errors"] = metrics.errors;
+	trace_entry["retries"] = metrics.retries;
+	trace_entry["cache_hits"] = metrics.cache_hits;
+	_append_ai_run_trace(trace_entry);
 }
 
 Dictionary YeetAIDock::_export_metrics_summary() const {
@@ -1778,24 +2041,10 @@ void YeetAIDock::_notification(int p_what) {
 	if (p_what == NOTIFICATION_THEME_CHANGED) {
 		if (!intro_message_added) {
 			intro_message_added = true;
-			_append_message("assistant", TTR("Crosshair AI is ready. I can inspect the project, scenes, selected nodes, and perform scene and script edits."));
+			_append_message("assistant", TTR("Ready. Describe what to build or fix — I can inspect scenes, edit scripts, and change the project directly."));
 		}
-		if (_header_icon_rect) {
-			_header_icon_rect->set_texture(get_editor_theme_icon(SNAME("Code")));
-		}
-		send_button->set_button_icon(get_editor_theme_icon(SNAME("Play")));
-		stop_button->set_button_icon(get_editor_theme_icon(SNAME("Stop")));
-		clear_button->set_button_icon(get_editor_theme_icon(SNAME("Clear")));
-		if (_new_chat_button) {
-			_new_chat_button->set_button_icon(get_editor_theme_icon(SNAME("Add")));
-		}
-		if (_delete_chat_button) {
-			_delete_chat_button->set_button_icon(get_editor_theme_icon(SNAME("Remove")));
-		}
-		if (_model_selector_button) {
-			_model_selector_button->set_button_icon(get_editor_theme_icon(SNAME("GuiOptionArrow")));
-			_update_model_button_label();
-		}
+		_apply_dock_icons();
+		_populate_provider_selector();
 	}
 	if (p_what == NOTIFICATION_PROCESS) {
 		_drain_stream_queue();
@@ -1862,28 +2111,21 @@ void YeetAIDock::_update_stream_label() {
 	stream_label->clear();
 
 	// Role header
-	stream_label->push_color(success);
-	stream_label->push_bold();
-	stream_label->add_text(TTR("Assistant"));
-	stream_label->pop();
-	stream_label->pop();
-	stream_label->add_text("  ");
 	{
-		Ref<Texture2D> dot_icon = get_editor_theme_icon("GuiProgressBar");
-		if (dot_icon.is_valid()) {
-			stream_label->add_image(dot_icon, int(8 * EDSCALE), int(8 * EDSCALE));
-		} else {
-			stream_label->push_color(accent);
-			stream_label->add_text("-");
-			stream_label->pop();
+		Ref<Texture2D> agent_icon = _editor_icon(SNAME("Script"), SNAME("Crosshair"));
+		if (agent_icon.is_valid()) {
+			stream_label->add_image(agent_icon, int(14 * EDSCALE), int(14 * EDSCALE));
+			stream_label->add_text(" ");
 		}
 	}
+	stream_label->push_color(success);
+	stream_label->push_bold();
+	stream_label->add_text(TTR("Agent"));
+	stream_label->pop();
+	stream_label->pop();
 	stream_label->append_text("\n");
 
-	stream_label->push_indent(1);
-
 	if (_stream_accumulated.is_empty()) {
-		// Show animated thinking dots
 		const int dot_count = 1 + (int(_anim_time * 2.0f) % 3);
 		stream_label->push_color(font_dim);
 		stream_label->push_italics();
@@ -1891,40 +2133,17 @@ void YeetAIDock::_update_stream_label() {
 		for (int i = 0; i < dot_count; i++) {
 			stream_label->add_text(".");
 		}
-		// Add subtle pulsing cursor
-		const float cursor_alpha = 0.3f + 0.7f * (0.5f + 0.5f * Math::sin(_anim_time * 5.0f));
 		stream_label->pop();
-		stream_label->pop();
-		stream_label->push_color(Color(accent.r, accent.g, accent.b, cursor_alpha));
-		{
-			Ref<Texture2D> cursor_icon = get_editor_theme_icon("Progress1");
-			if (cursor_icon.is_valid()) {
-				stream_label->add_image(cursor_icon, int(12 * EDSCALE), int(12 * EDSCALE));
-			} else {
-				stream_label->add_text("...");
-			}
-		}
 		stream_label->pop();
 	} else {
-		// Streaming content
 		stream_label->push_color(font_color);
 		stream_label->append_text(_escape_bbcode(_stream_accumulated));
-		// Blinking block cursor
-		const float cursor_alpha = 0.4f + 0.6f * (0.5f + 0.5f * Math::sin(_anim_time * 6.0f));
+		const float cursor_alpha = 0.35f + 0.65f * (0.5f + 0.5f * Math::sin(_anim_time * 6.0f));
 		stream_label->push_color(Color(accent.r, accent.g, accent.b, cursor_alpha));
-		{
-			Ref<Texture2D> block_cursor_icon = get_editor_theme_icon("Play");
-			if (block_cursor_icon.is_valid()) {
-				stream_label->add_image(block_cursor_icon, int(10 * EDSCALE), int(14 * EDSCALE));
-			} else {
-				stream_label->add_text("|");
-			}
-		}
+		stream_label->add_text("▍");
 		stream_label->pop();
 		stream_label->pop();
 	}
-
-	stream_label->pop(); // indent
 
 	_scroll_to_bottom();
 }
@@ -1938,6 +2157,17 @@ void YeetAIDock::_scroll_to_bottom() {
 }
 
 void YeetAIDock::_on_stop_pressed() {
+	_codex_should_stop = true;
+	_claude_should_stop = true;
+	_grok_should_stop = true;
+	// Abandon any tool batch waiting on the approval dialog.
+	if (_pending_approval.active) {
+		_pending_approval.active = false;
+		_pending_approval.tool_calls = Array();
+		if (_approval_dialog) {
+			_approval_dialog->hide();
+		}
+	}
 	_cancel_streaming();
 	_set_waiting(false, TTR("Stopped"));
 	stream_label->set_visible(false);
@@ -1960,9 +2190,9 @@ void YeetAIDock::_append_status_row(const String &p_text) {
 	if (base_fs > 0) {
 		chat_log->push_font_size(MAX(10, int(base_fs * 0.82f)));
 	}
-	Ref<Texture2D> status_icon = get_editor_theme_icon("Reload");
+	Ref<Texture2D> status_icon = _editor_icon(SNAME("Reload"), SNAME("History"));
 	if (status_icon.is_valid()) {
-		chat_log->add_image(status_icon, int(14 * EDSCALE), int(14 * EDSCALE));
+		chat_log->add_image(status_icon, int(13 * EDSCALE), int(13 * EDSCALE));
 	}
 	chat_log->add_text(" ");
 	chat_log->push_color(font_dim);
@@ -1978,8 +2208,9 @@ void YeetAIDock::_append_status_row(const String &p_text) {
 }
 
 String YeetAIDock::_icon_for_tool(const String &p_tool_name) const {
+	// Only names that exist under editor/icons — never invent icon IDs.
 	const String s = p_tool_name.to_lower();
-	if (s.contains("write") || s.contains("update_gdscript") || s.contains("create_gdscript")) {
+	if (s.contains("write") || s.contains("update_gdscript") || s.contains("create_gdscript") || s.contains("edit")) {
 		return "Edit";
 	}
 	if (s.contains("create") || s.contains("add_node") || s.contains("instantiate") || s.contains("add_primitive") || s.contains("add_collision")) {
@@ -1989,12 +2220,12 @@ String YeetAIDock::_icon_for_tool(const String &p_tool_name) const {
 		return "Remove";
 	}
 	if (s.contains("move") || s.contains("rename") || s.contains("reparent")) {
-		return "MoveUp";
+		return "ToolMove";
 	}
 	if (s.contains("play") || s.contains("run")) {
 		return "Play";
 	}
-	if (s.contains("stop_playing")) {
+	if (s.contains("stop")) {
 		return "Stop";
 	}
 	if (s.contains("capture") || s.contains("screenshot")) {
@@ -2003,13 +2234,35 @@ String YeetAIDock::_icon_for_tool(const String &p_tool_name) const {
 	if (s.contains("save")) {
 		return "Save";
 	}
-	if (s.contains("attach") || s.contains("connect") || s.contains("assign")) {
-		return "Link";
+	if (s.contains("attach") || s.contains("connect") || s.contains("assign") || s.contains("signal")) {
+		return "Slot";
 	}
-	if (s.contains("read") || s.contains("get") || s.contains("list") || s.contains("find") || s.contains("grep")) {
+	if (s.contains("read") || s.contains("get") || s.contains("list") || s.contains("find") || s.contains("grep") || s.contains("search")) {
 		return "Search";
 	}
-	return "Tool";
+	if (s.contains("script") || s.contains("gdscript")) {
+		return "Script";
+	}
+	if (s.contains("scene") || s.contains("node")) {
+		return "Node";
+	}
+	if (s.contains("file") || s.contains("folder") || s.contains("path")) {
+		return "File";
+	}
+	return "Tools";
+}
+
+String YeetAIDock::_icon_for_role(const String &p_role) const {
+	if (p_role == "user") {
+		return "MemberMethod";
+	}
+	if (p_role == "assistant") {
+		return "Script";
+	}
+	if (p_role == "tool") {
+		return "Tools";
+	}
+	return "Info";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2038,7 +2291,8 @@ void YeetAIDock::_send_prompt() {
 	conversation_messages.append(make_message("user", prompt));
 	_append_message("user", prompt);
 	tool_round_trips = 0;
-	turn_context_prompt = _build_runtime_context_prompt() + _build_task_hints_for_user_prompt(prompt);
+	_reset_turn_tool_tracking();
+	turn_context_prompt = _build_runtime_context_prompt() + _build_rag_context_prompt(prompt) + _build_task_hints_for_user_prompt(prompt);
 	_update_chat_title();
 	_update_token_counter();
 	_request_model_response();
@@ -2083,6 +2337,9 @@ void YeetAIDock::_clear_chat() {
 	_stream_accumulated = "";
 	_chat_records.clear();
 	_session_modified_files.clear();
+	_current_plan.clear();
+	_pending_approval.active = false;
+	_pending_approval.tool_calls = Array();
 	_update_token_counter();
 	_update_files_modified_label();
 
@@ -2118,45 +2375,33 @@ void YeetAIDock::_append_message(const String &p_role, const String &p_text) {
 	const Color warning = tree_ready ? get_theme_color(SNAME("warning_color"), EditorStringName(Editor)) : Color(0.8f, 0.6f, 0.2f);
 
 	String label;
-	String role_icon_name;
 	if (p_role == "user") {
 		label = TTR("You");
-		role_icon_name = "User";
 	} else if (p_role == "assistant") {
-		label = TTR("Assistant");
-		role_icon_name = "AI";
+		label = TTR("Agent");
 	} else if (p_role == "tool") {
 		label = TTR("Tool");
-		role_icon_name = "Tool";
 	} else {
 		label = p_role.capitalize();
-		role_icon_name = "GuiOptionArrow";
 	}
 
 	const Color label_color = (p_role == "user") ? accent : ((p_role == "assistant") ? success : ((p_role == "tool") ? warning : dim));
-	const Color bar_color = (p_role == "user") ? Color(accent.r, accent.g, accent.b, 0.6f) : Color(success.r, success.g, success.b, 0.4f);
 	const int base_fs = tree_ready ? get_theme_font_size(SNAME("main_size"), EditorStringName(EditorFonts)) : 14;
-	const int label_fs = MAX(10, int(base_fs * 0.88f));
-	const int caption_fs = MAX(10, int(base_fs * 0.86f));
+	const int label_fs = MAX(10, int(base_fs * 0.9f));
 
-	// Blank line separator between messages
+	// Message block with breathing room between turns.
 	chat_log->append_text("\n");
 
-	// Left colored accent bar
-	chat_log->push_color(bar_color);
-	chat_log->push_font_size(caption_fs);
-	chat_log->add_text("│ ");
-	chat_log->pop();
-	chat_log->pop();
-
-	// Role icon + label
+	// Role header (icon + name)
 	if (tree_ready) {
-		Ref<Texture2D> role_icon_tex = get_editor_theme_icon(role_icon_name);
+		const String role_icon_name = _icon_for_role(p_role);
+		const String fallback = (p_role == "assistant") ? "Crosshair" : ((p_role == "user") ? "Node" : "Tools");
+		Ref<Texture2D> role_icon_tex = _editor_icon(StringName(role_icon_name), StringName(fallback));
 		if (role_icon_tex.is_valid()) {
-			chat_log->add_image(role_icon_tex, int(14 * EDSCALE), int(14 * EDSCALE));
+			chat_log->add_image(role_icon_tex, int(13 * EDSCALE), int(13 * EDSCALE));
+			chat_log->add_text(" ");
 		}
 	}
-	chat_log->add_text(" ");
 	chat_log->push_color(label_color);
 	chat_log->push_font_size(label_fs);
 	chat_log->push_bold();
@@ -2164,27 +2409,23 @@ void YeetAIDock::_append_message(const String &p_role, const String &p_text) {
 	chat_log->pop();
 	chat_log->pop();
 	chat_log->pop();
-
-	// Separator line using underscore characters
-	chat_log->add_text("  ");
-	chat_log->push_color(dim);
-	chat_log->add_text("───");
-	chat_log->pop();
 	chat_log->append_text("\n");
 
-	// Message body with indent
 	if (safe_text.is_empty()) {
-		chat_log->pop(); // font color
-		chat_log->pop(); // indent
-		chat_log->append_text("\n");
 		_scroll_to_bottom();
 		return;
 	}
+	// Slight indent for body under the role header.
 	chat_log->push_indent(1);
-	chat_log->push_color(font_base);
+	// User messages stay accent-tinted; agent body is normal font color.
+	if (p_role == "user") {
+		chat_log->push_color(Color(font_base.r, font_base.g, font_base.b, 0.95f));
+	} else {
+		chat_log->push_color(font_base);
+	}
 	chat_log->append_text(_escape_bbcode(safe_text));
 	chat_log->pop();
-	chat_log->pop();
+	chat_log->pop(); // indent
 
 	chat_log->append_text("\n");
 	_scroll_to_bottom();
@@ -2208,30 +2449,28 @@ void YeetAIDock::_append_tool_running(const String &p_tool_name, const Dictionar
 	const String icon = _icon_for_tool(p_tool_name);
 	const Vector<String> paths = _collect_relevant_paths(p_args, Dictionary());
 
-	// Left colored bar (accent, indicating in-progress)
-	chat_log->push_color(Color(accent.r, accent.g, accent.b, 0.5f));
-	chat_log->push_font_size(caption_fs);
-	chat_log->add_text("| ");
-	chat_log->pop();
-	chat_log->pop();
-
-	// Spinner icon
-	Ref<Texture2D> spinner_icon = get_editor_theme_icon("Progress1");
+	// Tool running row (muted inline status).
+	chat_log->push_indent(1);
+	Ref<Texture2D> spinner_icon = _editor_icon(SNAME("Progress1"), SNAME("Reload"));
 	if (spinner_icon.is_valid()) {
-		chat_log->add_image(spinner_icon, int(14 * EDSCALE), int(14 * EDSCALE));
+		chat_log->add_image(spinner_icon, int(12 * EDSCALE), int(12 * EDSCALE));
+		chat_log->add_text(" ");
+	} else {
+		Ref<Texture2D> tool_icon = _editor_icon(StringName(icon), SNAME("Tools"));
+		if (tool_icon.is_valid()) {
+			chat_log->add_image(tool_icon, int(12 * EDSCALE), int(12 * EDSCALE));
+			chat_log->add_text(" ");
+		}
 	}
-	chat_log->add_text(" ");
 
-	// Tool name
 	chat_log->push_font_size(caption_fs);
-	chat_log->push_color(font_base);
+	chat_log->push_color(Color(font_base.r, font_base.g, font_base.b, 0.85f));
 	chat_log->push_bold();
 	chat_log->add_text(title);
 	chat_log->pop();
 	chat_log->pop();
 	chat_log->pop();
 
-	// Path
 	if (!paths.is_empty()) {
 		chat_log->add_text("  ");
 		chat_log->push_color(accent);
@@ -2239,24 +2478,24 @@ void YeetAIDock::_append_tool_running(const String &p_tool_name, const Dictionar
 		chat_log->push_font_size(small_fs);
 		const String p = paths[0];
 		const int last_slash = p.rfind("/");
-		const String short_path = (last_slash > 4) ? ("..." + p.substr(last_slash)) : p;
+		const String short_path = (last_slash > 4) ? ("…" + p.substr(last_slash)) : p;
 		chat_log->add_text(short_path);
 		chat_log->pop();
 		chat_log->pop();
 		chat_log->pop();
 	}
 
-	// Running status pill
 	chat_log->add_text("  ");
-	chat_log->push_color(accent);
+	chat_log->push_color(Color(accent.r, accent.g, accent.b, 0.8f));
 	chat_log->push_font_size(caption_fs);
 	chat_log->push_italics();
-	chat_log->add_text("Running...");
+	chat_log->add_text(TTR("Running…"));
 	chat_log->pop();
 	chat_log->pop();
 	chat_log->pop();
+	chat_log->pop(); // indent
 
-	chat_log->append_text("\n\n");
+	chat_log->append_text("\n");
 	_scroll_to_bottom();
 }
 
@@ -2295,31 +2534,36 @@ void YeetAIDock::_append_tool_result(const String &p_tool_name, const Dictionary
 	const String icon = _icon_for_tool(p_tool_name);
 	const Vector<String> paths = _collect_relevant_paths(p_args, p_result.payload);
 
-	// ── Card: left bar + icon + title + path + status ──
-	// Left colored bar (2 chars wide, using block element)
-	chat_log->push_color(p_result.ok ? Color(success.r, success.g, success.b, 0.5f) : Color(error.r, error.g, error.b, 0.5f));
-	chat_log->push_font_size(caption_fs);
-	chat_log->add_text("| ");
-	chat_log->pop();
-	chat_log->pop();
-
-	// Icon (editor theme icon)
-	Ref<Texture2D> icon_tex = get_editor_theme_icon(icon);
-	if (icon_tex.is_valid()) {
-		chat_log->add_image(icon_tex, int(16 * EDSCALE), int(16 * EDSCALE));
+	// Compact tool result row (indented under agent turn).
+	chat_log->push_indent(1);
+	if (p_result.ok) {
+		Ref<Texture2D> ok_icon = _editor_icon(SNAME("StatusSuccess"), SNAME("ImportCheck"));
+		if (ok_icon.is_valid()) {
+			chat_log->add_image(ok_icon, int(12 * EDSCALE), int(12 * EDSCALE));
+			chat_log->add_text(" ");
+		}
+	} else {
+		Ref<Texture2D> fail_icon = _editor_icon(SNAME("StatusError"), SNAME("Error"));
+		if (fail_icon.is_valid()) {
+			chat_log->add_image(fail_icon, int(12 * EDSCALE), int(12 * EDSCALE));
+			chat_log->add_text(" ");
+		}
 	}
-	chat_log->add_text(" ");
 
-	// Tool action label
+	Ref<Texture2D> icon_tex = _editor_icon(StringName(icon), SNAME("Tools"));
+	if (icon_tex.is_valid()) {
+		chat_log->add_image(icon_tex, int(12 * EDSCALE), int(12 * EDSCALE));
+		chat_log->add_text(" ");
+	}
+
 	chat_log->push_font_size(caption_fs);
-	chat_log->push_color(font_base);
+	chat_log->push_color(Color(font_base.r, font_base.g, font_base.b, 0.9f));
 	chat_log->push_bold();
 	chat_log->add_text(title);
 	chat_log->pop();
 	chat_log->pop();
 	chat_log->pop();
 
-	// Primary path inline (accent colored, monospace)
 	if (!paths.is_empty()) {
 		chat_log->add_text("  ");
 		chat_log->push_color(accent);
@@ -2341,34 +2585,21 @@ void YeetAIDock::_append_tool_result(const String &p_tool_name, const Dictionary
 		}
 	}
 
-	// Status pill: ✓ Done or ✗ Failed
 	chat_log->add_text("  ");
 	if (p_result.ok) {
-		Ref<Texture2D> ok_icon = get_editor_theme_icon("StatusSuccess");
-		if (ok_icon.is_valid()) {
-			chat_log->add_image(ok_icon, int(14 * EDSCALE), int(14 * EDSCALE));
-		} else {
-			chat_log->push_color(Color(0.2f, 0.7f, 0.3f));
-			chat_log->push_font_size(caption_fs);
-			chat_log->push_bold();
-			chat_log->add_text("Done");
-			chat_log->pop();
-			chat_log->pop();
-			chat_log->pop();
-		}
+		chat_log->push_color(success);
+		chat_log->push_font_size(caption_fs);
+		chat_log->add_text(TTR("Done"));
+		chat_log->pop();
+		chat_log->pop();
 	} else {
-		Ref<Texture2D> fail_icon = get_editor_theme_icon("StatusError");
-		if (fail_icon.is_valid()) {
-			chat_log->add_image(fail_icon, int(14 * EDSCALE), int(14 * EDSCALE));
-		} else {
-			chat_log->push_color(Color(0.9f, 0.3f, 0.3f));
-			chat_log->push_font_size(caption_fs);
-			chat_log->push_bold();
-			chat_log->add_text("Failed");
-			chat_log->pop();
-			chat_log->pop();
-			chat_log->pop();
-		}
+		chat_log->push_color(error);
+		chat_log->push_font_size(caption_fs);
+		chat_log->push_bold();
+		chat_log->add_text(TTR("Failed"));
+		chat_log->pop();
+		chat_log->pop();
+		chat_log->pop();
 	}
 
 	// Timing display
@@ -2384,6 +2615,7 @@ void YeetAIDock::_append_tool_result(const String &p_tool_name, const Dictionary
 		chat_log->pop();
 		chat_log->pop();
 	}
+	chat_log->pop(); // indent
 
 	chat_log->append_text("\n");
 
@@ -2565,8 +2797,23 @@ void YeetAIDock::_set_waiting(bool p_waiting, const String &p_status) {
 }
 
 void YeetAIDock::_request_model_response() {
-	// 0 = Berry (OpenAI-compatible), 1 = Gemini, 2 = OpenRouter, 3 = Yeet Models (in-house Ollama-compatible), 4 = Azure OpenAI.
+	// 0 = Berry, 1 = Gemini, 2 = OpenRouter, 3 = Yeet Models, 4 = Azure OpenAI,
+	// 5 = Codex CLI, 6 = Claude Code, 7 = Grok Build CLI.
 	const int provider = _get_editor_setting_int("yeet_ai/chat/provider", 0);
+	if (provider == 5 || provider == 6 || provider == 7) {
+		// Autonomous CLI agents: task FIRST, then project snapshot. Never use the
+		// in-editor JSON tool-call framing (that makes CLI agents stall).
+		const String cli_system_prompt = _build_cli_agent_system_prompt();
+		const String cli_task_prompt = _build_cli_agent_task_prompt() + "\n" + _build_cli_agent_context();
+		if (provider == 5) {
+			_run_codex_turn(cli_task_prompt, cli_system_prompt);
+		} else if (provider == 6) {
+			_run_claude_turn(cli_task_prompt, cli_system_prompt);
+		} else {
+			_run_grok_turn(cli_task_prompt, cli_system_prompt);
+		}
+		return;
+	}
 	static const char *k_gemini_openai_url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 	static const char *k_openrouter_url = "https://openrouter.ai/api/v1/chat/completions";
 	static const char *k_yeet_chat_default = "https://gpt.yeetlabs.fun/v1/chat/completions";
@@ -2586,18 +2833,35 @@ void YeetAIDock::_request_model_response() {
 		}
 		api_key = _get_editor_setting_string("yeet_ai/chat/yeet_api_key", "");
 	} else if (provider == 4) {
-		// Azure AI Services: endpoint is {base}/models/chat/completions?api-version={version}
-		// Auth uses Authorization: Bearer (not api-key).
-		String azure_endpoint = _get_editor_setting_string("yeet_ai/chat/azure_endpoint", "https://crosshair-resource.services.ai.azure.com");
-		String azure_api_version = _get_editor_setting_string("yeet_ai/chat/azure_api_version", "2024-05-01-preview");
-		if (azure_endpoint.strip_edges().is_empty()) {
+		// Azure AI Foundry / OpenAI — multi-profile (active profile from EditorSettings).
+		// - mode 0 (legacy): {base}/models/chat/completions?api-version=…
+		// - mode 1 (Responses v1): {base}/openai/v1/responses  (gpt-5.x etc.)
+		const Dictionary azure_profile = yeet_ai_azure_active_profile();
+		String azure_endpoint = String(azure_profile.get("endpoint", _get_editor_setting_string("yeet_ai/chat/azure_endpoint", "https://crosshair-resource.services.ai.azure.com"))).strip_edges();
+		const int azure_api_mode = int(azure_profile.get("api_mode", _get_editor_setting_int("yeet_ai/chat/azure_api_mode", 1)));
+		if (azure_endpoint.is_empty()) {
 			azure_endpoint = "https://crosshair-resource.services.ai.azure.com";
 		}
-		if (!azure_endpoint.ends_with("/")) {
-			azure_endpoint += "/";
+		if (azure_api_mode == 1) {
+			// Accept full Responses URL or resource base.
+			if (azure_endpoint.contains("/responses")) {
+				endpoint = azure_endpoint;
+			} else if (azure_endpoint.contains("/openai/v1")) {
+				endpoint = azure_endpoint.trim_suffix("/");
+				if (!endpoint.ends_with("/responses")) {
+					endpoint += "/responses";
+				}
+			} else {
+				endpoint = azure_endpoint.trim_suffix("/") + "/openai/v1/responses";
+			}
+		} else {
+			String azure_api_version = String(azure_profile.get("api_version", _get_editor_setting_string("yeet_ai/chat/azure_api_version", "2024-05-01-preview")));
+			if (!azure_endpoint.ends_with("/")) {
+				azure_endpoint += "/";
+			}
+			endpoint = azure_endpoint + "models/chat/completions?api-version=" + azure_api_version;
 		}
-		endpoint = azure_endpoint + "models/chat/completions?api-version=" + azure_api_version;
-		api_key = _get_editor_setting_string("yeet_ai/chat/azure_api_key", "");
+		api_key = String(azure_profile.get("api_key", _get_editor_setting_string("yeet_ai/chat/azure_api_key", "")));
 	} else {
 		endpoint = _get_editor_setting_string("yeet_ai/chat/completions_url", "https://llm.adityaberry.me/v1/chat/completions");
 		api_key = _get_editor_setting_string("yeet_ai/chat/api_key", "");
@@ -2614,7 +2878,22 @@ void YeetAIDock::_request_model_response() {
 	} else if (provider == 3 && model.strip_edges().is_empty()) {
 		model = "qwen3-coder:latest";
 	} else if (provider == 4 && model.strip_edges().is_empty()) {
-		model = "gpt-4o";
+		const Dictionary ap = yeet_ai_azure_active_profile();
+		model = String(ap.get("model", ap.get("deployment", "gpt-5.5")));
+		if (model.strip_edges().is_empty()) {
+			model = "gpt-5.5";
+		}
+	}
+	// Prefer active Azure profile deployment/model when set.
+	if (provider == 4) {
+		const Dictionary ap = yeet_ai_azure_active_profile();
+		const String deployment = String(ap.get("deployment", "")).strip_edges();
+		const String profile_model = String(ap.get("model", "")).strip_edges();
+		if (!profile_model.is_empty()) {
+			model = profile_model;
+		} else if (!deployment.is_empty()) {
+			model = deployment;
+		}
 	}
 
 	if (provider == 0 && endpoint.strip_edges().is_empty()) {
@@ -2653,10 +2932,18 @@ void YeetAIDock::_request_model_response() {
 	// Provider 1 (Gemini), 2 (OpenRouter), 3 (Yeet), 4 (Azure) usually support tools.
 	_native_tools_enabled = _get_editor_setting_bool("yeet_ai/chat/native_tools_enabled", provider != 0);
 
+	const int azure_api_mode = (provider == 4) ? int(yeet_ai_azure_active_profile().get("api_mode", _get_editor_setting_int("yeet_ai/chat/azure_api_mode", 1))) : 0;
+	const bool use_responses_api = (provider == 4 && azure_api_mode == 1);
+
 	Dictionary payload;
 	payload["model"] = model;
 	if (max_tokens > 0) {
-		payload["max_tokens"] = max_tokens;
+		// Responses API uses max_output_tokens; chat.completions uses max_tokens.
+		if (use_responses_api) {
+			payload["max_output_tokens"] = max_tokens;
+		} else {
+			payload["max_tokens"] = max_tokens;
+		}
 	}
 	// temperature < 0 omits the field (use server default). Otherwise prefer ~0.2–0.35 for structured JSON (Qwen, etc.).
 	if (temperature >= 0.0f) {
@@ -2732,20 +3019,38 @@ void YeetAIDock::_request_model_response() {
 				messages.append(conversation_messages[i]);
 			}
 			if (start > 0) {
-				// Insert a marker so the model knows context was trimmed.
+				// Don't just drop the trimmed messages — fold any that the rolling
+				// summary hasn't captured yet into _context_summary so their gist
+				// survives in this and future turns.
+				_fold_messages_into_summary(_context_summary_message_count, start);
 				Dictionary trim_marker;
 				trim_marker["role"] = "system";
-				trim_marker["content"] = vformat("%d earlier conversation messages were omitted from this request window. Use the conversation summary and live editor tools to recover details when needed.", start);
+				trim_marker["content"] = vformat("%d earlier conversation messages were trimmed from this request window; their gist:\n%s\nUse live editor tools to recover any further detail.", start, _truncate_context_summary(_context_summary));
 				messages.insert(MIN(3, messages.size()), trim_marker);
 			}
 		}
 	}
-	payload["messages"] = messages;
+
+	// Surface the live task plan as the freshest context (trailing message). Placed
+	// after the conversation so it does not disturb the cacheable system+tools
+	// prefix even though it changes between round-trips.
+	const String plan_prompt = _build_plan_prompt();
+	if (!plan_prompt.is_empty()) {
+		messages.append(make_message("system", plan_prompt));
+	}
 
 	Vector<String> headers;
 	headers.push_back("Content-Type: application/json");
 	if (!api_key.is_empty()) {
-		headers.push_back("Authorization: Bearer " + api_key);
+		if (use_responses_api) {
+			// Azure Foundry Responses REST examples use the api-key header.
+			headers.push_back("api-key: " + api_key);
+		} else if (provider == 4) {
+			// Legacy Azure chat path historically used Bearer.
+			headers.push_back("Authorization: Bearer " + api_key);
+		} else {
+			headers.push_back("Authorization: Bearer " + api_key);
+		}
 	}
 	if (provider == 2) {
 		// OpenRouter optional attribution (see https://openrouter.ai/docs).
@@ -2754,17 +3059,141 @@ void YeetAIDock::_request_model_response() {
 
 	// Add native tools payload when enabled and schemas are available.
 	_stream_expects_sse = true;
-	if (_native_tools_enabled) {
-		Array tools = _build_tools_payload();
-		if (!tools.is_empty()) {
-			payload["tools"] = tools;
-			payload["tool_choice"] = "auto";
-			payload["parallel_tool_calls"] = true;
+	_stream_protocol = use_responses_api ? 1 : 0;
+
+	if (use_responses_api) {
+		// Convert chat-style messages → Responses `input` (+ optional instructions).
+		String instructions;
+		Array input_items;
+		for (int i = 0; i < messages.size(); i++) {
+			if (messages[i].get_type() != Variant::DICTIONARY) {
+				continue;
+			}
+			const Dictionary msg = messages[i];
+			const String role = String(msg.get("role", ""));
+			const Variant content_v = msg.get("content", Variant());
+			String content_text;
+			if (content_v.get_type() == Variant::STRING) {
+				content_text = String(content_v);
+			} else if (content_v.get_type() == Variant::ARRAY) {
+				// Multimodal: keep only text parts for Responses text path.
+				const Array parts = content_v;
+				for (int p = 0; p < parts.size(); p++) {
+					if (parts[p].get_type() != Variant::DICTIONARY) {
+						continue;
+					}
+					const Dictionary part = parts[p];
+					if (String(part.get("type", "")) == "text" || part.has("text")) {
+						if (!content_text.is_empty()) {
+							content_text += "\n";
+						}
+						content_text += String(part.get("text", ""));
+					}
+				}
+			}
+
+			if (role == "system") {
+				if (!instructions.is_empty()) {
+					instructions += "\n\n";
+				}
+				instructions += content_text;
+				continue;
+			}
+
+			if (role == "tool") {
+				Dictionary out_item;
+				out_item["type"] = "function_call_output";
+				out_item["call_id"] = String(msg.get("tool_call_id", msg.get("id", "")));
+				out_item["output"] = content_text;
+				input_items.append(out_item);
+				continue;
+			}
+
+			if (role == "assistant" && msg.has("tool_calls")) {
+				if (!content_text.is_empty()) {
+					Dictionary text_item;
+					text_item["type"] = "message";
+					text_item["role"] = "assistant";
+					text_item["content"] = content_text;
+					input_items.append(text_item);
+				}
+				const Array tcs = msg.get("tool_calls", Array());
+				for (int t = 0; t < tcs.size(); t++) {
+					if (tcs[t].get_type() != Variant::DICTIONARY) {
+						continue;
+					}
+					const Dictionary tc = tcs[t];
+					const Dictionary fn = tc.get("function", Dictionary());
+					Dictionary call_item;
+					call_item["type"] = "function_call";
+					call_item["call_id"] = String(tc.get("id", "call_" + itos(t)));
+					call_item["name"] = String(fn.get("name", ""));
+					call_item["arguments"] = String(fn.get("arguments", "{}"));
+					input_items.append(call_item);
+				}
+				continue;
+			}
+
+			Dictionary item;
+			item["type"] = "message";
+			item["role"] = role.is_empty() ? String("user") : role;
+			item["content"] = content_text;
+			input_items.append(item);
+		}
+		if (!instructions.is_empty()) {
+			payload["instructions"] = instructions;
+		}
+		payload["input"] = input_items;
+
+		if (_native_tools_enabled) {
+			const Array chat_tools = _build_tools_payload();
+			Array responses_tools;
+			for (int i = 0; i < chat_tools.size(); i++) {
+				if (chat_tools[i].get_type() != Variant::DICTIONARY) {
+					continue;
+				}
+				const Dictionary t = chat_tools[i];
+				if (String(t.get("type", "")) != "function") {
+					continue;
+				}
+				const Dictionary fn = t.get("function", Dictionary());
+				Dictionary rt;
+				rt["type"] = "function";
+				rt["name"] = fn.get("name", "");
+				rt["description"] = fn.get("description", "");
+				rt["parameters"] = fn.get("parameters", Dictionary());
+				responses_tools.append(rt);
+			}
+			if (!responses_tools.is_empty()) {
+				payload["tools"] = responses_tools;
+				payload["tool_choice"] = "auto";
+			}
+		}
+		payload["stream"] = _stream_expects_sse;
+	} else {
+		payload["messages"] = messages;
+
+		if (_native_tools_enabled) {
+			Array tools = _build_tools_payload();
+			if (!tools.is_empty()) {
+				payload["tools"] = tools;
+				payload["tool_choice"] = "auto";
+				payload["parallel_tool_calls"] = true;
+			}
+		}
+
+		// Enable SSE streaming — all OpenAI-compatible providers support this.
+		payload["stream"] = _stream_expects_sse;
+
+		// Ask for token usage on the final stream chunk so we can report real prompt /
+		// completion / cached token counts instead of char estimates. A few strict
+		// servers reject unknown fields, so it is gated by a setting (default on).
+		if (_stream_expects_sse && _get_editor_setting_bool("yeet_ai/chat/request_usage", true)) {
+			Dictionary stream_options;
+			stream_options["include_usage"] = true;
+			payload["stream_options"] = stream_options;
 		}
 	}
-
-	// Enable SSE streaming — all OpenAI-compatible providers support this.
-	payload["stream"] = _stream_expects_sse;
 
 	_stream_endpoint = endpoint;
 	_stream_req_headers = headers;
@@ -2776,6 +3205,108 @@ void YeetAIDock::_request_model_response() {
 
 	_set_waiting(true, TTR("Thinking..."));
 	_start_streaming();
+}
+
+YeetAIDock::ToolExecutionResult YeetAIDock::_run_single_tool(const String &p_tool_name, const Dictionary &p_args) {
+	// Read-only mode: hard-block writes/destructive tools without executing. This
+	// covers BOTH the native and JSON-envelope paths (interactive ask_* approval is
+	// handled upstream in _run_tool_calls for the native path).
+	if (_permission_mode() == 3 && _tool_risk_tier(p_tool_name) != TIER_READ &&
+			!_session_allowed_tools.has(p_tool_name)) {
+		ToolExecutionResult blocked;
+		blocked.ok = false;
+		blocked.payload["ok"] = false;
+		blocked.payload["error"] = "Blocked: permission_mode is read-only, so write/destructive tools are disabled. Ask the user to change yeet_ai/chat/permission_mode if they want changes applied.";
+		blocked.payload["blocked_by_permission"] = true;
+		blocked.display_text = String(blocked.payload["error"]);
+		_append_tool_result(p_tool_name, p_args, blocked);
+		_note_tool_attempt(p_tool_name, p_args, false);
+		return blocked;
+	}
+
+	_set_waiting(true, vformat(TTR("Running: %s"), _humanize_tool_name(p_tool_name)));
+	_append_tool_running(p_tool_name, p_args);
+	ToolExecutionResult result = _execute_tool(p_tool_name, p_args);
+	_append_tool_result(p_tool_name, p_args, result);
+
+	if (result.ok) {
+		const Vector<String> modified = _collect_relevant_paths(p_args, result.payload);
+		for (const String &p : modified) {
+			if (!_session_modified_files.has(p)) {
+				_session_modified_files.insert(p);
+			}
+		}
+		_update_files_modified_label();
+	}
+
+	_note_tool_attempt(p_tool_name, p_args, result.ok && !result.payload.has("error"));
+	return result;
+}
+
+void YeetAIDock::_reset_turn_tool_tracking() {
+	_turn_tool_attempts.clear();
+	_last_stuck_nudge_signature = String();
+	// Recompute the curated tool set for the new turn (scene/keywords may differ).
+	_turn_active_tools_valid = false;
+	_turn_extra_pack_mask = 0;
+}
+
+String YeetAIDock::_tool_call_signature(const String &p_tool_name, const Dictionary &p_args) const {
+	// Stable signature: tool name + a hash of the JSON-stringified arguments.
+	// sort_keys=true so identical calls hash the same regardless of key ordering.
+	const String args_json = JSON::stringify(p_args, "", true, true);
+	return p_tool_name + "|" + itos((int64_t)args_json.hash());
+}
+
+void YeetAIDock::_note_tool_attempt(const String &p_tool_name, const Dictionary &p_args, bool p_ok) {
+	ToolAttemptRecord rec;
+	rec.signature = _tool_call_signature(p_tool_name, p_args);
+	rec.ok = p_ok;
+	_turn_tool_attempts.push_back(rec);
+	// Bound memory: only the tail matters for stuck detection.
+	if (_turn_tool_attempts.size() > 64) {
+		_turn_tool_attempts.remove_at(0);
+	}
+}
+
+int YeetAIDock::_evaluate_stuck_state(String &r_message) const {
+	const int n = _turn_tool_attempts.size();
+	if (n == 0) {
+		return 0;
+	}
+	const ToolAttemptRecord &last = _turn_tool_attempts[n - 1];
+	if (last.ok) {
+		return 0; // progress was made; not stuck
+	}
+
+	// Count consecutive identical failing calls at the tail.
+	int consecutive = 0;
+	for (int i = n - 1; i >= 0; i--) {
+		const ToolAttemptRecord &r = _turn_tool_attempts[i];
+		if (r.signature == last.signature && !r.ok) {
+			consecutive++;
+		} else {
+			break;
+		}
+	}
+	// Count total identical failing calls in this turn (catches alternating loops).
+	int total_same_fail = 0;
+	for (int i = 0; i < n; i++) {
+		const ToolAttemptRecord &r = _turn_tool_attempts[i];
+		if (r.signature == last.signature && !r.ok) {
+			total_same_fail++;
+		}
+	}
+
+	if (consecutive >= 4 || total_same_fail >= 6) {
+		r_message = TTR("The same tool call failed repeatedly with identical arguments. Stopping to avoid an endless loop. Tell the user what is blocking you and what you tried, or wait for new instructions.");
+		return 2; // break
+	}
+	if (consecutive >= 2) {
+		r_message = TTR("Heads up: you have called the same tool with the same arguments and it failed every time. Do NOT repeat that exact call. First inspect the current state (e.g. get_scene_tree / get_node_details / read the file), then change the arguments or pick a different approach. If it truly cannot be done, say so.");
+		return 1; // nudge
+	}
+	return 0;
 }
 
 void YeetAIDock::_handle_native_tool_calls(const Dictionary &p_message) {
@@ -2800,14 +3331,67 @@ void YeetAIDock::_handle_native_tool_calls(const Dictionary &p_message) {
 	assistant_msg["tool_calls"] = tool_calls;
 	conversation_messages.append(assistant_msg);
 
+	// Hand off to the (re-enterable) execution loop, which first checks whether any
+	// tool in the batch requires user approval under the current permission mode.
+	_run_tool_calls(tool_calls, false);
+}
+
+void YeetAIDock::_run_tool_calls(const Array &p_tool_calls, bool p_approval_granted) {
+	// Round-trip cap (the native path previously had no guard — only the envelope
+	// path did). Stops runaway tool loops regardless of provider.
+	const int max_round_trips = _get_editor_setting_int("yeet_ai/chat/max_tool_round_trips", 100);
+	if (tool_round_trips >= max_round_trips) {
+		// The caller already recorded an assistant message carrying these tool_calls;
+		// close every one with a synthetic result so we never leave an
+		// assistant(tool_calls) message without matching tool results (which would
+		// make the NEXT request invalid for the API).
+		for (int i = 0; i < p_tool_calls.size(); i++) {
+			if (p_tool_calls[i].get_type() != Variant::DICTIONARY) {
+				continue;
+			}
+			const Dictionary tc = p_tool_calls[i];
+			String call_id = vformat("call_%d", i);
+			const String parsed = _clean_json_string_field(tc.get("id", Variant()));
+			if (!parsed.is_empty()) {
+				call_id = parsed;
+			}
+			Dictionary payload;
+			payload["ok"] = false;
+			payload["error"] = "Not run: the tool-call loop hit the configured limit (yeet_ai/chat/max_tool_round_trips).";
+			Dictionary msg;
+			msg["role"] = "tool";
+			msg["tool_call_id"] = call_id;
+			msg["content"] = JSON::stringify(payload, "\t", false, true);
+			conversation_messages.append(msg);
+		}
+		_set_waiting(false, TTR("Ready"));
+		_append_message("assistant", TTR("Stopping because the tool-call loop hit the configured limit."));
+		return;
+	}
+
+	// ── Approval gate (ask_* modes) ───────────────────────────────────────────
+	// If any tool needs sign-off and we have not been granted approval yet,
+	// suspend the batch and pop the confirmation dialog; resume on the user's
+	// choice via _on_approval_*.
+	if (!p_approval_granted) {
+		const Vector<int> need = _tool_calls_needing_approval(p_tool_calls);
+		if (!need.is_empty()) {
+			_pending_approval.active = true;
+			_pending_approval.tool_calls = p_tool_calls;
+			_set_waiting(true, TTR("Waiting for approval"));
+			_show_approval_dialog(p_tool_calls, need);
+			return;
+		}
+	}
+
 	// Build tool results to send back.
 	Array tool_results;
 
-	for (int i = 0; i < tool_calls.size(); i++) {
-		if (tool_calls[i].get_type() != Variant::DICTIONARY) {
+	for (int i = 0; i < p_tool_calls.size(); i++) {
+		if (p_tool_calls[i].get_type() != Variant::DICTIONARY) {
 			continue;
 		}
-		const Dictionary tc = tool_calls[i];
+		const Dictionary tc = p_tool_calls[i];
 		String call_id = vformat("call_%d", i);
 		const Variant call_id_variant = tc.get("id", Variant());
 		const String parsed_call_id = _clean_json_string_field(call_id_variant);
@@ -2850,20 +3434,7 @@ void YeetAIDock::_handle_native_tool_calls(const Dictionary &p_message) {
 			}
 		}
 
-		_set_waiting(true, vformat(TTR("Running: %s"), _humanize_tool_name(tool_name)));
-		_append_tool_running(tool_name, args);
-		ToolExecutionResult result = _execute_tool(tool_name, args);
-		_append_tool_result(tool_name, args, result);
-
-		if (result.ok) {
-			const Vector<String> modified = _collect_relevant_paths(args, result.payload);
-			for (const String &p : modified) {
-				if (!_session_modified_files.has(p)) {
-					_session_modified_files.insert(p);
-				}
-			}
-			_update_files_modified_label();
-		}
+		ToolExecutionResult result = _run_single_tool(tool_name, args);
 
 		// Build OpenAI-format tool result message.
 		Dictionary tool_msg;
@@ -2882,12 +3453,219 @@ void YeetAIDock::_handle_native_tool_calls(const Dictionary &p_message) {
 		conversation_messages.append(tool_results[i]);
 	}
 
-	if (!tool_results.is_empty()) {
-		_append_status_row(TTR("Planning next moves..."));
-		_request_model_response();
-	} else {
+	if (tool_results.is_empty()) {
 		_set_waiting(false, TTR("Ready"));
+		return;
 	}
+
+	// Stuck-loop guard: stop or nudge if the model keeps repeating a failing call.
+	String stuck_msg;
+	const int stuck = _evaluate_stuck_state(stuck_msg);
+	if (stuck == 2) {
+		_set_waiting(false, TTR("Ready"));
+		_append_message("assistant", stuck_msg);
+		return;
+	}
+	if (stuck == 1 && !_turn_tool_attempts.is_empty()) {
+		const String sig = _turn_tool_attempts[_turn_tool_attempts.size() - 1].signature;
+		if (_last_stuck_nudge_signature != sig) {
+			_last_stuck_nudge_signature = sig;
+			Dictionary nudge;
+			nudge["role"] = "system";
+			nudge["content"] = stuck_msg;
+			conversation_messages.append(nudge);
+		}
+	}
+
+	_append_status_row(TTR("Planning next moves..."));
+	_request_model_response();
+}
+
+int YeetAIDock::_permission_mode() const {
+	return CLAMP(_get_editor_setting_int("yeet_ai/chat/permission_mode", 1), 0, 3);
+}
+
+YeetAIDock::ToolRiskTier YeetAIDock::_tool_risk_tier(const String &p_tool_name) const {
+	const String s = p_tool_name.to_lower();
+	// Genuinely destructive: data/file/node loss or overwriting arbitrary files.
+	if (s.begins_with("delete_") || s.begins_with("remove_") ||
+			s == "write_project_file" || s == "delete_project_file" ||
+			s.begins_with("replace_in_file")) {
+		return TIER_DESTRUCTIVE;
+	}
+	// Read-only inspection / verification (+ the planning tool — it mutates no project state).
+	if (s.begins_with("get_") || s.begins_with("validate_") || s.begins_with("find_") ||
+			s.begins_with("read_") || s.begins_with("list_") || s.begins_with("inspect_") ||
+			s.begins_with("search_") || s.begins_with("capture_") || s.begins_with("scene_get") ||
+			s.begins_with("audit_") || s == "update_plan") {
+		return TIER_READ;
+	}
+	return TIER_WRITE;
+}
+
+bool YeetAIDock::_tool_needs_approval(const String &p_tool_name) const {
+	const int mode = _permission_mode();
+	if (mode == 0 || mode == 3) {
+		// auto: nothing asks. read_only: enforced as a hard block, not a dialog.
+		return false;
+	}
+	if (_session_allowed_tools.has(p_tool_name)) {
+		return false;
+	}
+	const ToolRiskTier tier = _tool_risk_tier(p_tool_name);
+	if (mode == 1) { // ask_destructive
+		return tier == TIER_DESTRUCTIVE;
+	}
+	if (mode == 2) { // ask_writes
+		return tier >= TIER_WRITE;
+	}
+	return false;
+}
+
+Vector<int> YeetAIDock::_tool_calls_needing_approval(const Array &p_tool_calls) const {
+	Vector<int> out;
+	if (_permission_mode() == 0 || _permission_mode() == 3) {
+		return out;
+	}
+	for (int i = 0; i < p_tool_calls.size(); i++) {
+		if (p_tool_calls[i].get_type() != Variant::DICTIONARY) {
+			continue;
+		}
+		const Dictionary tc = p_tool_calls[i];
+		const Variant fnv = tc.get("function", Variant());
+		if (fnv.get_type() != Variant::DICTIONARY) {
+			continue;
+		}
+		const Dictionary fn = fnv;
+		const String name = _clean_json_string_field(fn, SNAME("name"));
+		if (!name.is_empty() && _tool_needs_approval(name)) {
+			out.push_back(i);
+		}
+	}
+	return out;
+}
+
+String YeetAIDock::_approval_summary(const Array &p_tool_calls, const Vector<int> &p_need) const {
+	String out = TTR("The assistant wants to run these actions that need your approval:") + "\n\n";
+	for (int k = 0; k < p_need.size(); k++) {
+		const int i = p_need[k];
+		if (i < 0 || i >= p_tool_calls.size() || p_tool_calls[i].get_type() != Variant::DICTIONARY) {
+			continue;
+		}
+		const Dictionary tc = p_tool_calls[i];
+		const Dictionary fn = tc.get("function", Dictionary());
+		const String name = _clean_json_string_field(fn, SNAME("name"));
+
+		String detail;
+		const Variant av = fn.get("arguments", Variant());
+		if (av.get_type() == Variant::STRING && !String(av).is_empty()) {
+			Ref<JSON> j;
+			j.instantiate();
+			if (j->parse(String(av)) == OK && j->get_data().get_type() == Variant::DICTIONARY) {
+				const Dictionary a = j->get_data();
+				const String path = String(a.get("path", a.get("file_path", a.get("node_path", ""))));
+				if (!path.is_empty()) {
+					detail = " → " + path;
+				}
+				if (a.has("content")) {
+					detail += vformat(" (%d chars)", String(a["content"]).length());
+				}
+			}
+		}
+		out += vformat("•  %s%s\n", _humanize_tool_name(name), detail);
+	}
+	out += "\n" + TTR("Approve runs them once. Always allow whitelists these tool types for this session. Deny skips them.");
+	return out;
+}
+
+void YeetAIDock::_show_approval_dialog(const Array &p_tool_calls, const Vector<int> &p_need) {
+	if (_approval_dialog == nullptr) {
+		_approval_dialog = memnew(ConfirmationDialog);
+		_approval_dialog->set_title(TTR("Crosshair AI — Approve actions"));
+		_approval_dialog->set_ok_button_text(TTR("Approve"));
+		_approval_dialog->set_cancel_button_text(TTR("Deny"));
+		Button *always_btn = _approval_dialog->add_button(TTR("Always allow"), false, "always_allow");
+		always_btn->connect(SceneStringName(pressed), callable_mp(this, &YeetAIDock::_on_approval_always_allow));
+		_approval_dialog->connect("confirmed", callable_mp(this, &YeetAIDock::_on_approval_confirmed));
+		_approval_dialog->connect("canceled", callable_mp(this, &YeetAIDock::_on_approval_denied));
+		add_child(_approval_dialog);
+	}
+	_approval_dialog->set_text(_approval_summary(p_tool_calls, p_need));
+	_approval_dialog->popup_centered();
+}
+
+void YeetAIDock::_on_approval_confirmed() {
+	if (!_pending_approval.active) {
+		return;
+	}
+	const Array tool_calls = _pending_approval.tool_calls;
+	_pending_approval.active = false;
+	_pending_approval.tool_calls = Array();
+	_run_tool_calls(tool_calls, true);
+}
+
+void YeetAIDock::_on_approval_always_allow() {
+	if (!_pending_approval.active) {
+		return;
+	}
+	const Array tool_calls = _pending_approval.tool_calls;
+	// Whitelist the tool types that triggered approval for the rest of the session.
+	const Vector<int> need = _tool_calls_needing_approval(tool_calls);
+	for (int k = 0; k < need.size(); k++) {
+		const Dictionary tc = tool_calls[need[k]];
+		const Dictionary fn = tc.get("function", Dictionary());
+		const String name = _clean_json_string_field(fn, SNAME("name"));
+		if (!name.is_empty()) {
+			_session_allowed_tools.insert(name);
+		}
+	}
+	if (_approval_dialog) {
+		_approval_dialog->hide();
+	}
+	_pending_approval.active = false;
+	_pending_approval.tool_calls = Array();
+	_run_tool_calls(tool_calls, true);
+}
+
+void YeetAIDock::_on_approval_denied() {
+	if (!_pending_approval.active) {
+		return;
+	}
+	const Array tool_calls = _pending_approval.tool_calls;
+	_pending_approval.active = false;
+	_pending_approval.tool_calls = Array();
+	// Every tool_call id still needs a matching tool result for a valid history.
+	const Array denials = _build_denial_results(tool_calls);
+	for (int i = 0; i < denials.size(); i++) {
+		conversation_messages.append(denials[i]);
+	}
+	_append_status_row(TTR("You denied the requested actions."));
+	_request_model_response();
+}
+
+Array YeetAIDock::_build_denial_results(const Array &p_tool_calls) const {
+	Array out;
+	for (int i = 0; i < p_tool_calls.size(); i++) {
+		if (p_tool_calls[i].get_type() != Variant::DICTIONARY) {
+			continue;
+		}
+		const Dictionary tc = p_tool_calls[i];
+		String call_id = vformat("call_%d", i);
+		const String parsed = _clean_json_string_field(tc.get("id", Variant()));
+		if (!parsed.is_empty()) {
+			call_id = parsed;
+		}
+		Dictionary payload;
+		payload["ok"] = false;
+		payload["error"] = "The user denied this action. Do not retry it; suggest an alternative or ask what they would like instead.";
+		payload["denied_by_user"] = true;
+		Dictionary msg;
+		msg["role"] = "tool";
+		msg["tool_call_id"] = call_id;
+		msg["content"] = JSON::stringify(payload, "\t", false, true);
+		out.push_back(msg);
+	}
+	return out;
 }
 
 void YeetAIDock::_handle_model_response(const String &p_content) {
@@ -2909,21 +3687,10 @@ void YeetAIDock::_handle_model_response(const String &p_content) {
 			return;
 		}
 		const Dictionary args = envelope.get("arguments", Dictionary());
-		_set_waiting(true, vformat(TTR("Running: %s"), _humanize_tool_name(tool_name)));
-		_append_tool_running(tool_name, args);
-		ToolExecutionResult result = _execute_tool(tool_name, args);
+		// Record the assistant envelope BEFORE the tool result so history order is
+		// assistant(tool_call) -> user(tool_result).
 		conversation_messages.append(make_message("assistant", JSON::stringify(envelope)));
-		_append_tool_result(tool_name, args, result);
-
-		if (result.ok) {
-			const Vector<String> modified = _collect_relevant_paths(args, result.payload);
-			for (const String &p : modified) {
-				if (!_session_modified_files.has(p)) {
-					_session_modified_files.insert(p);
-				}
-			}
-			_update_files_modified_label();
-		}
+		ToolExecutionResult result = _run_single_tool(tool_name, args);
 
 		Dictionary tool_payload = result.payload;
 		tool_payload["ok"] = result.ok && !result.payload.has("error");
@@ -2931,6 +3698,27 @@ void YeetAIDock::_handle_model_response(const String &p_content) {
 
 		tool_round_trips++;
 		_update_tool_progress_bar();
+
+		// Stuck-loop guard: stop or nudge if the model keeps repeating a failing call.
+		{
+			String stuck_msg;
+			const int stuck = _evaluate_stuck_state(stuck_msg);
+			if (stuck == 2) {
+				_set_waiting(false, TTR("Ready"));
+				_append_message("assistant", stuck_msg);
+				return;
+			}
+			if (stuck == 1 && !_turn_tool_attempts.is_empty()) {
+				const String sig = _turn_tool_attempts[_turn_tool_attempts.size() - 1].signature;
+				if (_last_stuck_nudge_signature != sig) {
+					_last_stuck_nudge_signature = sig;
+					// Non-native providers consume tool results as user turns, so the
+					// nudge rides along as a user message rather than a system message.
+					conversation_messages.append(make_message("user", stuck_msg));
+				}
+			}
+		}
+
 		// Show a subtle planning indicator before the next model call
 		_append_status_row(TTR("Planning next moves..."));
 		_request_model_response();
@@ -3013,6 +3801,73 @@ String YeetAIDock::_build_runtime_context_prompt() const {
 			+ JSON::stringify(context, "\t", false, true);
 }
 
+String YeetAIDock::_build_rag_context_prompt(const String &p_user_prompt) const {
+	if (!_get_editor_setting_bool("yeet_ai/rag/auto_context_enabled", true)) {
+		return String();
+	}
+	const String query = p_user_prompt.strip_edges();
+	if (query.is_empty()) {
+		return String();
+	}
+	YeetAIProjectContextIndex *index = YeetAIProjectContextIndex::get_singleton();
+	if (index == nullptr) {
+		return String();
+	}
+	Dictionary snapshot = index->get_project_context_index();
+	if (int(snapshot.get("chunk_count", 0)) <= 0) {
+		return String();
+	}
+
+	Dictionary args;
+	args["query"] = query;
+	args["mode"] = _get_editor_setting_bool("yeet_ai/rag/auto_context_vector_enabled", false) ? "hybrid" : "lexical";
+	args["max_results"] = CLAMP(_get_editor_setting_int("yeet_ai/rag/auto_context_results", 6), 1, 20);
+	args["max_chars_per_result"] = CLAMP(_get_editor_setting_int("yeet_ai/rag/auto_context_chars_per_result", 1200), 240, 4000);
+
+	Dictionary result = index->search_project_context(args);
+	if (!bool(result.get("ok", false)) || int(result.get("count", 0)) <= 0) {
+		return String();
+	}
+
+	const int max_total_chars = CLAMP(_get_editor_setting_int("yeet_ai/rag/auto_context_max_chars", 9000), 1000, 30000);
+	Array results = result.get("results", Array());
+	String out = String("\n\n--- Retrieved project context (embedding RAG) ---\n") +
+			"These snippets were retrieved for the current user request. Prefer them over guessing, and use tools if more detail is needed.\n";
+	out += vformat("Retrieval mode: %s; index: %s; embedded chunks: %d\n", String(result.get("mode", "lexical")), String(result.get("retrieval", "unknown")), int(result.get("embedded_chunk_count", 0)));
+	if (result.has("warning")) {
+		out += "Warning: " + String(result.get("warning", "")) + "\n";
+	}
+
+	for (int i = 0; i < results.size(); i++) {
+		Dictionary chunk = results[i];
+		const String path = String(chunk.get("path", ""));
+		const String kind = String(chunk.get("kind", ""));
+		const int line_start = int(chunk.get("line_start", 0));
+		const int line_end = int(chunk.get("line_end", 0));
+		String text = String(chunk.get("text", "")).strip_edges();
+		String header = vformat("\n[%d] %s", i + 1, path);
+		if (!kind.is_empty()) {
+			header += " (" + kind + ")";
+		}
+		if (line_start > 0) {
+			header += vformat(" lines %d-%d", line_start, line_end);
+		}
+		header += vformat(" score %.3f", double(chunk.get("score", 0.0))) + "\n";
+		const int remaining = max_total_chars - out.length() - header.length() - 8;
+		if (remaining <= 0) {
+			break;
+		}
+		if (text.length() > remaining) {
+			text = text.substr(0, remaining) + "...";
+		}
+		out += header + text + "\n";
+		if (out.length() >= max_total_chars) {
+			break;
+		}
+	}
+	return out;
+}
+
 String YeetAIDock::_build_task_hints_for_user_prompt(const String &p_user_prompt) const {
 	const String s = p_user_prompt.to_lower();
 	if (s.is_empty()) {
@@ -3063,6 +3918,132 @@ String YeetAIDock::_build_task_hints_for_user_prompt(const String &p_user_prompt
 	return out;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CLI agent providers (Codex / Claude Code)
+//
+// Unlike the in-editor model path — which drives a JSON tool-call loop we run —
+// these are full autonomous agents with their OWN filesystem/shell tools. They
+// must be told to just do the work by editing project files. They must NOT be
+// fed the API-loop framing ("snapshot follows as JSON, decide whether more
+// inspection tools are needed"), which makes them stall and ask the user to
+// "send the task" or supply a format. Keep this prompt action-biased and
+// Godot-aware.
+// ─────────────────────────────────────────────────────────────────────────────
+
+String YeetAIDock::_build_cli_agent_system_prompt() const {
+	String out;
+	out += "You are an autonomous coding agent embedded in the Crosshair Editor (Godot 4 fork). ";
+	out += "Edit the open Godot project files directly with your tools. Do not wait for more input.\n\n";
+	out += "OPERATING RULES:\n";
+	out += "- The USER REQUEST section is the complete task. Carry it out now.\n";
+	out += "- Never claim the request was cut off or missing when USER REQUEST is present.\n";
+	out += "- Never ask for JSON, schemas, or special formats.\n";
+	out += "- Inspect relevant files first, then edit. Prefer extending existing scenes/scripts.\n";
+	out += "- Finish with a short plain-language summary of what changed.\n\n";
+	out += "GODOT 4 NOTES:\n";
+	out += "- Project files use res:// paths. project.godot holds application/run/main_scene.\n";
+	out += "- Scenes are text .tscn files (gd_scene format=3). Keep load_steps, ids, parent paths valid.\n";
+	out += "- Scripts are GDScript .gd (extends, _ready, _process). Use C# only if the project already does.\n";
+	out += "- 3D: MeshInstance3D + primitive meshes, Camera3D, DirectionalLight3D, StaticBody3D+CollisionShape3D for solids.\n";
+	out += "- 2D: Sprite2D/CharacterBody2D/StaticBody2D/Camera2D equivalents.\n";
+	return out;
+}
+
+String YeetAIDock::_build_cli_agent_context() const {
+	const Dictionary empty_args;
+	String project_name;
+	String main_scene;
+	if (ProjectSettings::get_singleton()) {
+		project_name = String(ProjectSettings::get_singleton()->get_setting("application/config/name", ""));
+		main_scene = String(ProjectSettings::get_singleton()->get_setting("application/run/main_scene", ""));
+	}
+	const Dictionary current_scene = _tool_get_current_scene(empty_args);
+	const String current_scene_path = current_scene.has("error") ? String() : String(current_scene.get("scene_path", ""));
+
+	// Avoid embedded double-quotes — they break Windows CLI argv when not using files,
+	// and models misread truncated quotes as "task cut off".
+	String out = "PROJECT SNAPSHOT (reference — open files yourself for detail):\n";
+	if (!project_name.is_empty()) {
+		out += "- Project name: " + project_name + "\n";
+	}
+	out += "- Project path: " + _cli_project_path() + "\n";
+	out += "- Main scene (runs first): " + (main_scene.is_empty() ? String("(none set yet)") : main_scene) + "\n";
+	if (!current_scene_path.is_empty()) {
+		out += "- Scene open in the editor: " + current_scene_path + " (treat this as the current scene when the user is vague).\n";
+	} else {
+		out += "- No scene is currently open in the editor.\n";
+	}
+	return out;
+}
+
+String YeetAIDock::_build_cli_agent_task_prompt() const {
+	// Put the latest user request FIRST so it cannot be lost if anything truncates.
+	String latest_user;
+	for (int i = conversation_messages.size() - 1; i >= 0; i--) {
+		if (conversation_messages[i].get_type() != Variant::DICTIONARY) {
+			continue;
+		}
+		const Dictionary message = conversation_messages[i];
+		if (String(message.get("role", "")) != "user") {
+			continue;
+		}
+		latest_user = _message_content_to_text(message.get("content", Variant())).strip_edges();
+		if (!latest_user.is_empty()) {
+			break;
+		}
+	}
+
+	String history;
+	int included = 0;
+	for (int i = MAX(0, conversation_messages.size() - 9); i < conversation_messages.size() - 1 && included < 6; i++) {
+		if (conversation_messages[i].get_type() != Variant::DICTIONARY) {
+			continue;
+		}
+		const Dictionary message = conversation_messages[i];
+		const String role = String(message.get("role", "user"));
+		if (role != "user" && role != "assistant") {
+			continue;
+		}
+		if (message.has("tool_calls")) {
+			continue;
+		}
+		String content = _message_content_to_text(message.get("content", Variant())).strip_edges();
+		if (content.is_empty() || content.begins_with("{") || content.begins_with("[")) {
+			continue;
+		}
+		// Drop prior CLI action footers and very long past replies to save context.
+		const int actions_mark = content.find("_Claude Code actions:_");
+		if (actions_mark >= 0) {
+			content = content.substr(0, actions_mark).strip_edges();
+		}
+		const int codex_mark = content.find("_Codex actions:_");
+		if (codex_mark >= 0) {
+			content = content.substr(0, codex_mark).strip_edges();
+		}
+		const int grok_mark = content.find("_Grok Build actions:_");
+		if (grok_mark >= 0) {
+			content = content.substr(0, grok_mark).strip_edges();
+		}
+		if (content.length() > 400) {
+			content = content.substr(0, 400) + "...";
+		}
+		if (content.is_empty()) {
+			continue;
+		}
+		history += (role == "user" ? String("User: ") : String("Assistant: ")) + content + "\n";
+		included++;
+	}
+
+	String out;
+	out += "===== USER REQUEST (do this now) =====\n";
+	out += latest_user.is_empty() ? String("(no task provided)") : latest_user;
+	out += "\n===== END USER REQUEST =====\n\n";
+	if (!history.is_empty()) {
+		out += "RECENT CONVERSATION (context only):\n" + history + "\n";
+	}
+	return out;
+}
+
 // _execute_tool is in yeet_ai_tools.cpp
 
 String YeetAIDock::_get_editor_setting_string(const String &p_setting, const String &p_default) const {
@@ -3085,8 +4066,341 @@ String YeetAIDock::_get_editor_setting_string(const String &p_setting, const Str
 // Forward declaration from yeet_ai_tools.cpp
 extern Vector<String> yeet_ai_get_all_tool_names();
 
+YeetAIDock::ToolPack YeetAIDock::_tool_pack_for(const String &p_tool_name) const {
+	const String s = p_tool_name.to_lower();
+
+	// Read-only inspection / verification tools are ALWAYS useful (the inspect→
+	// verify→observe loop relies on them), so they live in CORE regardless of
+	// which build domain is active.
+	if (s.begins_with("get_") || s.begins_with("validate_") || s.begins_with("find_") ||
+			s.begins_with("read_") || s.begins_with("list_") || s.begins_with("inspect_") ||
+			s.begins_with("scene_get") || s.begins_with("capture_") || s.begins_with("search_")) {
+		return PACK_CORE;
+	}
+
+	// Domain buckets — most specific first. Only create/mutate tools reach here.
+	if (s.begins_with("runtime_") || s.contains("debug") || s.contains("breakpoint") ||
+			s.contains("profile") || s.contains("headless") || s.contains("monitor_")) {
+		return PACK_DEBUG;
+	}
+	if (s.contains("multiplayer") || s.contains("network") || s.contains("spawner") ||
+			s.contains("synchronizer") || s.contains("websocket")) {
+		return PACK_MULTIPLAYER;
+	}
+	if (s.ends_with("_3d") || s.contains("csg") || s.contains("gi_probe") ||
+			s.contains("reflection_probe") || s.contains("fog_volume") || s.contains("voxel") ||
+			s.contains("lightmap") || s.contains("_sky") || s.contains("vehicle") ||
+			s.contains("navigation_mesh") || s.contains("mesh_instance_3")) {
+		return PACK_3D;
+	}
+	if (s.ends_with("_2d") || s.contains("tilemap") || s.contains("tileset") ||
+			s.contains("tile_map") || s.contains("parallax") || s.contains("canvas") ||
+			s.contains("polygon_2") || s.contains("skeleton_2") || s.begins_with("scaffold_")) {
+		return PACK_2D;
+	}
+	if (s.contains("control") || s.contains("container") || s.contains("button") ||
+			s.contains("label") || s.contains("panel") || s.contains("dialog") ||
+			s.contains("line_edit") || s.contains("text_edit") || s.contains("item_list") ||
+			s.contains("option_button") || s.contains("spin_box") || s.contains("slider") ||
+			s.contains("progress") || s.contains("tab_") || s.contains("tree_widget") ||
+			s.contains("stylebox") || s.contains("theme") || s.contains("graph_node") ||
+			s.contains("scroll") || s.contains("nine_patch") || s.contains("rich_text") ||
+			s.contains("aspect_ratio") || s.contains("reference_rect") || s.contains("margin") ||
+			s.contains("separator") || s.contains("color_rect") || s.contains("_ui_")) {
+		return PACK_UI;
+	}
+	if (s.contains("animation") || s.contains("blend_tree") || s.contains("tween") || s.contains("sprite_frames")) {
+		return PACK_ANIM;
+	}
+	if (s.contains("audio") || s.contains("sound") || s.contains("music")) {
+		return PACK_AUDIO;
+	}
+	if (s.contains("shader") || s.contains("material") || s.contains("gradient") || s.contains("noise_texture")) {
+		return PACK_SHADER;
+	}
+	if (s.contains("collision") || s.contains("_area") || s.contains("rigid_body") ||
+			s.contains("static_body") || s.contains("character_body") || s.contains("animatable_body") ||
+			s.contains("joint") || s.contains("raycast") || s.contains("ray_cast") ||
+			s.contains("shape_cast") || s.contains("physics") || s.contains("kinematic")) {
+		return PACK_PHYSICS;
+	}
+	return PACK_CORE;
+}
+
+// Tools that stay registered for redirect/compat but should not burn the tool budget.
+bool yeet_ai_is_disabled_advertised_tool(const String &p_name) {
+	static const char *disabled[] = {
+		"add_custom_class", "get_console_output", "get_navigation_path",
+		"inspect_runtime_node", "inspect_runtime_variable",
+		"manage_export_presets", "profile_frame",
+		"run_gdscript_expression", "run_gdscript_test", "run_scene_script",
+		"set_default_import_presets", "set_import_setting"
+	};
+	for (const char *d : disabled) {
+		if (p_name == d) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// Always-advertise essentials (high agent value / harness loop). Kept well under GPT-5.x limits.
+static bool _yeet_is_essential_tool(const String &p_name) {
+	static const char *essential[] = {
+		// Harness / catalog
+		"update_plan", "search_tool_catalog", "request_tool_pack", "batch_tool_calls",
+		// Inspect
+		"get_scene_tree", "get_node_details", "get_node_api", "get_selected_nodes",
+		"get_current_scene", "get_open_scenes", "get_project_tree", "find_project_files",
+		"read_project_file", "get_editor_log", "get_gdscript_errors", "get_input_actions",
+		// Core mutate
+		"add_node", "set_node_property", "remove_node", "reparent_node", "rename_node",
+		"duplicate_node", "move_child", "connect_signal", "connect_ui_signal", "disconnect_signal",
+		// Scripts / files
+		"create_gdscript_file", "update_gdscript_file", "attach_script", "write_project_file",
+		"create_scene_file", "open_scene", "save_current_scene", "save_all_scenes",
+		// Run / verify
+		"play_current_scene", "stop_playing_scene", "capture_editor_viewport", "capture_game_viewport",
+		"audit_game_physics", "validate_scene",
+		// High-leverage composites
+		"scaffold_platformer_player_2d", "scaffold_game_hud_2d", "create_game_actor_2d",
+		"create_sprite_2d", "create_character_body_2d", "create_camera_2d", "create_button",
+		"create_label", "create_input_action",
+		// Undo
+		"editor_undo",
+	};
+	for (const char *e : essential) {
+		if (p_name == e) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// Free function (not a class member): cannot touch private ToolPack enum.
+// Bit index must match YeetAIDock::ToolPack order (PACK_COUNT currently 10).
+static int _yeet_pack_bit(int p_pack) {
+	if (p_pack < 0 || p_pack >= 16) {
+		return 0;
+	}
+	return 1 << p_pack;
+}
+
+int YeetAIDock::_resolve_max_advertised_tools() const {
+	// Hard API ceiling for Azure OpenAI / OpenAI function tools is 128.
+	static constexpr int k_api_hard_cap = 128;
+	const int configured = _get_editor_setting_int("yeet_ai/chat/max_advertised_tools", 0);
+	if (configured > 0) {
+		return CLAMP(configured, 8, k_api_hard_cap);
+	}
+
+	// Auto: stay well under the 128 cap for GPT-5.x / Azure Responses quality.
+	const int provider = _get_editor_setting_int("yeet_ai/chat/provider", 0);
+	const String model = _get_editor_setting_string("yeet_ai/chat/model", "").to_lower();
+	const bool is_azure = (provider == 4);
+	const bool is_gpt5 = model.contains("gpt-5") || model.contains("gpt5") || model.contains("o3") || model.contains("o4");
+	const bool is_responses = is_azure && int(yeet_ai_azure_active_profile().get("api_mode", 1)) == 1;
+
+	if (is_azure || is_responses || is_gpt5) {
+		return 64; // headroom under 128; better tool selection quality
+	}
+	if (_get_editor_setting_int("yeet_ai/chat/tool_curation", 0) != 0) {
+		return k_api_hard_cap; // "send all" still hard-capped
+	}
+	return 80; // default curated budget for other providers
+}
+
+Vector<String> YeetAIDock::_build_active_tool_names() const {
+	// Reuse the set computed for this turn so the tools block stays byte-stable
+	// across round-trips (prompt-cache friendly), unless request_tool_pack expanded it.
+	if (_turn_active_tools_valid) {
+		return _turn_active_tools;
+	}
+
+	const Vector<String> all = yeet_ai_get_all_tool_names();
+	const int max_tools = _resolve_max_advertised_tools();
+	const bool send_all_mode = (_get_editor_setting_int("yeet_ai/chat/tool_curation", 0) != 0);
+
+	// ── Context signals: edited scene type ─────────────────────────────────────
+	bool scene_is_3d = false, scene_is_2d = false, scene_is_ui = false;
+	if (EditorInterface::get_singleton()) {
+		Node *root = EditorInterface::get_singleton()->get_edited_scene_root();
+		if (root) {
+			if (root->is_class("Node3D")) {
+				scene_is_3d = true;
+			} else if (root->is_class("Control")) {
+				scene_is_ui = true;
+				scene_is_2d = true;
+			} else if (root->is_class("CanvasItem")) {
+				scene_is_2d = true;
+			}
+		}
+	}
+
+	// ── Context signals: recent user-message keywords ──────────────────────────
+	String ctx = turn_context_prompt.to_lower();
+	int scanned = 0;
+	for (int i = conversation_messages.size() - 1; i >= 0 && scanned < 6; i--) {
+		if (conversation_messages[i].get_type() != Variant::DICTIONARY) {
+			continue;
+		}
+		const Dictionary m = conversation_messages[i];
+		if (String(m.get("role", "")) == "user") {
+			ctx += " " + _message_content_to_text(m.get("content", Variant())).to_lower();
+			scanned++;
+		}
+	}
+
+	const bool want_3d = scene_is_3d || ctx.contains("3d") || ctx.contains("mesh") ||
+			ctx.contains("gltf") || ctx.contains("voxel") || ctx.contains("csg");
+	const bool want_2d = scene_is_2d || ctx.contains("2d") || ctx.contains("sprite") ||
+			ctx.contains("tilemap") || ctx.contains("platformer") || ctx.contains("top-down") ||
+			ctx.contains("topdown") || (!want_3d && !scene_is_ui);
+	const bool want_ui = scene_is_ui || ctx.contains("ui") || ctx.contains("hud") ||
+			ctx.contains("menu") || ctx.contains("button") || ctx.contains("label") ||
+			ctx.contains("dialog") || ctx.contains("inventory");
+	const bool want_physics = ctx.contains("collision") || ctx.contains("physics") ||
+			ctx.contains("rigid") || ctx.contains("character") || ctx.contains("area") ||
+			ctx.contains("jump") || ctx.contains("gravity") || want_2d || want_3d;
+	const bool want_anim = ctx.contains("anim") || ctx.contains("tween") ||
+			ctx.contains("keyframe") || ctx.contains("blend") || ctx.contains("sprite_frames");
+	const bool want_audio = ctx.contains("audio") || ctx.contains("sound") ||
+			ctx.contains("music") || ctx.contains("sfx");
+	const bool want_shader = ctx.contains("shader") || ctx.contains("material") ||
+			ctx.contains("glsl") || ctx.contains("gradient");
+	const bool want_debug = ctx.contains("debug") || ctx.contains("runtime") ||
+			ctx.contains("profile") || ctx.contains("breakpoint") || ctx.contains("crash") ||
+			ctx.contains("broken") || ctx.contains("not working") || ctx.contains("error");
+	const bool want_mp = ctx.contains("multiplayer") || ctx.contains("network") ||
+			ctx.contains("rpc") || ctx.contains("online") || ctx.contains("co-op") ||
+			ctx.contains("server") || ctx.contains("client") || ctx.contains("peer");
+
+	const uint32_t extra = _turn_extra_pack_mask;
+	const bool pack_on[PACK_COUNT] = {
+		true, // CORE always
+		want_2d || (extra & _yeet_pack_bit(int(PACK_2D))),
+		want_3d || (extra & _yeet_pack_bit(int(PACK_3D))),
+		want_ui || (extra & _yeet_pack_bit(int(PACK_UI))),
+		want_anim || (extra & _yeet_pack_bit(int(PACK_ANIM))),
+		want_audio || (extra & _yeet_pack_bit(int(PACK_AUDIO))),
+		want_shader || (extra & _yeet_pack_bit(int(PACK_SHADER))),
+		want_physics || (extra & _yeet_pack_bit(int(PACK_PHYSICS))),
+		want_debug || (extra & _yeet_pack_bit(int(PACK_DEBUG))),
+		want_mp || (extra & _yeet_pack_bit(int(PACK_MULTIPLAYER))),
+	};
+
+	struct ScoredTool {
+		String name;
+		int score = 0;
+	};
+	Vector<ScoredTool> scored;
+	scored.reserve(all.size());
+
+	for (const String &name : all) {
+		if (yeet_ai_is_disabled_advertised_tool(name)) {
+			continue;
+		}
+
+		const ToolPack pack = _tool_pack_for(name);
+		const bool essential = _yeet_is_essential_tool(name);
+		const bool pack_allowed = send_all_mode || pack_on[int(pack)] || essential;
+		if (!pack_allowed) {
+			continue;
+		}
+
+		int score = 0;
+		if (essential) {
+			score += 10000;
+		}
+		// Prefer composites / scaffolds when domain is active
+		if (name.begins_with("scaffold_") || name.begins_with("create_game_actor") || name == "batch_tool_calls") {
+			score += 400;
+		}
+		if (pack == PACK_CORE) {
+			score += 200;
+		} else if (pack_on[int(pack)]) {
+			score += 150;
+		}
+		// Keyword affinity: boost tools whose tokens appear in the user context
+		const String n = name.to_lower();
+		PackedStringArray parts = n.split("_");
+		int hits = 0;
+		for (int p = 0; p < parts.size(); p++) {
+			const String token = parts[p];
+			if (token.length() < 3) {
+				continue;
+			}
+			if (ctx.contains(token)) {
+				hits++;
+			}
+		}
+		score += hits * 80;
+		// Deprioritize huge runtime/debug surfaces unless requested
+		if (pack == PACK_DEBUG && !want_debug && !(extra & _yeet_pack_bit(int(PACK_DEBUG)))) {
+			score -= 300;
+		}
+		if (name.begins_with("runtime_") && !want_debug) {
+			score -= 200;
+		}
+		if (name.begins_with("debugger_") && !want_debug) {
+			score -= 200;
+		}
+
+		ScoredTool st;
+		st.name = name;
+		st.score = score;
+		scored.push_back(st);
+	}
+
+	// Sort by score descending.
+	struct ScoredToolCompare {
+		_FORCE_INLINE_ bool operator()(const ScoredTool &a, const ScoredTool &b) const {
+			if (a.score == b.score) {
+				return a.name < b.name;
+			}
+			return a.score > b.score;
+		}
+	};
+	scored.sort_custom<ScoredToolCompare>();
+
+	Vector<String> out;
+	HashSet<String> seen;
+	// Essentials first (guarantee harness loop even if scored oddly)
+	for (const String &name : all) {
+		if (!_yeet_is_essential_tool(name) || yeet_ai_is_disabled_advertised_tool(name) || seen.has(name)) {
+			continue;
+		}
+		out.push_back(name);
+		seen.insert(name);
+		if (out.size() >= max_tools) {
+			break;
+		}
+	}
+	for (int i = 0; i < scored.size() && out.size() < max_tools; i++) {
+		const String &name = scored[i].name;
+		if (seen.has(name)) {
+			continue;
+		}
+		out.push_back(name);
+		seen.insert(name);
+	}
+
+	if (_get_editor_setting_bool("yeet_ai/chat/debug_mode", false)) {
+		WARN_PRINT(vformat(
+				"[YeetAI Tools] advertising %d / %d tools (cap=%d send_all=%d packs 2d=%d 3d=%d ui=%d phys=%d anim=%d audio=%d shader=%d debug=%d mp=%d extra_mask=%u)",
+				out.size(), all.size(), max_tools, (int)send_all_mode,
+				(int)pack_on[PACK_2D], (int)pack_on[PACK_3D], (int)pack_on[PACK_UI], (int)pack_on[PACK_PHYSICS],
+				(int)pack_on[PACK_ANIM], (int)pack_on[PACK_AUDIO], (int)pack_on[PACK_SHADER],
+				(int)pack_on[PACK_DEBUG], (int)pack_on[PACK_MULTIPLAYER], _turn_extra_pack_mask));
+	}
+
+	_turn_active_tools = out;
+	_turn_active_tools_valid = true;
+	return out;
+}
+
 Array YeetAIDock::_build_tools_payload() const {
-	return YeetAIToolSchemaRegistry::build_openai_tools_payload(yeet_ai_get_all_tool_names());
+	return YeetAIToolSchemaRegistry::build_openai_tools_payload(_build_active_tool_names());
 }
 
 float YeetAIDock::_get_editor_setting_float(const String &p_setting, float p_default) const {
@@ -3133,6 +4447,11 @@ Dictionary YeetAIDock::_make_user_message_with_optional_vision(const String &p_t
 	if (!vision || image_b64.is_empty()) {
 		return make_message("user", text_body);
 	}
+	if (!_current_chat_model_supports_vision()) {
+		const String model = _get_editor_setting_string("yeet_ai/chat/model", "berrymodel");
+		const String note = vformat("\n\n[vision] Screenshot/image data was not attached because the selected model `%s` is treated as text-only. Switch to a vision-capable model or disable `yeet_ai/chat/vision_enabled`.", model);
+		return make_message("user", text_body + note);
+	}
 
 	const String b64 = image_b64;
 	if (b64.length() > max_b64) {
@@ -3160,6 +4479,21 @@ Dictionary YeetAIDock::_make_user_message_with_optional_vision(const String &p_t
 	msg["role"] = "user";
 	msg["content"] = content;
 	return msg;
+}
+
+bool YeetAIDock::_current_chat_model_supports_vision() const {
+	const int provider = _get_editor_setting_int("yeet_ai/chat/provider", 0);
+	const String model = _get_editor_setting_string("yeet_ai/chat/model", "").to_lower();
+	if (provider == 5 || provider == 6 || provider == 7) {
+		return false;
+	}
+	if (provider == 1) {
+		return model.begins_with("gemini-");
+	}
+	if (provider == 4) {
+		return model.contains("gpt-4o") || model.contains("gpt-4.1") || model.contains("vision");
+	}
+	return model.contains("vision") || model.contains("gpt-4o") || model.contains("gpt-4.1") || model.contains("gemini") || model.contains("claude-3") || model.contains("qwen-vl") || model.contains("qwen2-vl") || model.contains("qwen2.5-vl") || model.contains("llava") || model.contains("minicpm-v") || model.contains("pixtral");
 }
 
 Node *YeetAIDock::_resolve_scene_root(const String &p_scene_path, String &r_error) const {
@@ -4168,8 +5502,12 @@ void YeetAIDock::_switch_to_chat(int p_index) {
 	_context_summary = session.context_summary;
 	_context_summary_message_count = session.context_summary_message_count;
 	tool_round_trips = 0;
+	_reset_turn_tool_tracking();
 	turn_context_prompt = String();
 	_session_modified_files.clear();
+	_current_plan.clear();
+	_pending_approval.active = false;
+	_pending_approval.tool_calls = Array();
 
 	// Initialize conversation window for this chat session
 	_conversation_window.current_tokens = 0;
@@ -4369,7 +5707,128 @@ void YeetAIDock::_load_chats() {
 	// Chats loaded in file-system order — no custom sort needed.
 }
 
-// ── Model selector ─────────────────────────────────────────────────────────
+// ── Provider / model selector ───────────────────────────────────────────────
+
+static String yeet_provider_display_name(int p_provider) {
+	switch (p_provider) {
+		case 0: return "Berry";
+		case 1: return "Gemini";
+		case 2: return "OpenRouter";
+		case 3: return "Yeet";
+		case 4: return "Azure";
+		case 5: return "Codex";
+		case 6: return "Claude";
+		case 7: return "Grok";
+		default: return "Provider";
+	}
+}
+
+void YeetAIDock::_populate_provider_selector() {
+	if (_provider_selector == nullptr) {
+		return;
+	}
+	const int current = _get_editor_setting_int("yeet_ai/chat/provider", 0);
+	_provider_selector->clear();
+	_provider_selector->add_item(TTR("Berry"), 0);
+	_provider_selector->add_item(TTR("Gemini"), 1);
+	_provider_selector->add_item(TTR("OpenRouter"), 2);
+	_provider_selector->add_item(TTR("Yeet"), 3);
+	// One dock entry per Azure profile (all use provider id 4; metadata = profile id).
+	{
+		const Array azure_profiles = yeet_ai_azure_profiles_load();
+		const String active_azure = yeet_ai_azure_active_profile_id();
+		if (azure_profiles.is_empty()) {
+			const int aidx = _provider_selector->get_item_count();
+			_provider_selector->add_item(TTR("Azure"), 4);
+			_provider_selector->set_item_metadata(aidx, String());
+		} else {
+			for (int i = 0; i < azure_profiles.size(); i++) {
+				if (azure_profiles[i].get_type() != Variant::DICTIONARY) {
+					continue;
+				}
+				const Dictionary p = azure_profiles[i];
+				const String pname = String(p.get("name", "Azure"));
+				const String pid = String(p.get("id", ""));
+				const int aidx = _provider_selector->get_item_count();
+				_provider_selector->add_item(vformat("%s · %s", TTR("Azure"), pname), 4);
+				_provider_selector->set_item_metadata(aidx, pid);
+			}
+		}
+		(void)active_azure;
+	}
+	_provider_selector->add_item(TTR("Codex CLI"), 5);
+	_provider_selector->add_item(TTR("Claude Code"), 6);
+	_provider_selector->add_item(TTR("Grok CLI"), 7);
+
+	// Select matching provider (for Azure, prefer active profile metadata).
+	int select_idx = 0;
+	const String active_azure_id = yeet_ai_azure_active_profile_id();
+	for (int i = 0; i < _provider_selector->get_item_count(); i++) {
+		if (_provider_selector->get_item_id(i) != current) {
+			continue;
+		}
+		if (current == 4) {
+			const String meta = String(_provider_selector->get_item_metadata(i));
+			if (meta == active_azure_id || active_azure_id.is_empty()) {
+				select_idx = i;
+				break;
+			}
+			select_idx = i; // fallback last matching Azure item
+			continue;
+		}
+		select_idx = i;
+		break;
+	}
+	_provider_selector->select(select_idx);
+}
+
+void YeetAIDock::_on_provider_quick_selected(int p_index) {
+	if (_provider_selector == nullptr || p_index < 0) {
+		return;
+	}
+	const int provider = _provider_selector->get_item_id(p_index);
+	EditorSettings *settings = EditorSettings::get_singleton();
+	if (settings != nullptr) {
+		settings->set_setting("yeet_ai/chat/provider", provider);
+		String model;
+		if (provider == 0) {
+			model = "berrymodel";
+		} else if (provider == 1) {
+			model = "gemini-2.5-flash";
+		} else if (provider == 2) {
+			model = "qwen/qwen3-235b-a22b:free";
+		} else if (provider == 3) {
+			model = "qwen3-coder:latest";
+		} else if (provider == 4) {
+			// Switch active Azure profile from item metadata.
+			const String profile_id = String(_provider_selector->get_item_metadata(p_index));
+			if (!profile_id.is_empty()) {
+				Array profiles = yeet_ai_azure_profiles_load();
+				yeet_ai_azure_profiles_save(profiles, profile_id);
+			}
+			const Dictionary ap = yeet_ai_azure_active_profile();
+			model = String(ap.get("model", ap.get("deployment", "gpt-5.5")));
+			if (model.strip_edges().is_empty()) {
+				model = "gpt-5.5";
+			}
+		} else if (provider == 5) {
+			model = "codex-cli";
+		} else if (provider == 6) {
+			model = "claude-code";
+		} else if (provider == 7) {
+			model = "grok-cli";
+		}
+		if (!model.is_empty()) {
+			settings->set_setting("yeet_ai/chat/model", model);
+		}
+		settings->save();
+	}
+	_fetched_model_tags.clear();
+	_update_model_button_label();
+	if (_model_popup != nullptr && _model_popup->is_visible()) {
+		_populate_model_list(_model_search_edit ? _model_search_edit->get_text() : String());
+	}
+}
 
 void YeetAIDock::_on_model_selector_pressed() {
 	if (!_model_popup) {
@@ -4469,16 +5928,31 @@ void YeetAIDock::_populate_model_list(const String &p_filter) {
 		models.push_back("meta-llama/llama-4-scout:free");
 		models.push_back("mistralai/mistral-small-3.1-24b-instruct:free");
 	} else if (provider == 4) {
-		// Azure OpenAI models are fixed by the deployment name.
+		// Azure Foundry deployments — include modern GPT-5.x names.
+		models.push_back("gpt-5.5");
+		models.push_back("gpt-5.4");
+		models.push_back("gpt-5.2");
+		models.push_back("gpt-5.1");
+		models.push_back("gpt-5");
 		models.push_back("gpt-4o");
 		models.push_back("gpt-4o-mini");
-		models.push_back("gpt-4-turbo");
-		models.push_back("gpt-4");
-		models.push_back("gpt-35-turbo");
+		models.push_back("gpt-4.1");
 		String azure_deployment = _get_editor_setting_string("yeet_ai/chat/azure_deployment", "");
 		if (!azure_deployment.is_empty() && !models.has(azure_deployment)) {
 			models.push_back(azure_deployment);
 		}
+		const String current_model = _get_editor_setting_string("yeet_ai/chat/model", "");
+		if (!current_model.is_empty() && !models.has(current_model)) {
+			models.push_back(current_model);
+		}
+	} else if (provider == 5) {
+		models.push_back("codex-cli");
+	} else if (provider == 6) {
+		models.push_back("claude-code");
+	} else if (provider == 7) {
+		models.push_back("grok-cli");
+		models.push_back("grok-4.5");
+		models.push_back("grok-build");
 	} else {
 		models.push_back("berrymodel");
 		for (const String &tag : _fetched_model_tags) {
@@ -4581,7 +6055,15 @@ void YeetAIDock::_update_model_button_label() {
 		return;
 	}
 	const String model = _get_editor_setting_string("yeet_ai/chat/model", "berrymodel");
+	const int provider = _get_editor_setting_int("yeet_ai/chat/provider", 0);
 	String display = model;
+	if (provider == 4) {
+		const Dictionary ap = yeet_ai_azure_active_profile();
+		const String pname = String(ap.get("name", "Azure"));
+		display = vformat("Azure · %s", pname);
+	} else if (provider == 5 || provider == 6 || provider == 7) {
+		display = yeet_provider_display_name(provider);
+	}
 	const int slash = display.rfind("/");
 	if (slash >= 0) {
 		display = display.substr(slash + 1);
@@ -4606,7 +6088,12 @@ void YeetAIDock::_update_token_counter() {
 		approx_tokens += _context_summary.length() / 4;
 	}
 	if (approx_tokens > 0) {
-		_token_count_label->set_text(vformat(TTR("~%d tokens"), approx_tokens));
+		String txt = vformat(TTR("~%d tokens"), approx_tokens);
+		if (_last_prompt_tokens > 0) {
+			// Real prompt-token count from the last API response, when available.
+			txt += vformat(TTR(" (last req: %d)"), _last_prompt_tokens);
+		}
+		_token_count_label->set_text(txt);
 		_token_count_label->set_visible(true);
 	} else {
 		_token_count_label->set_visible(false);
@@ -4636,50 +6123,60 @@ void YeetAIDock::_update_files_modified_label() {
 		return;
 	}
 	if (_session_modified_files.is_empty()) {
-		_files_modified_label->set_visible(false);
+		_files_modified_label->clear();
+		if (_files_strip_panel) {
+			_files_strip_panel->set_visible(false);
+		} else {
+			_files_modified_label->set_visible(false);
+		}
 		return;
 	}
 	_files_modified_label->clear();
+	if (_files_strip_panel) {
+		_files_strip_panel->set_visible(true);
+	}
 	_files_modified_label->set_visible(true);
 
 	const bool tree_ready = is_inside_tree();
 	const Color accent = tree_ready ? get_theme_color(SNAME("accent_color"), EditorStringName(Editor)) : Color(0.3f, 0.5f, 0.9f);
 	const Color font_dim = tree_ready ? get_theme_color(SNAME("font_disabled_color"), EditorStringName(Editor)) : Color(0.5f, 0.5f, 0.5f);
 	const int base_fs = tree_ready ? get_theme_font_size(SNAME("main_size"), EditorStringName(EditorFonts)) : 14;
-	const int small_fs = MAX(9, int(base_fs * 0.8f));
+	const int small_fs = MAX(9, int(base_fs * 0.78f));
 
-	Ref<Texture2D> file_icon = get_editor_theme_icon("File");
+	// Single compact line: icon · N files · chip · chip · …
+	Ref<Texture2D> file_icon = _editor_icon(SNAME("File"), SNAME("FileList"));
 	if (file_icon.is_valid()) {
-		_files_modified_label->add_image(file_icon, int(14 * EDSCALE), int(14 * EDSCALE));
+		_files_modified_label->add_image(file_icon, int(12 * EDSCALE), int(12 * EDSCALE));
+		_files_modified_label->add_text(" ");
 	}
-	_files_modified_label->add_text(" ");
 	_files_modified_label->push_font_size(small_fs);
 	_files_modified_label->push_color(font_dim);
 	_files_modified_label->push_bold();
-	_files_modified_label->add_text(vformat(TTR("Files modified (%d):"), _session_modified_files.size()));
+	_files_modified_label->add_text(vformat(TTR("%d changed"), _session_modified_files.size()));
 	_files_modified_label->pop();
 	_files_modified_label->pop();
 	_files_modified_label->pop();
-	_files_modified_label->append_text("\n");
 
 	int count = 0;
 	for (const String &f : _session_modified_files) {
-		if (count >= 8) {
+		if (count >= 4) {
 			_files_modified_label->push_color(font_dim);
 			_files_modified_label->push_font_size(small_fs);
-			_files_modified_label->add_text(vformat("  +%d more", _session_modified_files.size() - count));
+			_files_modified_label->add_text(vformat("  +%d", _session_modified_files.size() - count));
 			_files_modified_label->pop();
 			_files_modified_label->pop();
 			break;
 		}
+		_files_modified_label->add_text("  ");
 		_files_modified_label->push_font_size(small_fs);
 		_files_modified_label->push_color(accent);
 		_files_modified_label->push_meta(f);
-		_files_modified_label->add_text(f);
+		// Short basename only.
+		const int slash = MAX(f.rfind("/"), f.rfind("\\"));
+		_files_modified_label->add_text(slash >= 0 ? f.substr(slash + 1) : f);
 		_files_modified_label->pop();
 		_files_modified_label->pop();
 		_files_modified_label->pop();
-		_files_modified_label->append_text("\n");
 		count++;
 	}
 }

@@ -225,6 +225,103 @@ bool YeetAIToolSchemaRegistry::validate_arguments(
 	return valid;
 }
 
+// Build a readable description from a tool name when no explicit one exists.
+// Maps the leading verb to a phrase and normalizes _2d/_3d suffixes, so e.g.
+// "create_rigid_body_2d" -> "Create a rigid body (2D) node." This makes the
+// auto-generated tool definitions much clearer to the model than a bare
+// title-cased name, across every tool that lacks a hand-written schema.
+static String _infer_tool_description(const String &p_name) {
+	const String s = p_name.to_lower();
+
+	struct VerbPhrase {
+		const char *prefix;
+		const char *verb;
+		bool node_creator;
+	};
+	static const VerbPhrase verbs[] = {
+		{ "create_", "Create a", true },
+		{ "scaffold_", "Scaffold a ready-made", false },
+		{ "instantiate_", "Instantiate the", false },
+		{ "duplicate_", "Duplicate the", false },
+		{ "add_", "Add a", false },
+		{ "set_", "Set the", false },
+		{ "update_", "Update the", false },
+		{ "patch_", "Patch the", false },
+		{ "assign_", "Assign a", false },
+		{ "attach_", "Attach a", false },
+		{ "connect_", "Connect the", false },
+		{ "disconnect_", "Disconnect the", false },
+		{ "reparent_", "Reparent the", false },
+		{ "rename_", "Rename the", false },
+		{ "remove_", "Remove the", false },
+		{ "delete_", "Delete the", false },
+		{ "clear_", "Clear the", false },
+		{ "get_", "Get / inspect the", false },
+		{ "find_", "Find", false },
+		{ "list_", "List the", false },
+		{ "search_", "Search", false },
+		{ "inspect_", "Inspect the", false },
+		{ "validate_", "Validate the", false },
+		{ "audit_", "Audit the", false },
+		{ "repair_", "Repair the", false },
+		{ "capture_", "Capture the", false },
+		{ "read_", "Read the", false },
+		{ "write_", "Write the", false },
+		{ "copy_", "Copy the", false },
+		{ "move_", "Move the", false },
+		{ "save_", "Save the", false },
+		{ "open_", "Open the", false },
+		{ "reload_", "Reload the", false },
+		{ "select_", "Select the", false },
+		{ "focus_", "Focus the", false },
+		{ "import_", "Import the", false },
+		{ "bake_", "Bake the", false },
+		{ "fill_", "Fill the", false },
+		{ "paint_", "Paint the", false },
+		{ "play_", "Play the", false },
+		{ "stop_", "Stop the", false },
+		{ "run_", "Run the", false },
+		{ "batch_", "Batch", false },
+		{ "manage_", "Manage", false },
+		{ "resolve_", "Resolve the", false },
+		{ "scan_", "Scan the", false },
+		{ "lint_", "Lint the", false },
+		{ "memory_", "Project memory:", false },
+		{ "git_", "Git:", false },
+		{ "runtime_", "On the running game, control the", false },
+	};
+
+	for (const VerbPhrase &v : verbs) {
+		const String prefix = v.prefix;
+		if (!s.begins_with(prefix)) {
+			continue;
+		}
+		String rest = s.substr(prefix.length());
+		String dim;
+		if (rest.ends_with("_2d")) {
+			rest = rest.substr(0, rest.length() - 3);
+			dim = " (2D)";
+		} else if (rest.ends_with("_3d")) {
+			rest = rest.substr(0, rest.length() - 3);
+			dim = " (3D)";
+		}
+		const String object = rest.replace("_", " ").strip_edges();
+		String out = String(v.verb) + " " + object + dim;
+		if (v.node_creator && !object.contains("file") && !object.contains("folder") &&
+				!object.contains("material") && !object.contains("resource") &&
+				!object.contains("texture") && !object.contains("theme") &&
+				!object.contains("gradient") && !object.contains("curve") &&
+				!object.contains("font") && !object.contains("tileset") &&
+				!object.contains("animation") && !object.contains("shader")) {
+			out += " node";
+		}
+		return out.strip_edges() + ".";
+	}
+
+	// Fallback: title-cased name.
+	return p_name.replace("_", " ").capitalize() + ".";
+}
+
 // Generate a fallback schema for tools without explicit definitions.
 // This keeps the native tools payload comprehensive even when we haven't
 // hand-written every schema.
@@ -232,7 +329,7 @@ static ToolSchema _infer_schema(const String &p_tool_name) {
 	ToolSchema schema;
 	schema.tool_name = p_tool_name;
 	schema.category = "inferred";
-	schema.description = p_tool_name.replace("_", " ").capitalize();
+	schema.description = _infer_tool_description(p_tool_name);
 	schema.requires_scene = false;
 	schema.is_write_operation = false;
 	schema.supports_batching = false;
@@ -4481,6 +4578,1262 @@ const HashMap<String, ToolSchema> &YeetAIToolSchemaRegistry::get_all_schemas() {
 		schemas["create_panel_container"] = schema;
 	}
 
+	// ═══════════════════════════════════════════════════════════════════════════
+	// BULK SCHEMA BACKFILL — compact group-based registration
+	// Uses helpers to register tools with shared argument patterns.
+	// All additional args marked optional to avoid rejecting valid calls.
+	// ═══════════════════════════════════════════════════════════════════════════
+
+	// Helper: register a node creation tool with name + parent_path + optional position
+	auto reg_create_node = [&](const char *tool, const char *desc, bool is_2d) {
+		String t(tool);
+		if (schemas.has(t)) return;
+		ToolSchema s;
+		s.tool_name = t;
+		s.description = desc;
+		s.requires_scene = true;
+		s.is_write_operation = true;
+		s.supports_batching = true;
+		ToolArgSchema a_name; a_name.name = "name"; a_name.type_hint = Variant::STRING; a_name.required = true; a_name.description = "Node name"; s.arguments.push_back(a_name);
+		ToolArgSchema a_parent; a_parent.name = "parent_path"; a_parent.type_hint = Variant::STRING; a_parent.required = false; a_parent.auto_resolve_node_path = true; a_parent.description = "Parent node path"; s.arguments.push_back(a_parent);
+		if (is_2d) {
+			ToolArgSchema ax; ax.name = "x"; ax.type_hint = Variant::FLOAT; ax.required = false; s.arguments.push_back(ax);
+			ToolArgSchema ay; ay.name = "y"; ay.type_hint = Variant::FLOAT; ay.required = false; s.arguments.push_back(ay);
+		} else {
+			ToolArgSchema ap; ap.name = "position"; ap.type_hint = Variant::VECTOR3; ap.required = false; s.arguments.push_back(ap);
+		}
+		schemas[t] = s;
+	};
+
+	// Helper: register a read-only tool with optional node_path
+	auto reg_read_node = [&](const char *tool, const char *desc, bool needs_path) {
+		String t(tool);
+		if (schemas.has(t)) return;
+		ToolSchema s;
+		s.tool_name = t;
+		s.description = desc;
+		s.requires_scene = true;
+		s.is_write_operation = false;
+		if (needs_path) {
+			ToolArgSchema ap; ap.name = "node_path"; ap.type_hint = Variant::STRING; ap.required = true; ap.auto_resolve_node_path = true; ap.description = "Node path"; s.arguments.push_back(ap);
+		}
+		schemas[t] = s;
+	};
+
+	// Helper: register a write tool on a node path
+	auto reg_write_node = [&](const char *tool, const char *desc) {
+		String t(tool);
+		if (schemas.has(t)) return;
+		ToolSchema s;
+		s.tool_name = t;
+		s.description = desc;
+		s.requires_scene = true;
+		s.is_write_operation = true;
+		s.supports_batching = true;
+		ToolArgSchema ap; ap.name = "node_path"; ap.type_hint = Variant::STRING; ap.required = true; ap.auto_resolve_node_path = true; ap.description = "Node path"; s.arguments.push_back(ap);
+		schemas[t] = s;
+	};
+
+	// Helper: register a file/project tool (no scene required)
+	auto reg_file_tool = [&](const char *tool, const char *desc, bool is_write) {
+		String t(tool);
+		if (schemas.has(t)) return;
+		ToolSchema s;
+		s.tool_name = t;
+		s.description = desc;
+		s.requires_scene = false;
+		s.is_write_operation = is_write;
+		ToolArgSchema ap; ap.name = "path"; ap.type_hint = Variant::STRING; ap.required = true; ap.description = "File path"; s.arguments.push_back(ap);
+		schemas[t] = s;
+	};
+
+	// Helper: register a no-arg read-only tool
+	auto reg_noarg_read = [&](const char *tool, const char *desc, bool needs_scene) {
+		String t(tool);
+		if (schemas.has(t)) return;
+		ToolSchema s;
+		s.tool_name = t;
+		s.description = desc;
+		s.requires_scene = needs_scene;
+		s.is_write_operation = false;
+		schemas[t] = s;
+	};
+
+	// ── 2D BODY NODES ──
+	reg_create_node("create_area_2d", "Create an Area2D node", true);
+	reg_create_node("create_rigid_body_2d", "Create a RigidBody2D node", true);
+	reg_create_node("create_static_body_2d", "Create a StaticBody2D node", true);
+	reg_create_node("create_animatable_body_2d", "Create an AnimatableBody2D node", true);
+	reg_create_node("create_ray_cast_2d", "Create a RayCast2D node", true);
+	reg_create_node("create_shape_cast_2d", "Create a ShapeCast2D node", true);
+	reg_create_node("create_line_2d", "Create a Line2D node", true);
+	reg_create_node("create_path_2d", "Create a Path2D node", true);
+	reg_create_node("create_polygon_2d", "Create a Polygon2D node", true);
+	reg_create_node("create_marker_2d", "Create a Marker2D node", true);
+	reg_create_node("create_light_2d", "Create a PointLight2D node", true);
+	reg_create_node("create_cpu_particles_2d", "Create a CPUParticles2D node", true);
+	reg_create_node("create_gpu_particles_2d", "Create a GPUParticles2D node", true);
+	reg_create_node("create_canvas_layer", "Create a CanvasLayer node", true);
+	reg_create_node("create_parallax_background", "Create a ParallaxBackground node", true);
+	reg_create_node("create_parallax_layer", "Create a ParallaxLayer node", true);
+	reg_create_node("create_navigation_region_2d", "Create a NavigationRegion2D node", true);
+	reg_create_node("create_navigation_agent_2d", "Create a NavigationAgent2D node", true);
+	reg_create_node("create_collision_polygon_2d", "Create a CollisionPolygon2D node", true);
+	reg_create_node("create_remote_transform_2d", "Create a RemoteTransform2D node", true);
+	reg_create_node("create_visible_on_screen_notifier_2d", "Create a VisibleOnScreenNotifier2D node", true);
+	reg_create_node("create_audio_stream_player_2d", "Create an AudioStreamPlayer2D node", true);
+	reg_create_node("create_mesh_instance_2d", "Create a MeshInstance2D node", true);
+	reg_create_node("create_path_follow_2d", "Create a PathFollow2D node", true);
+	reg_create_node("create_skeleton_2d", "Create a Skeleton2D node", true);
+	reg_create_node("create_bone_2d", "Create a Bone2D node", true);
+	reg_create_node("create_multimesh_instance_2d", "Create a MultiMeshInstance2D node", true);
+
+	// ── 3D BODY NODES ──
+	reg_create_node("create_area_3d", "Create an Area3D node", false);
+	reg_create_node("create_rigid_body_3d", "Create a RigidBody3D node", false);
+	reg_create_node("create_static_body_3d", "Create a StaticBody3D node", false);
+	reg_create_node("create_character_body_3d", "Create a CharacterBody3D node", false);
+	reg_create_node("create_ray_cast_3d", "Create a RayCast3D node", false);
+	reg_create_node("create_shape_cast_3d", "Create a ShapeCast3D node", false);
+	reg_create_node("create_vehicle_body_3d", "Create a VehicleBody3D node", false);
+	reg_create_node("create_path_3d", "Create a Path3D node", false);
+	reg_create_node("create_gi_probe", "Create a VoxelGI node", false);
+	reg_create_node("create_reflection_probe", "Create a ReflectionProbe node", false);
+	reg_create_node("create_fog_volume", "Create a FogVolume node", false);
+	reg_create_node("create_particle_emitter", "Create a GPUParticles2D/3D node", false);
+
+	// ── UI NODES ──
+	reg_create_node("create_control_node", "Create a Control-derived UI node", true);
+	reg_create_node("create_container_layout", "Create a container layout node", true);
+	reg_create_node("create_scroll_container", "Create a ScrollContainer node", true);
+	reg_create_node("create_progress_bar", "Create a ProgressBar node", true);
+	reg_create_node("create_slider", "Create a Slider node", true);
+	reg_create_node("create_item_list", "Create an ItemList node", true);
+	reg_create_node("create_option_button", "Create an OptionButton node", true);
+	reg_create_node("create_tab_container", "Create a TabContainer node", true);
+	reg_create_node("create_graph_node", "Create a GraphNode node", true);
+	reg_create_node("create_tree_widget", "Create a Tree widget node", true);
+	reg_create_node("create_margin_container", "Create a MarginContainer node", true);
+	reg_create_node("create_h_separator", "Create an HSeparator node", true);
+	reg_create_node("create_v_separator", "Create a VSeparator node", true);
+	reg_create_node("create_reference_rect", "Create a ReferenceRect node", true);
+	reg_create_node("create_aspect_ratio_container", "Create an AspectRatioContainer node", true);
+	reg_create_node("create_accept_dialog", "Create an AcceptDialog node", true);
+	reg_create_node("create_confirmation_dialog", "Create a ConfirmationDialog node", true);
+	reg_create_node("create_subviewport_container", "Create a SubViewportContainer node", true);
+	reg_create_node("create_audio_player", "Create an AudioStreamPlayer node", true);
+
+	// ── INSPECTION TOOLS ──
+	reg_read_node("get_node_api", "Get signals, methods, properties of a node", true);
+	reg_read_node("get_node_groups", "Get groups a node belongs to", true);
+	reg_read_node("get_node_collision_layers", "Get collision layer/mask of a node", true);
+	reg_read_node("get_signal_connections", "Get signal connections from a node", true);
+	reg_read_node("get_animation_player_state", "Get animation player tracks/keys", true);
+	reg_read_node("get_tilemap_info", "Get tilemap cells and sources", true);
+	reg_read_node("get_tileset_sources", "Get tileset source atlas info", true);
+	reg_read_node("get_navigation_region_info", "Get navigation region agents/obstacles/links", true);
+	reg_read_node("get_world_environment", "Get environment settings", false);
+	reg_read_node("get_shader_uniforms", "Get shader uniform names and values", true);
+	reg_read_node("inspect_runtime_node", "Inspect a runtime node properties", true);
+
+	reg_noarg_read("get_autoloads", "List project autoloads", false);
+	reg_noarg_read("get_audio_buses", "Get audio bus configuration", false);
+	reg_noarg_read("get_console_output", "Get console/output messages", false);
+	reg_noarg_read("get_debug_snapshot", "Get debug variables, memory, scene tree", false);
+	reg_noarg_read("get_runtime_debugger_state", "Get runtime errors, warnings, stack", false);
+	reg_noarg_read("get_editor_3d_camera_transform", "Get editor 3D camera position/rotation", true);
+	reg_noarg_read("get_editor_inspector_subject", "Get currently inspected node", true);
+	reg_noarg_read("get_editor_version", "Get Godot editor version string", false);
+	reg_noarg_read("get_export_presets", "List export presets", false);
+	reg_noarg_read("get_global_classes", "List global script classes", false);
+	reg_noarg_read("get_network_state", "Get multiplayer network state", false);
+	reg_noarg_read("get_remote_scene_tree", "Get running game scene tree", false);
+	reg_noarg_read("get_translation_overview", "Get translation keys/values", false);
+	reg_noarg_read("get_unsaved_scenes", "List unsaved scene paths", false);
+	reg_noarg_read("get_binary_file_metadata", "Get file size and format info", false);
+	reg_noarg_read("get_collision_exceptions", "Get collision exceptions for a node", true);
+	reg_noarg_read("get_resource_dependencies", "Get resource dependencies list", false);
+	reg_noarg_read("get_scene_dependency_closure", "Get scene dependency closure", false);
+	reg_noarg_read("profile_frame", "Get frame time, physics time, draw calls", false);
+	reg_noarg_read("monitor_runtime_performance", "Get FPS, CPU, memory, vertices", false);
+
+	// ── WRITE/SET TOOLS (node-path based) ──
+	reg_write_node("set_collision_layer_mask", "Set collision layer and mask");
+	reg_write_node("set_node_collision_layers", "Set node collision layers");
+	reg_write_node("set_control_layout", "Set control layout anchors/offsets");
+	reg_write_node("set_control_theme_override", "Set theme override on control");
+	reg_write_node("set_navigation_agent_params", "Set navigation agent parameters");
+	reg_write_node("set_physics_material", "Set physics material properties");
+	reg_write_node("set_node_meta", "Set/get/remove node metadata");
+	reg_write_node("set_environment_fog", "Set environment fog parameters");
+	reg_write_node("set_environment_tonemap", "Set tonemap parameters");
+	reg_write_node("set_environment_ss_effects", "Set SSAO/SSR/glow parameters");
+	reg_write_node("set_world_environment", "Set world environment properties");
+	reg_write_node("set_editor_3d_camera", "Set editor 3D camera transform");
+	reg_write_node("add_collision_exception", "Add collision exception pair");
+	reg_write_node("remove_collision_exception", "Remove collision exception pair");
+	reg_write_node("add_csg_primitive", "Add CSG primitive to node");
+	reg_write_node("disconnect_signal", "Disconnect a signal connection");
+	reg_write_node("clear_tilemap_cells", "Clear tilemap cells in region");
+	reg_write_node("paint_terrain", "Paint terrain cells");
+	reg_write_node("focus_scene_tree_node", "Focus/select node in scene tree");
+	reg_write_node("play_audio", "Play audio on AudioStreamPlayer");
+	reg_write_node("stop_audio", "Stop audio on AudioStreamPlayer");
+
+	// ── FILE/PROJECT TOOLS ──
+	reg_file_tool("write_project_file", "Write text content to a project file", true);
+	reg_file_tool("delete_project_file", "Delete a project file (requires confirm:true)", true);
+	reg_file_tool("move_project_file", "Move/rename a project file", true);
+	reg_file_tool("copy_project_file", "Copy a project file", true);
+	reg_file_tool("import_asset", "Import an external asset into the project", true);
+	reg_file_tool("select_file", "Select file in FileSystem dock", false);
+	reg_file_tool("save_resource", "Save a resource to disk", true);
+	reg_file_tool("resolve_resource_uid", "Resolve UID to file path", false);
+	reg_file_tool("get_shader_code", "Read shader source code", false);
+	reg_file_tool("update_shader_code", "Update shader file contents", true);
+	reg_file_tool("lint_gdscript", "Lint a GDScript file for issues", false);
+	reg_file_tool("get_gdscript_symbols", "Get script classes/functions/signals/properties", false);
+	reg_file_tool("get_gdscript_docs", "Get script documentation comments", false);
+
+	// ── NO-SCENE FILE TOOLS ──
+	{
+		if (!schemas.has("find_project_files")) {
+			ToolSchema s; s.tool_name = "find_project_files"; s.description = "Search project files by name/extension"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "root"; a.type_hint = Variant::STRING; a.required = false; s.arguments.push_back(a);
+			ToolArgSchema aq; aq.name = "query"; aq.type_hint = Variant::STRING; aq.required = false; s.arguments.push_back(aq);
+			schemas["find_project_files"] = s;
+		}
+		if (!schemas.has("grep_project_files")) {
+			ToolSchema s; s.tool_name = "grep_project_files"; s.description = "Search file contents with regex"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "query"; a.type_hint = Variant::STRING; a.required = true; a.description = "Search pattern"; s.arguments.push_back(a);
+			ToolArgSchema ap; ap.name = "path"; ap.type_hint = Variant::STRING; ap.required = true; ap.description = "Root path to search"; s.arguments.push_back(ap);
+			schemas["grep_project_files"] = s;
+		}
+		if (!schemas.has("replace_in_project_files")) {
+			ToolSchema s; s.tool_name = "replace_in_project_files"; s.description = "Find and replace in project files"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema aq; aq.name = "query"; aq.type_hint = Variant::STRING; aq.required = true; s.arguments.push_back(aq);
+			ToolArgSchema ar; ar.name = "replacement"; ar.type_hint = Variant::STRING; ar.required = true; s.arguments.push_back(ar);
+			ToolArgSchema ap; ap.name = "path"; ap.type_hint = Variant::STRING; ap.required = true; s.arguments.push_back(ap);
+			schemas["replace_in_project_files"] = s;
+		}
+		if (!schemas.has("reimport_project_files")) {
+			ToolSchema s; s.tool_name = "reimport_project_files"; s.description = "Reimport files through Godot import pipeline"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "paths"; a.type_hint = Variant::ARRAY; a.required = true; s.arguments.push_back(a);
+			schemas["reimport_project_files"] = s;
+		}
+		if (!schemas.has("scan_project_filesystem")) {
+			ToolSchema s; s.tool_name = "scan_project_filesystem"; s.description = "Rescan project filesystem"; s.requires_scene = false; s.is_write_operation = false;
+			schemas["scan_project_filesystem"] = s;
+		}
+		if (!schemas.has("rename_resource_references")) {
+			ToolSchema s; s.tool_name = "rename_resource_references"; s.description = "Rename resource references project-wide"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema ao; ao.name = "old_name"; ao.type_hint = Variant::STRING; ao.required = true; s.arguments.push_back(ao);
+			ToolArgSchema an; an.name = "new_name"; an.type_hint = Variant::STRING; an.required = true; s.arguments.push_back(an);
+			schemas["rename_resource_references"] = s;
+		}
+	}
+
+	// ── EDITOR ACTIONS ──
+	reg_noarg_read("get_editor_settings", "Get editor settings", false);
+	{
+		if (!schemas.has("set_editor_main_screen")) {
+			ToolSchema s; s.tool_name = "set_editor_main_screen"; s.description = "Switch editor main screen"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "screen"; a.type_hint = Variant::STRING; a.required = true; a.valid_values = Vector<String>{"3D", "2D", "Script", "Animation", "AssetLib"}; s.arguments.push_back(a);
+			schemas["set_editor_main_screen"] = s;
+		}
+		if (!schemas.has("editor_undo")) {
+			ToolSchema s; s.tool_name = "editor_undo"; s.description = "Undo editor actions"; s.requires_scene = true; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "steps"; a.type_hint = Variant::INT; a.required = false; a.min_value = 1; a.max_value = 50; s.arguments.push_back(a);
+			schemas["editor_undo"] = s;
+		}
+		if (!schemas.has("edit_script")) {
+			ToolSchema s; s.tool_name = "edit_script"; s.description = "Open script in editor"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "script_path"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["edit_script"] = s;
+		}
+		if (!schemas.has("capture_editor_viewport")) {
+			ToolSchema s; s.tool_name = "capture_editor_viewport"; s.description = "Capture editor viewport as PNG"; s.requires_scene = true; s.is_write_operation = false;
+			schemas["capture_editor_viewport"] = s;
+		}
+		if (!schemas.has("capture_game_viewport")) {
+			ToolSchema s; s.tool_name = "capture_game_viewport"; s.description = "Capture running game viewport as PNG"; s.requires_scene = false; s.is_write_operation = false;
+			schemas["capture_game_viewport"] = s;
+		}
+		if (!schemas.has("capture_dual_view")) {
+			ToolSchema s; s.tool_name = "capture_dual_view"; s.description = "Capture both editor and game viewports"; s.requires_scene = true; s.is_write_operation = false;
+			schemas["capture_dual_view"] = s;
+		}
+		if (!schemas.has("capture_subviewport")) {
+			ToolSchema s; s.tool_name = "capture_subviewport"; s.description = "Capture a SubViewport as PNG"; s.requires_scene = true; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "node_path"; a.type_hint = Variant::STRING; a.required = true; a.auto_resolve_node_path = true; s.arguments.push_back(a);
+			schemas["capture_subviewport"] = s;
+		}
+		if (!schemas.has("capture_texture_resource")) {
+			ToolSchema s; s.tool_name = "capture_texture_resource"; s.description = "Capture a texture resource as PNG"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "path"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["capture_texture_resource"] = s;
+		}
+		if (!schemas.has("export_project")) {
+			ToolSchema s; s.tool_name = "export_project"; s.description = "Export project using preset"; s.requires_scene = false; s.is_write_operation = true;
+			schemas["export_project"] = s;
+		}
+		if (!schemas.has("run_scene_script")) {
+			ToolSchema s; s.tool_name = "run_scene_script"; s.description = "Run a GDScript scene script"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "scene_path"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["run_scene_script"] = s;
+		}
+	}
+
+	// ── SCRIPTING TOOLS ──
+	{
+		if (!schemas.has("get_gdscript_errors")) {
+			ToolSchema s; s.tool_name = "get_gdscript_errors"; s.description = "Get GDScript parse errors"; s.requires_scene = false; s.is_write_operation = false;
+			schemas["get_gdscript_errors"] = s;
+		}
+		if (!schemas.has("search_tool_catalog")) {
+			ToolSchema s;
+			s.tool_name = "search_tool_catalog";
+			s.category = "core";
+			s.description = "Search the full editor tool catalog by keyword and/or pack. Use when a needed capability is missing from the curated tool list.";
+			s.requires_scene = false;
+			s.is_write_operation = false;
+			{
+				ToolArgSchema a;
+				a.name = "query";
+				a.type_hint = Variant::STRING;
+				a.required = false;
+				a.description = "Substring match against tool names (e.g. tilemap, animation, runtime).";
+				s.arguments.push_back(a);
+			}
+			{
+				ToolArgSchema a;
+				a.name = "pack";
+				a.type_hint = Variant::STRING;
+				a.required = false;
+				a.description = "Optional pack filter: core,2d,3d,ui,anim,audio,shader,physics,debug,multiplayer.";
+				s.arguments.push_back(a);
+			}
+			{
+				ToolArgSchema a;
+				a.name = "max_results";
+				a.type_hint = Variant::INT;
+				a.required = false;
+				a.description = "Max rows to return (default 40).";
+				s.arguments.push_back(a);
+			}
+			schemas["search_tool_catalog"] = s;
+		}
+		if (!schemas.has("request_tool_pack")) {
+			ToolSchema s;
+			s.tool_name = "request_tool_pack";
+			s.category = "core";
+			s.description = "Expand which tool packs are advertised on the next model turn (for GPT-5.x/Azure tool budget). Call after search_tool_catalog if you need a domain.";
+			s.requires_scene = false;
+			s.is_write_operation = false;
+			{
+				ToolArgSchema a;
+				a.name = "packs";
+				a.type_hint = Variant::ARRAY;
+				a.required = true;
+				a.description = "Pack names: 2d,3d,ui,anim,audio,shader,physics,debug,multiplayer.";
+				s.arguments.push_back(a);
+			}
+			schemas["request_tool_pack"] = s;
+		}
+		if (!schemas.has("update_plan")) {
+			ToolSchema s; s.tool_name = "update_plan"; s.category = "core";
+			s.description = "Create or update your task plan as a checklist. Call this first for any multi-step task and keep it current: pass the full list of steps each time, marking exactly one as in_progress and completed ones as done. Status values: pending, in_progress, done.";
+			s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "plan"; a.type_hint = Variant::ARRAY; a.required = true;
+			a.description = "Full ordered list of steps. Each item is an object {\"step\": string, \"status\": \"pending\"|\"in_progress\"|\"done\"}.";
+			s.arguments.push_back(a);
+			schemas["update_plan"] = s;
+		}
+		// ── Hot always-advertised tools: explicit schemas (replace weak inference) ──
+		if (!schemas.has("get_node_api")) {
+			ToolSchema s; s.tool_name = "get_node_api"; s.category = "inspection";
+			s.description = "List a node's class methods, properties, and signals (its scripting API). Call this before connect_signal or set_node_property to confirm exact member names.";
+			s.requires_scene = true; s.is_write_operation = false;
+			ToolArgSchema ap; ap.name = "node_path"; ap.type_hint = Variant::STRING; ap.required = true; ap.auto_resolve_node_path = true; ap.description = "Path or bare name of the node to introspect."; s.arguments.push_back(ap);
+			ToolArgSchema asp; asp.name = "scene_path"; asp.type_hint = Variant::STRING; asp.required = false; asp.description = "Scene to resolve the node in (defaults to the open scene)."; s.arguments.push_back(asp);
+			ToolArgSchema apv; apv.name = "include_private"; apv.type_hint = Variant::BOOL; apv.required = false; apv.description = "Include underscore-prefixed members."; s.arguments.push_back(apv);
+			ToolArgSchema amm; amm.name = "max_methods"; amm.type_hint = Variant::INT; amm.required = false; s.arguments.push_back(amm);
+			ToolArgSchema amp; amp.name = "max_properties"; amp.type_hint = Variant::INT; amp.required = false; s.arguments.push_back(amp);
+			ToolArgSchema ams; ams.name = "max_signals"; ams.type_hint = Variant::INT; ams.required = false; s.arguments.push_back(ams);
+			schemas["get_node_api"] = s;
+		}
+		if (!schemas.has("write_project_file")) {
+			ToolSchema s; s.tool_name = "write_project_file"; s.category = "files";
+			s.description = "Create or overwrite a text/resource file at a res:// path. Prefer update_gdscript_file for scripts. Only overwrites an existing file when overwrite=true.";
+			s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "path"; ap.type_hint = Variant::STRING; ap.required = true; ap.description = "Destination path, e.g. res://data/config.json."; s.arguments.push_back(ap);
+			ToolArgSchema ac; ac.name = "contents"; ac.type_hint = Variant::STRING; ac.required = true; ac.description = "Full file contents to write."; s.arguments.push_back(ac);
+			ToolArgSchema ao; ao.name = "overwrite"; ao.type_hint = Variant::BOOL; ao.required = false; ao.description = "Set true to replace an existing file."; s.arguments.push_back(ao);
+			schemas["write_project_file"] = s;
+		}
+		if (!schemas.has("delete_project_file")) {
+			ToolSchema s; s.tool_name = "delete_project_file"; s.category = "files";
+			s.description = "Delete a file from the project. Destructive: you MUST pass confirm=true for the deletion to actually happen.";
+			s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "path"; ap.type_hint = Variant::STRING; ap.required = true; ap.description = "res:// path of the file to delete."; s.arguments.push_back(ap);
+			ToolArgSchema ac; ac.name = "confirm"; ac.type_hint = Variant::BOOL; ac.required = false; ac.description = "Must be true to perform the deletion."; s.arguments.push_back(ac);
+			schemas["delete_project_file"] = s;
+		}
+		if (!schemas.has("copy_project_file")) {
+			ToolSchema s; s.tool_name = "copy_project_file"; s.category = "files";
+			s.description = "Copy a project file to a new res:// path. Only overwrites the destination when overwrite=true.";
+			s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema af; af.name = "from_path"; af.type_hint = Variant::STRING; af.required = true; af.description = "Source res:// path."; s.arguments.push_back(af);
+			ToolArgSchema at; at.name = "to_path"; at.type_hint = Variant::STRING; at.required = true; at.description = "Destination res:// path."; s.arguments.push_back(at);
+			ToolArgSchema ao; ao.name = "overwrite"; ao.type_hint = Variant::BOOL; ao.required = false; s.arguments.push_back(ao);
+			schemas["copy_project_file"] = s;
+		}
+		if (!schemas.has("move_project_file")) {
+			ToolSchema s; s.tool_name = "move_project_file"; s.category = "files";
+			s.description = "Move or rename a project file (updates the res:// path). Use for renaming assets/scripts.";
+			s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema af; af.name = "from_path"; af.type_hint = Variant::STRING; af.required = true; af.description = "Current res:// path."; s.arguments.push_back(af);
+			ToolArgSchema at; at.name = "to_path"; at.type_hint = Variant::STRING; at.required = true; at.description = "New res:// path."; s.arguments.push_back(at);
+			schemas["move_project_file"] = s;
+		}
+		if (!schemas.has("disconnect_signal")) {
+			ToolSchema s; s.tool_name = "disconnect_signal"; s.category = "scene";
+			s.description = "Disconnect a previously connected signal between two nodes. Mirror of connect_signal.";
+			s.requires_scene = true; s.is_write_operation = true;
+			ToolArgSchema asn; asn.name = "source_node_path"; asn.type_hint = Variant::STRING; asn.required = true; asn.auto_resolve_node_path = true; asn.description = "Node emitting the signal."; s.arguments.push_back(asn);
+			ToolArgSchema asig; asig.name = "signal_name"; asig.type_hint = Variant::STRING; asig.required = true; asig.description = "Signal to disconnect, e.g. pressed."; s.arguments.push_back(asig);
+			ToolArgSchema atn; atn.name = "target_node_path"; atn.type_hint = Variant::STRING; atn.required = true; atn.auto_resolve_node_path = true; atn.description = "Node the signal was connected to."; s.arguments.push_back(atn);
+			ToolArgSchema am; am.name = "method_name"; am.type_hint = Variant::STRING; am.required = true; am.description = "Method that was connected."; s.arguments.push_back(am);
+			schemas["disconnect_signal"] = s;
+		}
+		if (!schemas.has("save_resource")) {
+			ToolSchema s; s.tool_name = "save_resource"; s.category = "files";
+			s.description = "Save an in-memory or generated resource to a res:// path (.res/.tres).";
+			s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "path"; ap.type_hint = Variant::STRING; ap.required = true; ap.description = "Destination res:// path for the resource."; s.arguments.push_back(ap);
+			ToolArgSchema am; am.name = "merge_with_existing"; am.type_hint = Variant::BOOL; am.required = false; s.arguments.push_back(am);
+			schemas["save_resource"] = s;
+		}
+		if (!schemas.has("select_file")) {
+			ToolSchema s; s.tool_name = "select_file"; s.category = "editor";
+			s.description = "Reveal and select a file in the editor FileSystem dock.";
+			s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema ap; ap.name = "path"; ap.type_hint = Variant::STRING; ap.required = true; ap.description = "res:// path of the file to select."; s.arguments.push_back(ap);
+			schemas["select_file"] = s;
+		}
+		if (!schemas.has("get_class_reference")) {
+			ToolSchema s; s.tool_name = "get_class_reference"; s.description = "Get ClassDB reference for a class"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "class_name"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["get_class_reference"] = s;
+		}
+		if (!schemas.has("search_class_db")) {
+			ToolSchema s; s.tool_name = "search_class_db"; s.description = "Search ClassDB for classes by name"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "query"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["search_class_db"] = s;
+		}
+		if (!schemas.has("get_method_signature")) {
+			ToolSchema s; s.tool_name = "get_method_signature"; s.description = "Get method signature from ClassDB"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema ac; ac.name = "class_name"; ac.type_hint = Variant::STRING; ac.required = true; s.arguments.push_back(ac);
+			ToolArgSchema am; am.name = "method_name"; am.type_hint = Variant::STRING; am.required = true; s.arguments.push_back(am);
+			schemas["get_method_signature"] = s;
+		}
+		if (!schemas.has("get_enum_values")) {
+			ToolSchema s; s.tool_name = "get_enum_values"; s.description = "Get enum values from ClassDB"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema ac; ac.name = "class_name"; ac.type_hint = Variant::STRING; ac.required = true; s.arguments.push_back(ac);
+			ToolArgSchema ae; ae.name = "enum_name"; ae.type_hint = Variant::STRING; ae.required = true; s.arguments.push_back(ae);
+			schemas["get_enum_values"] = s;
+		}
+		if (!schemas.has("run_gdscript_expression")) {
+			ToolSchema s; s.tool_name = "run_gdscript_expression"; s.description = "Evaluate a GDScript expression"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "expression"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["run_gdscript_expression"] = s;
+		}
+		if (!schemas.has("run_gdscript_test")) {
+			ToolSchema s; s.tool_name = "run_gdscript_test"; s.description = "Run a GDScript test expression"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "expression"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["run_gdscript_test"] = s;
+		}
+		if (!schemas.has("inspect_runtime_variable")) {
+			ToolSchema s; s.tool_name = "inspect_runtime_variable"; s.description = "Inspect a runtime variable value"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "variable_name"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["inspect_runtime_variable"] = s;
+		}
+		if (!schemas.has("search_project_settings_keys")) {
+			ToolSchema s; s.tool_name = "search_project_settings_keys"; s.description = "Search project setting keys by substring."; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "pattern"; a.type_hint = Variant::STRING; a.required = true; a.description = "Case-insensitive substring to match against setting names."; s.arguments.push_back(a);
+			ToolArgSchema am; am.name = "max_results"; am.type_hint = Variant::INT; am.required = false; s.arguments.push_back(am);
+			schemas["search_project_settings_keys"] = s;
+		}
+	}
+
+	// ── ANIMATION TOOLS ──
+	{
+		if (!schemas.has("remove_animation_track")) {
+			ToolSchema s; s.tool_name = "remove_animation_track"; s.description = "Remove an animation track by index"; s.requires_scene = true; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "node_path"; ap.type_hint = Variant::STRING; ap.required = true; ap.auto_resolve_node_path = true; s.arguments.push_back(ap);
+			ToolArgSchema an; an.name = "animation_name"; an.type_hint = Variant::STRING; an.required = true; s.arguments.push_back(an);
+			ToolArgSchema ai; ai.name = "track_index"; ai.type_hint = Variant::INT; ai.required = true; s.arguments.push_back(ai);
+			schemas["remove_animation_track"] = s;
+		}
+		if (!schemas.has("add_animation_transition")) {
+			ToolSchema s; s.tool_name = "add_animation_transition"; s.description = "Add state machine transition"; s.requires_scene = true; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "node_path"; ap.type_hint = Variant::STRING; ap.required = true; ap.auto_resolve_node_path = true; s.arguments.push_back(ap);
+			schemas["add_animation_transition"] = s;
+		}
+		if (!schemas.has("set_animation_blend_amount")) {
+			ToolSchema s; s.tool_name = "set_animation_blend_amount"; s.description = "Set blend tree parameter value"; s.requires_scene = true; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "node_path"; ap.type_hint = Variant::STRING; ap.required = true; ap.auto_resolve_node_path = true; s.arguments.push_back(ap);
+			schemas["set_animation_blend_amount"] = s;
+		}
+		if (!schemas.has("create_blend_tree")) {
+			ToolSchema s; s.tool_name = "create_blend_tree"; s.description = "Create an AnimationTree blend tree"; s.requires_scene = true; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "parent_path"; ap.type_hint = Variant::STRING; ap.required = true; ap.auto_resolve_node_path = true; s.arguments.push_back(ap);
+			ToolArgSchema an; an.name = "name"; an.type_hint = Variant::STRING; an.required = true; s.arguments.push_back(an);
+			schemas["create_blend_tree"] = s;
+		}
+	}
+
+	// ── PHYSICS TOOLS (already mostly covered but add missing ones) ──
+	{
+		if (!schemas.has("add_audio_bus_effect")) {
+			ToolSchema s; s.tool_name = "add_audio_bus_effect"; s.description = "Add effect to audio bus"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema ab; ab.name = "bus_name"; ab.type_hint = Variant::STRING; ab.required = true; s.arguments.push_back(ab);
+			ToolArgSchema at; at.name = "effect_type"; at.type_hint = Variant::STRING; at.required = true; s.arguments.push_back(at);
+			schemas["add_audio_bus_effect"] = s;
+		}
+	}
+
+	// ── PROJECT/MANAGEMENT TOOLS ──
+	{
+		if (!schemas.has("manage_autoloads")) {
+			ToolSchema s; s.tool_name = "manage_autoloads"; s.description = "Add or remove project autoloads"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema aa; aa.name = "action"; aa.type_hint = Variant::STRING; aa.required = true; aa.valid_values = Vector<String>{"add", "remove"}; s.arguments.push_back(aa);
+			ToolArgSchema an; an.name = "name"; an.type_hint = Variant::STRING; an.required = true; s.arguments.push_back(an);
+			ToolArgSchema ap; ap.name = "path"; ap.type_hint = Variant::STRING; ap.required = false; s.arguments.push_back(ap);
+			schemas["manage_autoloads"] = s;
+		}
+		if (!schemas.has("manage_editor_plugins")) {
+			ToolSchema s; s.tool_name = "manage_editor_plugins"; s.description = "Enable/disable editor plugins"; s.requires_scene = false; s.is_write_operation = true;
+			schemas["manage_editor_plugins"] = s;
+		}
+		if (!schemas.has("manage_export_presets")) {
+			ToolSchema s; s.tool_name = "manage_export_presets"; s.description = "Add/remove/edit export presets"; s.requires_scene = false; s.is_write_operation = true;
+			schemas["manage_export_presets"] = s;
+		}
+		if (!schemas.has("patch_editor_settings")) {
+			ToolSchema s; s.tool_name = "patch_editor_settings"; s.description = "Patch editor settings"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "settings"; a.type_hint = Variant::DICTIONARY; a.required = true; s.arguments.push_back(a);
+			schemas["patch_editor_settings"] = s;
+		}
+		if (!schemas.has("add_custom_class")) {
+			ToolSchema s; s.tool_name = "add_custom_class"; s.description = "Register a custom global class"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema ac; ac.name = "class_name"; ac.type_hint = Variant::STRING; ac.required = true; s.arguments.push_back(ac);
+			ToolArgSchema asp; asp.name = "script_path"; asp.type_hint = Variant::STRING; asp.required = true; s.arguments.push_back(asp);
+			ToolArgSchema ab; ab.name = "base_class"; ab.type_hint = Variant::STRING; ab.required = true; s.arguments.push_back(ab);
+			schemas["add_custom_class"] = s;
+		}
+		if (!schemas.has("set_import_setting")) {
+			ToolSchema s; s.tool_name = "set_import_setting"; s.description = "Set import setting on a file"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema af; af.name = "file_path"; af.type_hint = Variant::STRING; af.required = true; s.arguments.push_back(af);
+			ToolArgSchema an; an.name = "setting_name"; an.type_hint = Variant::STRING; an.required = true; s.arguments.push_back(an);
+			schemas["set_import_setting"] = s;
+		}
+		if (!schemas.has("set_default_import_presets")) {
+			ToolSchema s; s.tool_name = "set_default_import_presets"; s.description = "Set default import presets"; s.requires_scene = false; s.is_write_operation = true;
+			schemas["set_default_import_presets"] = s;
+		}
+	}
+
+	// ── REMAINING MISSING TOOLS (explicit) ──
+	{
+		// Resource creation tools (save_path required)
+		const char *res_create_tools[] = { "create_gradient", "create_curve", "create_stylebox", "create_theme", "create_font", "create_texture_2d", "create_noise_texture", "create_tileset" };
+		for (const char *t : res_create_tools) {
+			String ts(t);
+			if (schemas.has(ts)) continue;
+			ToolSchema s; s.tool_name = ts; s.description = ts.replace("create_", "Create a ").replace("_", " ") + " resource"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "save_path"; a.type_hint = Variant::STRING; a.required = true; a.description = "Path to save resource (res://...)"; s.arguments.push_back(a);
+			schemas[ts] = s;
+		}
+		if (!schemas.has("create_atlas_texture")) {
+			ToolSchema s; s.tool_name = "create_atlas_texture"; s.description = "Create an AtlasTexture from a region"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema asp; asp.name = "source_path"; asp.type_hint = Variant::STRING; asp.required = true; s.arguments.push_back(asp);
+			ToolArgSchema adp; adp.name = "save_path"; adp.type_hint = Variant::STRING; adp.required = true; s.arguments.push_back(adp);
+			schemas["create_atlas_texture"] = s;
+		}
+		if (!schemas.has("create_animated_sprite_2d")) {
+			ToolSchema s; s.tool_name = "create_animated_sprite_2d"; s.description = "Create an AnimatedSprite2D node"; s.requires_scene = true; s.is_write_operation = true; s.supports_batching = true;
+			ToolArgSchema an; an.name = "name"; an.type_hint = Variant::STRING; an.required = true; s.arguments.push_back(an);
+			ToolArgSchema ap; ap.name = "parent_path"; ap.type_hint = Variant::STRING; ap.required = true; ap.auto_resolve_node_path = true; s.arguments.push_back(ap);
+			schemas["create_animated_sprite_2d"] = s;
+		}
+		if (!schemas.has("create_sky")) {
+			ToolSchema s; s.tool_name = "create_sky"; s.description = "Create a sky in the current scene"; s.requires_scene = true; s.is_write_operation = true;
+			schemas["create_sky"] = s;
+		}
+		if (!schemas.has("create_multiplayer_spawner")) {
+			ToolSchema s; s.tool_name = "create_multiplayer_spawner"; s.description = "Create a MultiplayerSpawner node"; s.requires_scene = true; s.is_write_operation = true; s.supports_batching = true;
+			ToolArgSchema an; an.name = "name"; an.type_hint = Variant::STRING; an.required = true; s.arguments.push_back(an);
+			ToolArgSchema ap; ap.name = "parent_path"; ap.type_hint = Variant::STRING; ap.required = true; ap.auto_resolve_node_path = true; s.arguments.push_back(ap);
+			schemas["create_multiplayer_spawner"] = s;
+		}
+		if (!schemas.has("create_multiplayer_synchronizer")) {
+			ToolSchema s; s.tool_name = "create_multiplayer_synchronizer"; s.description = "Create a MultiplayerSynchronizer node"; s.requires_scene = true; s.is_write_operation = true; s.supports_batching = true;
+			ToolArgSchema an; an.name = "name"; an.type_hint = Variant::STRING; an.required = true; s.arguments.push_back(an);
+			ToolArgSchema ap; ap.name = "parent_path"; ap.type_hint = Variant::STRING; ap.required = true; ap.auto_resolve_node_path = true; s.arguments.push_back(ap);
+			schemas["create_multiplayer_synchronizer"] = s;
+		}
+		if (!schemas.has("create_navigation_link")) {
+			ToolSchema s; s.tool_name = "create_navigation_link"; s.description = "Create a NavigationLink node"; s.requires_scene = true; s.is_write_operation = true; s.supports_batching = true;
+			ToolArgSchema an; an.name = "name"; an.type_hint = Variant::STRING; an.required = true; s.arguments.push_back(an);
+			ToolArgSchema ap; ap.name = "parent_path"; ap.type_hint = Variant::STRING; ap.required = true; ap.auto_resolve_node_path = true; s.arguments.push_back(ap);
+			schemas["create_navigation_link"] = s;
+		}
+		if (!schemas.has("create_navigation_obstacle")) {
+			ToolSchema s; s.tool_name = "create_navigation_obstacle"; s.description = "Create a NavigationObstacle node"; s.requires_scene = true; s.is_write_operation = true; s.supports_batching = true;
+			ToolArgSchema an; an.name = "name"; an.type_hint = Variant::STRING; an.required = true; s.arguments.push_back(an);
+			ToolArgSchema ap; ap.name = "parent_path"; ap.type_hint = Variant::STRING; ap.required = true; ap.auto_resolve_node_path = true; s.arguments.push_back(ap);
+			schemas["create_navigation_obstacle"] = s;
+		}
+		if (!schemas.has("add_tileset_atlas_source")) {
+			ToolSchema s; s.tool_name = "add_tileset_atlas_source"; s.description = "Add atlas source to a tileset"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema atp; atp.name = "tileset_path"; atp.type_hint = Variant::STRING; atp.required = true; s.arguments.push_back(atp);
+			ToolArgSchema atex; atex.name = "texture_path"; atex.type_hint = Variant::STRING; atex.required = true; s.arguments.push_back(atex);
+			ToolArgSchema atx; atx.name = "tile_size_x"; atx.type_hint = Variant::INT; atx.required = true; s.arguments.push_back(atx);
+			ToolArgSchema aty; aty.name = "tile_size_y"; aty.type_hint = Variant::INT; aty.required = true; s.arguments.push_back(aty);
+			schemas["add_tileset_atlas_source"] = s;
+		}
+		if (!schemas.has("set_tilemap_cells")) {
+			ToolSchema s; s.tool_name = "set_tilemap_cells"; s.description = "Set individual tilemap cells"; s.requires_scene = true; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "node_path"; ap.type_hint = Variant::STRING; ap.required = true; ap.auto_resolve_node_path = true; s.arguments.push_back(ap);
+			ToolArgSchema ac; ac.name = "cells"; ac.type_hint = Variant::ARRAY; ac.required = true; s.arguments.push_back(ac);
+			schemas["set_tilemap_cells"] = s;
+		}
+		if (!schemas.has("set_tile_collision_polygon")) {
+			ToolSchema s; s.tool_name = "set_tile_collision_polygon"; s.description = "Set collision polygon for a tile"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema atp; atp.name = "tileset_path"; atp.type_hint = Variant::STRING; atp.required = true; s.arguments.push_back(atp);
+			schemas["set_tile_collision_polygon"] = s;
+		}
+		if (!schemas.has("get_project_tree")) {
+			ToolSchema s; s.tool_name = "get_project_tree"; s.description = "Get project directory tree"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema ar; ar.name = "root"; ar.type_hint = Variant::STRING; ar.required = false; s.arguments.push_back(ar);
+			schemas["get_project_tree"] = s;
+		}
+		if (!schemas.has("attach_script")) {
+			ToolSchema s; s.tool_name = "attach_script"; s.description = "Attach a script to a node"; s.requires_scene = true; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "node_path"; ap.type_hint = Variant::STRING; ap.required = true; ap.auto_resolve_node_path = true; s.arguments.push_back(ap);
+			ToolArgSchema asp; asp.name = "script_path"; asp.type_hint = Variant::STRING; asp.required = true; s.arguments.push_back(asp);
+			schemas["attach_script"] = s;
+		}
+		if (!schemas.has("batch_set_node_property")) {
+			ToolSchema s; s.tool_name = "batch_set_node_property"; s.description = "Set properties on many nodes at once. Pass an 'entries' array; each entry is {node_path, property, value} (optionally scene_path)."; s.requires_scene = true; s.is_write_operation = true; s.supports_batching = true;
+			ToolArgSchema ae; ae.name = "entries"; ae.type_hint = Variant::ARRAY; ae.required = true; ae.description = "Array of {node_path, property, value} objects."; s.arguments.push_back(ae);
+			ToolArgSchema asp; asp.name = "scene_path"; asp.type_hint = Variant::STRING; asp.required = false; asp.description = "Default scene for entries that omit their own scene_path."; s.arguments.push_back(asp);
+			schemas["batch_set_node_property"] = s;
+		}
+	}
+
+	// ── SCAFFOLD TOOLS ──
+	{
+		const char *scaffolds[] = { "scaffold_platformer_player_2d", "scaffold_patrol_enemy_2d", "scaffold_collectible_2d", "scaffold_moving_platform_2d", "scaffold_game_hud_2d", "scaffold_main_menu_2d", "scaffold_pause_menu_2d", "scaffold_lighting_rig_2d" };
+		for (const char *t : scaffolds) {
+			String ts(t);
+			if (schemas.has(ts)) continue;
+			ToolSchema s;
+			s.tool_name = ts;
+			s.description = ts.replace("scaffold_", "Scaffold a ").replace("_2d", " (2D)").replace("_", " ");
+			s.requires_scene = true;
+			s.is_write_operation = true;
+			s.supports_batching = true;
+			ToolArgSchema an; an.name = "name"; an.type_hint = Variant::STRING; an.required = false; s.arguments.push_back(an);
+			ToolArgSchema ap; ap.name = "parent_path"; ap.type_hint = Variant::STRING; ap.required = false; ap.auto_resolve_node_path = true; s.arguments.push_back(ap);
+			schemas[ts] = s;
+		}
+	}
+
+	// ── GIT TOOLS ──
+	reg_noarg_read("git_status", "Get git staged/unstaged files", false);
+	reg_noarg_read("git_branch", "Get current git branch", false);
+	{
+		if (!schemas.has("git_diff_file")) {
+			ToolSchema s; s.tool_name = "git_diff_file"; s.description = "Get git diff for a file"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "file_path"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["git_diff_file"] = s;
+		}
+		if (!schemas.has("git_log")) {
+			ToolSchema s; s.tool_name = "git_log"; s.description = "Get git commit log"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "max_count"; a.type_hint = Variant::INT; a.required = false; s.arguments.push_back(a);
+			schemas["git_log"] = s;
+		}
+	}
+
+	// ── SCENE REFACTORING ──
+	{
+		if (!schemas.has("merge_scenes")) {
+			ToolSchema s; s.tool_name = "merge_scenes"; s.description = "Merge one scene into another"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema as; as.name = "source_path"; as.type_hint = Variant::STRING; as.required = true; s.arguments.push_back(as);
+			ToolArgSchema at; at.name = "target_path"; at.type_hint = Variant::STRING; at.required = true; s.arguments.push_back(at);
+			schemas["merge_scenes"] = s;
+		}
+		if (!schemas.has("extract_sub_scene")) {
+			ToolSchema s; s.tool_name = "extract_sub_scene"; s.description = "Extract a node subtree as a new scene"; s.requires_scene = true; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "node_path"; ap.type_hint = Variant::STRING; ap.required = true; ap.auto_resolve_node_path = true; s.arguments.push_back(ap);
+			ToolArgSchema asp; asp.name = "save_path"; asp.type_hint = Variant::STRING; asp.required = true; s.arguments.push_back(asp);
+			schemas["extract_sub_scene"] = s;
+		}
+		if (!schemas.has("replace_node_with_scene")) {
+			ToolSchema s; s.tool_name = "replace_node_with_scene"; s.description = "Replace a node with an instanced scene"; s.requires_scene = true; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "node_path"; ap.type_hint = Variant::STRING; ap.required = true; ap.auto_resolve_node_path = true; s.arguments.push_back(ap);
+			ToolArgSchema asp; asp.name = "scene_file_path"; asp.type_hint = Variant::STRING; asp.required = true; s.arguments.push_back(asp);
+			schemas["replace_node_with_scene"] = s;
+		}
+		if (!schemas.has("batch_reparent_nodes")) {
+			ToolSchema s; s.tool_name = "batch_reparent_nodes"; s.description = "Reparent multiple nodes at once"; s.requires_scene = true; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "node_paths"; ap.type_hint = Variant::ARRAY; ap.required = true; s.arguments.push_back(ap);
+			ToolArgSchema anp; anp.name = "new_parent_path"; anp.type_hint = Variant::STRING; anp.required = true; anp.auto_resolve_node_path = true; s.arguments.push_back(anp);
+			schemas["batch_reparent_nodes"] = s;
+		}
+	}
+
+	// ── MEMORY TOOLS ──
+	{
+		const char *mem_tools[] = { "memory_record_entity", "memory_query_entities", "memory_get_entity", "memory_update_entity", "memory_delete_entity", "memory_get_summary" };
+		for (const char *t : mem_tools) {
+			String ts(t);
+			if (schemas.has(ts)) continue;
+			ToolSchema s;
+			s.tool_name = ts;
+			s.description = ts.replace("memory_", "Project memory: ").replace("_", " ");
+			s.requires_scene = false;
+			s.is_write_operation = ts.contains("record") || ts.contains("update") || ts.contains("delete");
+			schemas[ts] = s;
+		}
+	}
+
+	// ── ASSET INDEX TOOLS ──
+	{
+		if (!schemas.has("index_project_assets")) {
+			ToolSchema s; s.tool_name = "index_project_assets"; s.description = "Scan and index all project image assets"; s.requires_scene = false; s.is_write_operation = true;
+			schemas["index_project_assets"] = s;
+		}
+		if (!schemas.has("index_asset")) {
+			ToolSchema s; s.tool_name = "index_asset"; s.description = "Index a single asset (deep mode optional)"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "path"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["index_asset"] = s;
+		}
+		if (!schemas.has("search_assets")) {
+			ToolSchema s; s.tool_name = "search_assets"; s.description = "Search indexed assets by query/type/tags"; s.requires_scene = false; s.is_write_operation = false;
+			schemas["search_assets"] = s;
+		}
+		if (!schemas.has("get_asset_manifest")) {
+			ToolSchema s; s.tool_name = "get_asset_manifest"; s.description = "Get asset manifest by path or ID"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "path_or_id"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["get_asset_manifest"] = s;
+		}
+		if (!schemas.has("update_asset_manifest")) {
+			ToolSchema s; s.tool_name = "update_asset_manifest"; s.description = "Patch an asset manifest"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "path_or_id"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["update_asset_manifest"] = s;
+		}
+		if (!schemas.has("confirm_asset_manifest")) {
+			ToolSchema s; s.tool_name = "confirm_asset_manifest"; s.description = "Confirm an asset manifest as accurate"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "path_or_id"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["confirm_asset_manifest"] = s;
+		}
+		if (!schemas.has("list_asset_index_issues")) {
+			ToolSchema s; s.tool_name = "list_asset_index_issues"; s.description = "List asset index quality issues"; s.requires_scene = false; s.is_write_operation = false;
+			schemas["list_asset_index_issues"] = s;
+		}
+		if (!schemas.has("create_sprite_frames_from_manifest")) {
+			ToolSchema s; s.tool_name = "create_sprite_frames_from_manifest"; s.description = "Create SpriteFrames from indexed manifest"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "asset_id"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["create_sprite_frames_from_manifest"] = s;
+		}
+		if (!schemas.has("create_tileset_from_manifest")) {
+			ToolSchema s; s.tool_name = "create_tileset_from_manifest"; s.description = "Create TileSet from indexed manifest"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "asset_id"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["create_tileset_from_manifest"] = s;
+		}
+		if (!schemas.has("index_project_context")) {
+			ToolSchema s; s.tool_name = "index_project_context"; s.description = "Build the embedding-backed project context retrieval index over code, docs, scenes, resources, and asset metadata"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "force"; a.type_hint = Variant::BOOL; a.required = false; s.arguments.push_back(a);
+			ToolArgSchema e; e.name = "embed"; e.type_hint = Variant::BOOL; e.required = false; s.arguments.push_back(e);
+			ToolArgSchema p; p.name = "embedding_provider"; p.type_hint = Variant::STRING; p.required = false; s.arguments.push_back(p);
+			ToolArgSchema mo; mo.name = "embedding_model"; mo.type_hint = Variant::STRING; mo.required = false; s.arguments.push_back(mo);
+			ToolArgSchema u; u.name = "embedding_base_url"; u.type_hint = Variant::STRING; u.required = false; s.arguments.push_back(u);
+			ToolArgSchema mc; mc.name = "max_embedded_chunks"; mc.type_hint = Variant::INT; mc.required = false; s.arguments.push_back(mc);
+			schemas["index_project_context"] = s;
+		}
+		if (!schemas.has("search_project_context")) {
+			ToolSchema s; s.tool_name = "search_project_context"; s.description = "Retrieve relevant project context chunks by vector, lexical, or hybrid query"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema q; q.name = "query"; q.type_hint = Variant::STRING; q.required = true; s.arguments.push_back(q);
+			ToolArgSchema k; k.name = "kind"; k.type_hint = Variant::STRING; k.required = false; s.arguments.push_back(k);
+			ToolArgSchema m; m.name = "max_results"; m.type_hint = Variant::INT; m.required = false; s.arguments.push_back(m);
+			ToolArgSchema c; c.name = "max_chars_per_result"; c.type_hint = Variant::INT; c.required = false; s.arguments.push_back(c);
+			ToolArgSchema mode; mode.name = "mode"; mode.type_hint = Variant::STRING; mode.required = false; s.arguments.push_back(mode);
+			schemas["search_project_context"] = s;
+		}
+	}
+
+	// ── SPECIAL TOOLS WITH UNIQUE SIGNATURES ──
+	{
+		if (!schemas.has("create_pin_joint_2d")) {
+			ToolSchema s; s.tool_name = "create_pin_joint_2d"; s.description = "Create a PinJoint2D between two bodies"; s.requires_scene = true; s.is_write_operation = true; s.supports_batching = true;
+			ToolArgSchema an; an.name = "name"; an.type_hint = Variant::STRING; an.required = true; s.arguments.push_back(an);
+			ToolArgSchema ap; ap.name = "parent_path"; ap.type_hint = Variant::STRING; ap.required = true; ap.auto_resolve_node_path = true; s.arguments.push_back(ap);
+			ToolArgSchema aa; aa.name = "node_a"; aa.type_hint = Variant::STRING; aa.required = true; s.arguments.push_back(aa);
+			ToolArgSchema ab; ab.name = "node_b"; ab.type_hint = Variant::STRING; ab.required = true; s.arguments.push_back(ab);
+			schemas["create_pin_joint_2d"] = s;
+		}
+		if (!schemas.has("create_damped_spring_joint_2d")) {
+			ToolSchema s; s.tool_name = "create_damped_spring_joint_2d"; s.description = "Create a DampedSpringJoint2D"; s.requires_scene = true; s.is_write_operation = true; s.supports_batching = true;
+			ToolArgSchema an; an.name = "name"; an.type_hint = Variant::STRING; an.required = true; s.arguments.push_back(an);
+			ToolArgSchema ap; ap.name = "parent_path"; ap.type_hint = Variant::STRING; ap.required = true; ap.auto_resolve_node_path = true; s.arguments.push_back(ap);
+			ToolArgSchema aa; aa.name = "node_a"; aa.type_hint = Variant::STRING; aa.required = true; s.arguments.push_back(aa);
+			ToolArgSchema ab; ab.name = "node_b"; ab.type_hint = Variant::STRING; ab.required = true; s.arguments.push_back(ab);
+			schemas["create_damped_spring_joint_2d"] = s;
+		}
+		if (!schemas.has("create_touch_screen_button")) {
+			ToolSchema s; s.tool_name = "create_touch_screen_button"; s.description = "Create a mobile touch button"; s.requires_scene = true; s.is_write_operation = true; s.supports_batching = true;
+			ToolArgSchema an; an.name = "name"; an.type_hint = Variant::STRING; an.required = true; s.arguments.push_back(an);
+			ToolArgSchema ap; ap.name = "parent_path"; ap.type_hint = Variant::STRING; ap.required = true; ap.auto_resolve_node_path = true; s.arguments.push_back(ap);
+			schemas["create_touch_screen_button"] = s;
+		}
+		if (!schemas.has("connect_ui_signal")) {
+			ToolSchema s; s.tool_name = "connect_ui_signal"; s.description = "Connect a Control's UI event to a handler method by preset (maps ui_event to the right signal for the source node type)."; s.requires_scene = true; s.is_write_operation = true;
+			ToolArgSchema asn; asn.name = "source_node_path"; asn.type_hint = Variant::STRING; asn.required = true; asn.auto_resolve_node_path = true; asn.description = "The Control emitting the event (Button, LineEdit, Slider, ...)."; s.arguments.push_back(asn);
+			ToolArgSchema aue; aue.name = "ui_event"; aue.type_hint = Variant::STRING; aue.required = true; aue.valid_values = Vector<String>{ "pressed", "toggled", "text_changed", "text_submitted", "value_changed", "item_selected", "tab_changed", "gui_input" }; aue.description = "Logical UI event; mapped to the correct signal for the node type."; s.arguments.push_back(aue);
+			ToolArgSchema atn; atn.name = "target_node_path"; atn.type_hint = Variant::STRING; atn.required = true; atn.auto_resolve_node_path = true; atn.description = "Node whose method handles the event."; s.arguments.push_back(atn);
+			ToolArgSchema am; am.name = "method_name"; am.type_hint = Variant::STRING; am.required = true; am.description = "Method on the target node to call."; s.arguments.push_back(am);
+			schemas["connect_ui_signal"] = s;
+		}
+		if (!schemas.has("validate_scene")) {
+			ToolSchema s; s.tool_name = "validate_scene"; s.description = "Validate scene structure and references"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "scene_path"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["validate_scene"] = s;
+		}
+		if (!schemas.has("reload_scene")) {
+			ToolSchema s; s.tool_name = "reload_scene"; s.description = "Reload current or specified scene"; s.requires_scene = false; s.is_write_operation = true;
+			schemas["reload_scene"] = s;
+		}
+		if (!schemas.has("get_input_actions")) {
+			ToolSchema s; s.tool_name = "get_input_actions"; s.description = "List project input actions and events"; s.requires_scene = false; s.is_write_operation = false;
+			schemas["get_input_actions"] = s;
+		}
+		if (!schemas.has("set_input_action_bindings")) {
+			ToolSchema s; s.tool_name = "set_input_action_bindings"; s.description = "Set bindings for an input action"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "action_name"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["set_input_action_bindings"] = s;
+		}
+		if (!schemas.has("remove_input_action")) {
+			ToolSchema s; s.tool_name = "remove_input_action"; s.description = "Remove an input action"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "action_name"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["remove_input_action"] = s;
+		}
+		if (!schemas.has("set_breakpoint")) {
+			ToolSchema s; s.tool_name = "set_breakpoint"; s.description = "Set a debugger breakpoint"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema asp; asp.name = "script_path"; asp.type_hint = Variant::STRING; asp.required = true; s.arguments.push_back(asp);
+			ToolArgSchema al; al.name = "line"; al.type_hint = Variant::INT; al.required = true; s.arguments.push_back(al);
+			schemas["set_breakpoint"] = s;
+		}
+		if (!schemas.has("debugger_continue")) {
+			ToolSchema s; s.tool_name = "debugger_continue"; s.description = "Continue debugger execution"; s.requires_scene = false; s.is_write_operation = true;
+			schemas["debugger_continue"] = s;
+		}
+		if (!schemas.has("create_ui_element")) {
+			ToolSchema s; s.tool_name = "create_ui_element"; s.description = "Create a UI element by type"; s.requires_scene = true; s.is_write_operation = true; s.supports_batching = true;
+			ToolArgSchema at; at.name = "element_type"; at.type_hint = Variant::STRING; at.required = true; s.arguments.push_back(at);
+			schemas["create_ui_element"] = s;
+		}
+	}
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// END BULK BACKFILL
+	// ═══════════════════════════════════════════════════════════════════════════
+
+	// ── PHASE 1: RUNTIME GAME MANIPULATION SCHEMAS ──
+	{
+		if (!schemas.has("runtime_get_scene_tree")) {
+			ToolSchema s; s.tool_name = "runtime_get_scene_tree"; s.description = "Get the live scene tree from the running game"; s.requires_scene = false; s.is_write_operation = false;
+			schemas["runtime_get_scene_tree"] = s;
+		}
+		if (!schemas.has("runtime_eval")) {
+			ToolSchema s; s.tool_name = "runtime_eval"; s.description = "Evaluate a GDScript expression in the running game"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "expression"; a.type_hint = Variant::STRING; a.required = true; a.description = "GDScript expression to evaluate"; s.arguments.push_back(a);
+			schemas["runtime_eval"] = s;
+		}
+		if (!schemas.has("runtime_create_node")) {
+			ToolSchema s; s.tool_name = "runtime_create_node"; s.description = "Create a node in the running game"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "parent_path"; ap.type_hint = Variant::STRING; ap.required = false; ap.description = "Parent node path in the running game (default /root)"; s.arguments.push_back(ap);
+			ToolArgSchema at; at.name = "node_type"; at.type_hint = Variant::STRING; at.required = true; at.description = "Godot class type"; s.arguments.push_back(at);
+			ToolArgSchema an; an.name = "node_name"; an.type_hint = Variant::STRING; an.required = true; an.description = "Name for the new node"; s.arguments.push_back(an);
+			schemas["runtime_create_node"] = s;
+		}
+		if (!schemas.has("runtime_remove_node")) {
+			ToolSchema s; s.tool_name = "runtime_remove_node"; s.description = "Remove a node from the running game"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "node_path"; a.type_hint = Variant::STRING; a.required = true; a.description = "Path of node to remove"; s.arguments.push_back(a);
+			schemas["runtime_remove_node"] = s;
+		}
+		if (!schemas.has("runtime_instantiate_scene")) {
+			ToolSchema s; s.tool_name = "runtime_instantiate_scene"; s.description = "Instantiate a PackedScene in the running game"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "parent_path"; ap.type_hint = Variant::STRING; ap.required = false; s.arguments.push_back(ap);
+			ToolArgSchema asp; asp.name = "scene_path"; asp.type_hint = Variant::STRING; asp.required = true; asp.description = "Path to .tscn file"; s.arguments.push_back(asp);
+			ToolArgSchema an; an.name = "node_name"; an.type_hint = Variant::STRING; an.required = false; s.arguments.push_back(an);
+			schemas["runtime_instantiate_scene"] = s;
+		}
+		if (!schemas.has("runtime_duplicate_node")) {
+			ToolSchema s; s.tool_name = "runtime_duplicate_node"; s.description = "Duplicate a node in the running game"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "node_path"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			ToolArgSchema an; an.name = "new_name"; an.type_hint = Variant::STRING; an.required = false; s.arguments.push_back(an);
+			schemas["runtime_duplicate_node"] = s;
+		}
+		if (!schemas.has("runtime_reparent_node")) {
+			ToolSchema s; s.tool_name = "runtime_reparent_node"; s.description = "Move a node to a new parent in the running game"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "node_path"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			ToolArgSchema ap; ap.name = "new_parent_path"; ap.type_hint = Variant::STRING; ap.required = true; s.arguments.push_back(ap);
+			schemas["runtime_reparent_node"] = s;
+		}
+		if (!schemas.has("runtime_set_property")) {
+			ToolSchema s; s.tool_name = "runtime_set_property"; s.description = "Set a property on a remote object in the running game"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema ai; ai.name = "object_id"; ai.type_hint = Variant::INT; ai.required = true; ai.description = "Remote object ID from runtime_get_scene_tree"; s.arguments.push_back(ai);
+			ToolArgSchema ap; ap.name = "property"; ap.type_hint = Variant::STRING; ap.required = true; s.arguments.push_back(ap);
+			ToolArgSchema av; av.name = "value"; av.type_hint = Variant::NIL; av.required = true; s.arguments.push_back(av);
+			schemas["runtime_set_property"] = s;
+		}
+		if (!schemas.has("runtime_send_message")) {
+			ToolSchema s; s.tool_name = "runtime_send_message"; s.description = "Send a raw debugger protocol message to the running game"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema am; am.name = "message"; am.type_hint = Variant::STRING; am.required = true; am.description = "Protocol message name"; s.arguments.push_back(am);
+			ToolArgSchema ad; ad.name = "data"; ad.type_hint = Variant::ARRAY; ad.required = false; s.arguments.push_back(ad);
+			schemas["runtime_send_message"] = s;
+		}
+		if (!schemas.has("runtime_pause")) {
+			ToolSchema s; s.tool_name = "runtime_pause"; s.description = "Pause or unpause the running game"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "pause"; a.type_hint = Variant::BOOL; a.required = false; s.arguments.push_back(a);
+			schemas["runtime_pause"] = s;
+		}
+		if (!schemas.has("runtime_inspect_object")) {
+			ToolSchema s; s.tool_name = "runtime_inspect_object"; s.description = "Inspect a remote object by ID"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "object_id"; a.type_hint = Variant::INT; a.required = true; s.arguments.push_back(a);
+			schemas["runtime_inspect_object"] = s;
+		}
+		if (!schemas.has("runtime_break")) {
+			ToolSchema s; s.tool_name = "runtime_break"; s.description = "Break into debugger (pause execution)"; s.requires_scene = false; s.is_write_operation = true;
+			schemas["runtime_break"] = s;
+		}
+		if (!schemas.has("runtime_step")) {
+			ToolSchema s; s.tool_name = "runtime_step"; s.description = "Step debugger execution (continue/step_over/step_into)"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "action"; a.type_hint = Variant::STRING; a.required = true; a.valid_values = Vector<String>{"continue", "step_over", "step_into", "break"}; s.arguments.push_back(a);
+			schemas["runtime_step"] = s;
+		}
+		if (!schemas.has("runtime_time_scale")) {
+			ToolSchema s; s.tool_name = "runtime_time_scale"; s.description = "Get or set Engine.time_scale in the running game"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "value"; a.type_hint = Variant::FLOAT; a.required = false; a.description = "New time_scale value (omit to get current)"; s.arguments.push_back(a);
+			schemas["runtime_time_scale"] = s;
+		}
+		// Phase 1 remaining tools
+		if (!schemas.has("runtime_connect_signal")) {
+			ToolSchema s; s.tool_name = "runtime_connect_signal"; s.description = "Connect a signal between nodes in the running game"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema as; as.name = "source_path"; as.type_hint = Variant::STRING; as.required = true; s.arguments.push_back(as);
+			ToolArgSchema asn; asn.name = "signal_name"; asn.type_hint = Variant::STRING; asn.required = true; s.arguments.push_back(asn);
+			ToolArgSchema at; at.name = "target_path"; at.type_hint = Variant::STRING; at.required = true; s.arguments.push_back(at);
+			ToolArgSchema am; am.name = "method_name"; am.type_hint = Variant::STRING; am.required = true; s.arguments.push_back(am);
+			schemas["runtime_connect_signal"] = s;
+		}
+		if (!schemas.has("runtime_disconnect_signal")) {
+			ToolSchema s; s.tool_name = "runtime_disconnect_signal"; s.description = "Disconnect a signal in the running game"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema as; as.name = "source_path"; as.type_hint = Variant::STRING; as.required = true; s.arguments.push_back(as);
+			ToolArgSchema asn; asn.name = "signal_name"; asn.type_hint = Variant::STRING; asn.required = true; s.arguments.push_back(asn);
+			ToolArgSchema at; at.name = "target_path"; at.type_hint = Variant::STRING; at.required = true; s.arguments.push_back(at);
+			ToolArgSchema am; am.name = "method_name"; am.type_hint = Variant::STRING; am.required = true; s.arguments.push_back(am);
+			schemas["runtime_disconnect_signal"] = s;
+		}
+		if (!schemas.has("runtime_emit_signal")) {
+			ToolSchema s; s.tool_name = "runtime_emit_signal"; s.description = "Emit a signal on a node in the running game"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "node_path"; ap.type_hint = Variant::STRING; ap.required = true; s.arguments.push_back(ap);
+			ToolArgSchema asn; asn.name = "signal_name"; asn.type_hint = Variant::STRING; asn.required = true; s.arguments.push_back(asn);
+			schemas["runtime_emit_signal"] = s;
+		}
+		if (!schemas.has("runtime_play_animation")) {
+			ToolSchema s; s.tool_name = "runtime_play_animation"; s.description = "Play/stop/pause animation on AnimationPlayer"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "node_path"; ap.type_hint = Variant::STRING; ap.required = true; s.arguments.push_back(ap);
+			ToolArgSchema an; an.name = "animation_name"; an.type_hint = Variant::STRING; an.required = false; s.arguments.push_back(an);
+			ToolArgSchema aa; aa.name = "action"; aa.type_hint = Variant::STRING; aa.required = false; aa.valid_values = Vector<String>{"play", "stop", "pause"}; s.arguments.push_back(aa);
+			schemas["runtime_play_animation"] = s;
+		}
+		if (!schemas.has("runtime_tween_property")) {
+			ToolSchema s; s.tool_name = "runtime_tween_property"; s.description = "Smoothly tween a property with easing"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "node_path"; ap.type_hint = Variant::STRING; ap.required = true; s.arguments.push_back(ap);
+			ToolArgSchema apr; apr.name = "property"; apr.type_hint = Variant::STRING; apr.required = true; s.arguments.push_back(apr);
+			ToolArgSchema av; av.name = "final_value"; av.type_hint = Variant::STRING; av.required = true; av.description = "GDScript literal (e.g. Vector2(100,200))"; s.arguments.push_back(av);
+			ToolArgSchema ad; ad.name = "duration"; ad.type_hint = Variant::FLOAT; ad.required = false; s.arguments.push_back(ad);
+			schemas["runtime_tween_property"] = s;
+		}
+		if (!schemas.has("runtime_key_press")) {
+			ToolSchema s; s.tool_name = "runtime_key_press"; s.description = "Simulate a key press or input action"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema ak; ak.name = "key"; ak.type_hint = Variant::STRING; ak.required = false; ak.description = "Key constant (e.g. KEY_SPACE)"; s.arguments.push_back(ak);
+			ToolArgSchema aa; aa.name = "action"; aa.type_hint = Variant::STRING; aa.required = false; aa.description = "Input action name (e.g. ui_jump)"; s.arguments.push_back(aa);
+			schemas["runtime_key_press"] = s;
+		}
+		if (!schemas.has("runtime_key_hold")) {
+			ToolSchema s; s.tool_name = "runtime_key_hold"; s.description = "Hold an input action down (no auto-release)"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "action"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["runtime_key_hold"] = s;
+		}
+		if (!schemas.has("runtime_key_release")) {
+			ToolSchema s; s.tool_name = "runtime_key_release"; s.description = "Release a held input action"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "action"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["runtime_key_release"] = s;
+		}
+		if (!schemas.has("runtime_mouse_click")) {
+			ToolSchema s; s.tool_name = "runtime_mouse_click"; s.description = "Click at a position in the running game"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema ax; ax.name = "x"; ax.type_hint = Variant::FLOAT; ax.required = true; s.arguments.push_back(ax);
+			ToolArgSchema ay; ay.name = "y"; ay.type_hint = Variant::FLOAT; ay.required = true; s.arguments.push_back(ay);
+			ToolArgSchema ab; ab.name = "button"; ab.type_hint = Variant::INT; ab.required = false; s.arguments.push_back(ab);
+			schemas["runtime_mouse_click"] = s;
+		}
+		if (!schemas.has("runtime_mouse_move")) {
+			ToolSchema s; s.tool_name = "runtime_mouse_move"; s.description = "Move the mouse to a position"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema ax; ax.name = "x"; ax.type_hint = Variant::FLOAT; ax.required = true; s.arguments.push_back(ax);
+			ToolArgSchema ay; ay.name = "y"; ay.type_hint = Variant::FLOAT; ay.required = true; s.arguments.push_back(ay);
+			schemas["runtime_mouse_move"] = s;
+		}
+		if (!schemas.has("runtime_get_camera")) {
+			ToolSchema s; s.tool_name = "runtime_get_camera"; s.description = "Get active camera position and rotation"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "mode"; a.type_hint = Variant::STRING; a.required = false; a.valid_values = Vector<String>{"2d", "3d"}; s.arguments.push_back(a);
+			schemas["runtime_get_camera"] = s;
+		}
+		if (!schemas.has("runtime_set_camera")) {
+			ToolSchema s; s.tool_name = "runtime_set_camera"; s.description = "Set camera position/rotation/zoom in running game"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema am; am.name = "mode"; am.type_hint = Variant::STRING; am.required = false; am.valid_values = Vector<String>{"2d", "3d"}; s.arguments.push_back(am);
+			schemas["runtime_set_camera"] = s;
+		}
+		if (!schemas.has("runtime_change_scene")) {
+			ToolSchema s; s.tool_name = "runtime_change_scene"; s.description = "Change the current scene in the running game"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "scene_path"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["runtime_change_scene"] = s;
+		}
+		if (!schemas.has("runtime_get_nodes_in_group")) {
+			ToolSchema s; s.tool_name = "runtime_get_nodes_in_group"; s.description = "Get all nodes in a group from the running game"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "group"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["runtime_get_nodes_in_group"] = s;
+		}
+		if (!schemas.has("runtime_manage_group")) {
+			ToolSchema s; s.tool_name = "runtime_manage_group"; s.description = "Add or remove a node from a group at runtime"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "node_path"; ap.type_hint = Variant::STRING; ap.required = true; s.arguments.push_back(ap);
+			ToolArgSchema ag; ag.name = "group"; ag.type_hint = Variant::STRING; ag.required = true; s.arguments.push_back(ag);
+			ToolArgSchema aa; aa.name = "action"; aa.type_hint = Variant::STRING; aa.required = false; aa.valid_values = Vector<String>{"add", "remove"}; s.arguments.push_back(aa);
+			schemas["runtime_manage_group"] = s;
+		}
+		if (!schemas.has("runtime_get_node_property")) {
+			ToolSchema s; s.tool_name = "runtime_get_node_property"; s.description = "Get a property value from a node in the running game"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema ap; ap.name = "node_path"; ap.type_hint = Variant::STRING; ap.required = true; s.arguments.push_back(ap);
+			ToolArgSchema apr; apr.name = "property"; apr.type_hint = Variant::STRING; apr.required = true; s.arguments.push_back(apr);
+			schemas["runtime_get_node_property"] = s;
+		}
+		if (!schemas.has("runtime_set_node_property")) {
+			ToolSchema s; s.tool_name = "runtime_set_node_property"; s.description = "Set a property on a node by path in the running game"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "node_path"; ap.type_hint = Variant::STRING; ap.required = true; s.arguments.push_back(ap);
+			ToolArgSchema apr; apr.name = "property"; apr.type_hint = Variant::STRING; apr.required = true; s.arguments.push_back(apr);
+			ToolArgSchema av; av.name = "value"; av.type_hint = Variant::STRING; av.required = true; av.description = "GDScript literal value"; s.arguments.push_back(av);
+			schemas["runtime_set_node_property"] = s;
+		}
+		if (!schemas.has("runtime_call_method")) {
+			ToolSchema s; s.tool_name = "runtime_call_method"; s.description = "Call a method on a node in the running game"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "node_path"; ap.type_hint = Variant::STRING; ap.required = true; s.arguments.push_back(ap);
+			ToolArgSchema am; am.name = "method"; am.type_hint = Variant::STRING; am.required = true; s.arguments.push_back(am);
+			ToolArgSchema aa; aa.name = "args"; aa.type_hint = Variant::STRING; aa.required = false; aa.description = "Comma-separated GDScript args"; s.arguments.push_back(aa);
+			schemas["runtime_call_method"] = s;
+		}
+		if (!schemas.has("runtime_window")) {
+			ToolSchema s; s.tool_name = "runtime_window"; s.description = "Get or set window properties in the running game"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "action"; a.type_hint = Variant::STRING; a.required = false; a.valid_values = Vector<String>{"get", "set_size", "set_title", "set_fullscreen"}; s.arguments.push_back(a);
+			schemas["runtime_window"] = s;
+		}
+		if (!schemas.has("runtime_get_performance")) {
+			ToolSchema s; s.tool_name = "runtime_get_performance"; s.description = "Get FPS, memory, draw calls from the running game"; s.requires_scene = false; s.is_write_operation = false;
+			schemas["runtime_get_performance"] = s;
+		}
+		if (!schemas.has("runtime_raycast")) {
+			ToolSchema s; s.tool_name = "runtime_raycast"; s.description = "Cast a physics ray in the running game (2D or 3D)"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema am; am.name = "mode"; am.type_hint = Variant::STRING; am.required = false; am.valid_values = Vector<String>{"2d", "3d"}; s.arguments.push_back(am);
+			schemas["runtime_raycast"] = s;
+		}
+		if (!schemas.has("runtime_serialize_state")) {
+			ToolSchema s; s.tool_name = "runtime_serialize_state"; s.description = "Serialize or print node tree state for save/load"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "node_path"; ap.type_hint = Variant::STRING; ap.required = false; s.arguments.push_back(ap);
+			ToolArgSchema aa; aa.name = "action"; aa.type_hint = Variant::STRING; aa.required = false; aa.valid_values = Vector<String>{"save", "print"}; s.arguments.push_back(aa);
+			schemas["runtime_serialize_state"] = s;
+		}
+	}
+
+	// ── PHASE 2: DEEP DEBUGGER TOOL SCHEMAS ──
+	{
+		if (!schemas.has("debugger_get_sessions")) {
+			ToolSchema s; s.tool_name = "debugger_get_sessions"; s.description = "List all debugger sessions and their state"; s.requires_scene = false; s.is_write_operation = false;
+			schemas["debugger_get_sessions"] = s;
+		}
+		if (!schemas.has("debugger_get_state")) {
+			ToolSchema s; s.tool_name = "debugger_get_state"; s.description = "Get detailed debugger state (active, breaked, stack, errors)"; s.requires_scene = false; s.is_write_operation = false;
+			schemas["debugger_get_state"] = s;
+		}
+		if (!schemas.has("debugger_get_stack")) {
+			ToolSchema s; s.tool_name = "debugger_get_stack"; s.description = "Get stack frames when debugger is breaked"; s.requires_scene = false; s.is_write_operation = false;
+			schemas["debugger_get_stack"] = s;
+		}
+		if (!schemas.has("debugger_get_variables")) {
+			ToolSchema s; s.tool_name = "debugger_get_variables"; s.description = "Request variable inspection for a stack frame"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "frame"; a.type_hint = Variant::INT; a.required = false; a.description = "Stack frame index (default 0 = top)"; s.arguments.push_back(a);
+			schemas["debugger_get_variables"] = s;
+		}
+		if (!schemas.has("debugger_step_out")) {
+			ToolSchema s; s.tool_name = "debugger_step_out"; s.description = "Step out of the current function (resume until return)"; s.requires_scene = false; s.is_write_operation = true;
+			schemas["debugger_step_out"] = s;
+		}
+		if (!schemas.has("debugger_toggle_profiler")) {
+			ToolSchema s; s.tool_name = "debugger_toggle_profiler"; s.description = "Enable/disable a profiler in the running game"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema ap; ap.name = "profiler"; ap.type_hint = Variant::STRING; ap.required = true; ap.valid_values = Vector<String>{"servers", "visual", "performance", "scripts", "multiplayer:bandwidth", "multiplayer:rpc", "multiplayer:replication"}; s.arguments.push_back(ap);
+			ToolArgSchema ae; ae.name = "enable"; ae.type_hint = Variant::BOOL; ae.required = false; s.arguments.push_back(ae);
+			schemas["debugger_toggle_profiler"] = s;
+		}
+		if (!schemas.has("debugger_evaluate")) {
+			ToolSchema s; s.tool_name = "debugger_evaluate"; s.description = "Evaluate expression in debugger context (when breaked)"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "expression"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			ToolArgSchema af; af.name = "frame"; af.type_hint = Variant::INT; af.required = false; s.arguments.push_back(af);
+			schemas["debugger_evaluate"] = s;
+		}
+		if (!schemas.has("debugger_await_condition")) {
+			ToolSchema s; s.tool_name = "debugger_await_condition"; s.description = "Poll an expression until truthy or timeout"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "expression"; a.type_hint = Variant::STRING; a.required = true; a.description = "GDScript expression that should become truthy"; s.arguments.push_back(a);
+			ToolArgSchema at; at.name = "timeout_ms"; at.type_hint = Variant::INT; at.required = false; s.arguments.push_back(at);
+			ToolArgSchema ap; ap.name = "poll_interval_ms"; ap.type_hint = Variant::INT; ap.required = false; s.arguments.push_back(ap);
+			schemas["debugger_await_condition"] = s;
+		}
+		if (!schemas.has("debugger_assert_condition")) {
+			ToolSchema s; s.tool_name = "debugger_assert_condition"; s.description = "Assert a GDScript expression is truthy in the running game"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "expression"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			ToolArgSchema am; am.name = "message"; am.type_hint = Variant::STRING; am.required = false; s.arguments.push_back(am);
+			schemas["debugger_assert_condition"] = s;
+		}
+		if (!schemas.has("debugger_get_errors")) {
+			ToolSchema s; s.tool_name = "debugger_get_errors"; s.description = "Get error/warning counts and break location"; s.requires_scene = false; s.is_write_operation = false;
+			schemas["debugger_get_errors"] = s;
+		}
+		if (!schemas.has("debugger_send_custom_message")) {
+			ToolSchema s; s.tool_name = "debugger_send_custom_message"; s.description = "Send a custom EngineDebugger message to the game"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema am; am.name = "message"; am.type_hint = Variant::STRING; am.required = true; am.description = "Message name (e.g. mcp:ping)"; s.arguments.push_back(am);
+			ToolArgSchema ad; ad.name = "data"; ad.type_hint = Variant::ARRAY; ad.required = false; s.arguments.push_back(ad);
+			schemas["debugger_send_custom_message"] = s;
+		}
+		if (!schemas.has("debugger_get_performance_snapshot")) {
+			ToolSchema s; s.tool_name = "debugger_get_performance_snapshot"; s.description = "Capture detailed performance snapshot (FPS, memory, objects, draw calls)"; s.requires_scene = false; s.is_write_operation = false;
+			schemas["debugger_get_performance_snapshot"] = s;
+		}
+		if (!schemas.has("debugger_get_memory_info")) {
+			ToolSchema s; s.tool_name = "debugger_get_memory_info"; s.description = "Get detailed memory usage from the running game"; s.requires_scene = false; s.is_write_operation = false;
+			schemas["debugger_get_memory_info"] = s;
+		}
+		if (!schemas.has("debugger_reload_scripts")) {
+			ToolSchema s; s.tool_name = "debugger_reload_scripts"; s.description = "Hot-reload all scripts in the running game"; s.requires_scene = false; s.is_write_operation = true;
+			schemas["debugger_reload_scripts"] = s;
+		}
+	}
+
+	// ── PHASE 3: HEADLESS SCENE/RESOURCE + PROJECT HEALTH SCHEMAS ──
+	{
+		if (!schemas.has("scene_read")) {
+			ToolSchema s; s.tool_name = "scene_read"; s.description = "Read a .tscn file as structured JSON without opening it"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "scene_path"; a.type_hint = Variant::STRING; a.required = true; a.description = "Path to .tscn file"; s.arguments.push_back(a);
+			ToolArgSchema am; am.name = "max_depth"; am.type_hint = Variant::INT; am.required = false; s.arguments.push_back(am);
+			schemas["scene_read"] = s;
+		}
+		if (!schemas.has("scene_modify_node")) {
+			ToolSchema s; s.tool_name = "scene_modify_node"; s.description = "Modify node properties in a .tscn file without opening it"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema asp; asp.name = "scene_path"; asp.type_hint = Variant::STRING; asp.required = true; s.arguments.push_back(asp);
+			ToolArgSchema anp; anp.name = "node_path"; anp.type_hint = Variant::STRING; anp.required = true; anp.description = "Relative path within scene (e.g. Player/Sprite2D)"; s.arguments.push_back(anp);
+			ToolArgSchema ap; ap.name = "properties"; ap.type_hint = Variant::DICTIONARY; ap.required = true; s.arguments.push_back(ap);
+			schemas["scene_modify_node"] = s;
+		}
+		if (!schemas.has("scene_remove_node")) {
+			ToolSchema s; s.tool_name = "scene_remove_node"; s.description = "Remove a node from a .tscn file without opening it"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema asp; asp.name = "scene_path"; asp.type_hint = Variant::STRING; asp.required = true; s.arguments.push_back(asp);
+			ToolArgSchema anp; anp.name = "node_path"; anp.type_hint = Variant::STRING; anp.required = true; s.arguments.push_back(anp);
+			schemas["scene_remove_node"] = s;
+		}
+		if (!schemas.has("resource_create")) {
+			ToolSchema s; s.tool_name = "resource_create"; s.description = "Create a .tres resource file from a type"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema asp; asp.name = "save_path"; asp.type_hint = Variant::STRING; asp.required = true; s.arguments.push_back(asp);
+			ToolArgSchema at; at.name = "resource_type"; at.type_hint = Variant::STRING; at.required = true; at.description = "ClassDB resource type (e.g. StandardMaterial3D, Theme)"; s.arguments.push_back(at);
+			ToolArgSchema ap; ap.name = "properties"; ap.type_hint = Variant::DICTIONARY; ap.required = false; s.arguments.push_back(ap);
+			schemas["resource_create"] = s;
+		}
+		if (!schemas.has("resource_read")) {
+			ToolSchema s; s.tool_name = "resource_read"; s.description = "Read a .tres/.res resource as structured JSON"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "path"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["resource_read"] = s;
+		}
+		if (!schemas.has("resource_modify")) {
+			ToolSchema s; s.tool_name = "resource_modify"; s.description = "Modify properties in a .tres/.res file"; s.requires_scene = false; s.is_write_operation = true;
+			ToolArgSchema a; a.name = "path"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			ToolArgSchema ap; ap.name = "properties"; ap.type_hint = Variant::DICTIONARY; ap.required = true; s.arguments.push_back(ap);
+			schemas["resource_modify"] = s;
+		}
+		if (!schemas.has("scene_get_signals")) {
+			ToolSchema s; s.tool_name = "scene_get_signals"; s.description = "List all signal connections in a .tscn file"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "scene_path"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["scene_get_signals"] = s;
+		}
+		if (!schemas.has("project_detect_broken_scripts")) {
+			ToolSchema s; s.tool_name = "project_detect_broken_scripts"; s.description = "Scan GDScript files for parse/compile errors"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "root"; a.type_hint = Variant::STRING; a.required = false; s.arguments.push_back(a);
+			schemas["project_detect_broken_scripts"] = s;
+		}
+		if (!schemas.has("project_scan_missing_deps")) {
+			ToolSchema s; s.tool_name = "project_scan_missing_deps"; s.description = "Find broken/missing resource dependencies"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "root"; a.type_hint = Variant::STRING; a.required = false; s.arguments.push_back(a);
+			schemas["project_scan_missing_deps"] = s;
+		}
+		if (!schemas.has("project_scan_cyclic_deps")) {
+			ToolSchema s; s.tool_name = "project_scan_cyclic_deps"; s.description = "Detect cyclic dependency chains in resources"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "root"; a.type_hint = Variant::STRING; a.required = false; s.arguments.push_back(a);
+			schemas["project_scan_cyclic_deps"] = s;
+		}
+		if (!schemas.has("project_audit_health")) {
+			ToolSchema s; s.tool_name = "project_audit_health"; s.description = "Comprehensive project health audit (scripts, deps, main scene, orphans)"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "root"; a.type_hint = Variant::STRING; a.required = false; s.arguments.push_back(a);
+			schemas["project_audit_health"] = s;
+		}
+		if (!schemas.has("project_get_class_api")) {
+			ToolSchema s; s.tool_name = "project_get_class_api"; s.description = "Get ClassDB metadata (methods, signals, properties, enums) for a class"; s.requires_scene = false; s.is_write_operation = false;
+			ToolArgSchema a; a.name = "class_name"; a.type_hint = Variant::STRING; a.required = true; s.arguments.push_back(a);
+			schemas["project_get_class_api"] = s;
+		}
+	}
+
+	// ── PHASE 4: ADVANCED RUNTIME OPS SCHEMAS ──
+	{
+		const char *phase4_tools[] = {
+			"runtime_mesh_instance", "runtime_light_3d", "runtime_gridmap",
+			"runtime_environment", "runtime_sky", "runtime_debug_draw",
+			"runtime_canvas_draw", "runtime_parallax",
+			"runtime_audio_play", "runtime_audio_bus", "runtime_audio_effect",
+			"runtime_ui_control", "runtime_ui_text", "runtime_ui_popup", "runtime_ui_range",
+			"runtime_shader_param", "runtime_theme_override", "runtime_physics_body"
+		};
+		for (const char *t : phase4_tools) {
+			String ts(t);
+			if (schemas.has(ts)) continue;
+			ToolSchema s;
+			s.tool_name = ts;
+			s.description = ts.replace("runtime_", "Runtime: ").replace("_", " ");
+			s.requires_scene = false;
+			s.is_write_operation = true;
+			// Most take node_path as first arg
+			ToolArgSchema ap; ap.name = "node_path"; ap.type_hint = Variant::STRING; ap.required = false; ap.description = "Target node path in running game"; s.arguments.push_back(ap);
+			schemas[ts] = s;
+		}
+	}
+
+
 	initialized = true;
 	return schemas;
 }
@@ -4515,7 +5868,12 @@ String YeetAIToolSchemaRegistry::_variant_type_to_json_schema_type(Variant::Type
 Dictionary YeetAIToolSchemaRegistry::tool_schema_to_openai_function(const ToolSchema &p_schema) {
 	Dictionary function;
 	function["name"] = p_schema.tool_name;
-	function["description"] = p_schema.description;
+	// Azure OpenAI / Foundry caps tool descriptions at 1024 characters.
+	String desc = p_schema.description;
+	if (desc.length() > 1024) {
+		desc = desc.substr(0, 1021) + "...";
+	}
+	function["description"] = desc;
 
 	Dictionary parameters;
 	parameters["type"] = "object";

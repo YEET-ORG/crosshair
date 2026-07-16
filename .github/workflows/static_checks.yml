@@ -45,3 +45,7 @@ jobs:
           CHANGED_FILES: '"${{ steps.changed-files.outputs.everything_all_changed_files }}"' # Wrap with quotes to bookend internal quote separators.
         with:
           extra_args: --files ${{ env.CHANGED_FILES }}
+
+      - name: Crosshair agent harness checks
+        run: |
+          python misc/scripts/check_harness.py

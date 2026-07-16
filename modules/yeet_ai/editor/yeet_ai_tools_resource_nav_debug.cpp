@@ -826,25 +826,30 @@ Dictionary YeetAIDock::_tool_set_navigation_agent_params(const Dictionary &p_arg
 	}
 
 	if (p_args.has("path_offset")) {
-		node->set("path_offset", _arg_float(p_args, "path_offset", 0.0));
+		const StringName property = SNAME("path_offset");
+		_commit_ai_property_change(node, property, node->get(property), _arg_float(p_args, "path_offset", 0.0), "Set Navigation Agent Parameter");
 	}
 	if (p_args.has("avoidance_enabled")) {
-		node->set("avoidance_enabled", _arg_bool(p_args, "avoidance_enabled", false));
+		const StringName property = SNAME("avoidance_enabled");
+		_commit_ai_property_change(node, property, node->get(property), _arg_bool(p_args, "avoidance_enabled", false), "Set Navigation Agent Parameter");
 	}
 	if (p_args.has("path_desired_distance")) {
-		node->set("path_desired_distance", _arg_float(p_args, "path_desired_distance", 1.0));
+		const StringName property = SNAME("path_desired_distance");
+		_commit_ai_property_change(node, property, node->get(property), _arg_float(p_args, "path_desired_distance", 1.0), "Set Navigation Agent Parameter");
 	}
 	if (p_args.has("target_desired_distance")) {
-		node->set("target_desired_distance", _arg_float(p_args, "target_desired_distance", 1.0));
+		const StringName property = SNAME("target_desired_distance");
+		_commit_ai_property_change(node, property, node->get(property), _arg_float(p_args, "target_desired_distance", 1.0), "Set Navigation Agent Parameter");
 	}
 	if (p_args.has("path_max_distance")) {
-		node->set("path_max_distance", _arg_float(p_args, "path_max_distance", 10.0));
+		const StringName property = SNAME("path_max_distance");
+		_commit_ai_property_change(node, property, node->get(property), _arg_float(p_args, "path_max_distance", 10.0), "Set Navigation Agent Parameter");
 	}
 	if (p_args.has("navigation_layers")) {
-		node->set("navigation_layers", _arg_int(p_args, "navigation_layers", 1));
+		const StringName property = SNAME("navigation_layers");
+		_commit_ai_property_change(node, property, node->get(property), _arg_int(p_args, "navigation_layers", 1), "Set Navigation Agent Parameter");
 	}
 
-	_mark_unsaved();
 	Dictionary extra;
 	extra["node_path"] = String(node->get_path());
 	return _make_ok(extra);

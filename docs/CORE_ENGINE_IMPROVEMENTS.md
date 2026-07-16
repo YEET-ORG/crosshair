@@ -1,5 +1,7 @@
 # Core Engine Changes Needed for Crosshair AI
 
+Last verified: 2026-06-30
+
 > This document catalogs architectural improvements needed in the Godot 4 editor core (not just the yeet_ai module) to make AI-assisted development truly first-class.
 
 ---

@@ -15,6 +15,7 @@ class HTTPRequest;
 class LineEdit;
 class OptionButton;
 class SpinBox;
+class HBoxContainer;
 
 /// Editor Settings dialog tab: Crosshair AI (`yeet_ai/*` EditorSettings keys).
 class YeetAISettingsPanel : public VBoxContainer {
@@ -25,6 +26,9 @@ class YeetAISettingsPanel : public VBoxContainer {
 	VBoxContainer *openrouter_settings_block = nullptr;
 	VBoxContainer *yeet_settings_block = nullptr;
 	VBoxContainer *azure_settings_block = nullptr;
+	VBoxContainer *codex_settings_block = nullptr;
+	VBoxContainer *claude_settings_block = nullptr;
+	VBoxContainer *grok_settings_block = nullptr;
 	VBoxContainer *model_local_gemini_block = nullptr;
 	VBoxContainer *model_gemini_block = nullptr;
 	VBoxContainer *model_openrouter_block = nullptr;
@@ -50,11 +54,21 @@ class YeetAISettingsPanel : public VBoxContainer {
 	LineEdit *settings_gemini_api_key = nullptr;
 	LineEdit *settings_openrouter_api_key = nullptr;
 	LineEdit *settings_yeet_api_key = nullptr;
+	// Multi-profile Azure providers
+	OptionButton *settings_azure_profile = nullptr;
+	Button *settings_azure_profile_add = nullptr;
+	Button *settings_azure_profile_dup = nullptr;
+	Button *settings_azure_profile_remove = nullptr;
+	LineEdit *settings_azure_profile_name = nullptr;
 	LineEdit *settings_azure_endpoint = nullptr;
 	LineEdit *settings_azure_deployment = nullptr;
 	LineEdit *settings_azure_api_version = nullptr;
 	LineEdit *settings_azure_api_key = nullptr;
 	LineEdit *settings_azure_model = nullptr;
+	OptionButton *settings_azure_api_mode = nullptr;
+	Array _azure_profiles_cache;
+	String _azure_active_profile_id;
+	bool _azure_profile_ui_loading = false;
 	SpinBox *settings_max_tokens = nullptr;
 	SpinBox *settings_max_tool_round_trips = nullptr;
 	SpinBox *settings_context_token_budget = nullptr;
@@ -115,6 +129,16 @@ class YeetAISettingsPanel : public VBoxContainer {
 	String _get_gemini_model_slug_from_ui() const;
 	String _get_yeet_model_slug_from_ui() const;
 	String _get_model_value_for_commit() const;
+
+	void _azure_reload_profiles_into_ui();
+	void _azure_apply_selected_profile_to_fields();
+	void _azure_read_fields_into_selected_profile();
+	void _azure_rebuild_profile_dropdown();
+	void _on_azure_profile_selected(int p_index);
+	void _on_azure_profile_add();
+	void _on_azure_profile_duplicate();
+	void _on_azure_profile_remove();
+	void _on_azure_profile_field_changed();
 
 	String _get_setting_string(const String &p_setting, const String &p_default) const;
 	int _get_setting_int(const String &p_setting, int p_default) const;
