@@ -1,5 +1,5 @@
 #define MyAppName "Crosshair Engine"
-#define MyAppVersion "4.7"
+#define MyAppVersion "4.8"
 #define MyAppPublisher "Crosshair Engine contributors"
 #define MyAppURL "https://docs.godotengine.org/en/latest/"
 #define MyAppExeName "godot.exe"

@@ -4,7 +4,7 @@ Last verified: 2026-06-30
 
 <p align="center">
   <a href="https://godotengine.org">
-    <img src="logo_outlined.svg" width="400" alt="Crosshair logo">
+    <img src="misc/logo/logo_outlined.svg" width="400" alt="Crosshair logo">
   </a>
 </p>
 

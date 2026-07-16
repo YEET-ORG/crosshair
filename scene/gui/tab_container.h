@@ -54,7 +54,6 @@ private:
 	Button *popup_button = nullptr;
 
 	bool tabs_visible = true;
-	bool all_tabs_in_front = false;
 	TabPosition tabs_position = POSITION_TOP;
 	mutable ObjectID popup_obj_id;
 	bool use_hidden_tabs_for_min_size = false;
@@ -119,7 +118,7 @@ private:
 	PropertyListHelper property_helper;
 
 	mutable Vector<CachedTab> pending_tabs;
-	CachedTab &get_pending_tab(int p_idx) const;
+	CachedTab *get_pending_tab(int p_idx) const;
 
 	HashMap<Node *, RID> tab_panels;
 
@@ -149,6 +148,8 @@ private:
 
 	void _popup_button_hovered(bool p_hover);
 	void _popup_button_pressed();
+
+	Size2 _get_minimum_size(bool p_use_desired_sizes) const;
 
 protected:
 	bool _set(const StringName &p_name, const Variant &p_value) { return property_helper.property_set_value(p_name, p_value); }
@@ -189,8 +190,10 @@ public:
 	void set_tabs_visible(bool p_visible);
 	bool are_tabs_visible() const;
 
+#ifndef DISABLE_DEPRECATED
 	void set_all_tabs_in_front(bool p_is_front);
 	bool is_all_tabs_in_front() const;
+#endif
 
 	void set_tab_title(int p_tab, const String &p_title);
 	String get_tab_title(int p_tab) const;
@@ -232,6 +235,7 @@ public:
 
 	virtual Size2 get_minimum_size() const override;
 	virtual Size2 get_inner_combined_maximum_size() const override;
+	virtual Size2 get_desired_size() const override;
 
 	void set_popup(Node *p_popup);
 	Popup *get_popup() const;

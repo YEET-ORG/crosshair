@@ -395,7 +395,8 @@ void Node2D::set_global_transform(const Transform2D &p_transform) {
 	}
 }
 
-Transform2D Node2D::get_relative_transform_to_parent(const Node *p_parent) const {
+Transform2D Node2D::get_relative_transform_to_parent(RequiredParam<const Node> rp_parent) const {
+	EXTRACT_PARAM_OR_FAIL_V(p_parent, rp_parent, Transform2D());
 	ERR_READ_THREAD_GUARD_V(Transform2D());
 	if (p_parent == this) {
 		return Transform2D();
@@ -421,12 +422,12 @@ real_t Node2D::get_angle_to(const Vector2 &p_pos) const {
 	return (to_local(p_pos) * get_scale()).angle();
 }
 
-Point2 Node2D::to_local(Point2 p_global) const {
+Point2 Node2D::to_local(const Point2 &p_global) const {
 	ERR_READ_THREAD_GUARD_V(Point2());
 	return get_global_transform().affine_inverse().xform(p_global);
 }
 
-Point2 Node2D::to_global(Point2 p_local) const {
+Point2 Node2D::to_global(const Point2 &p_local) const {
 	ERR_READ_THREAD_GUARD_V(Point2());
 	return get_global_transform().xform(p_local);
 }

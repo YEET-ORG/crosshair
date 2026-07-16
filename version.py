@@ -1,7 +1,7 @@
 short_name = "crosshair"
 name = "Crosshair"
 major = 4
-minor = 7
+minor = 8
 patch = 0
 status = "dev"
 module_config = ""

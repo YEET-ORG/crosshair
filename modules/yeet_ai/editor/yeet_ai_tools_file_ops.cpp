@@ -33,7 +33,7 @@ static String _validate_gdscript_file(const String &p_path) {
 	if (reload_err != OK) {
 		return vformat("Script has parse errors (error code %d)", reload_err);
 	}
-	if (!script->is_valid()) {
+	if (!script->is_script_valid()) {
 		return "Script has parse errors";
 	}
 	return String();
